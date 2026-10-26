@@ -44,14 +44,19 @@ versions of the game will not work.
 
 ## Install
 
-You need Windows 10/11 (64-bit), a Vulkan GPU, [Python 3](https://www.python.org/downloads/)
-and [Build Tools for Visual Studio 2022](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)
-with the *Desktop development with C++* workload.
+There is no prebuilt exe: the game's code is recompiled from your own ROM on your PC.
+You need Windows 10/11 (64-bit) and a Vulkan GPU.
 
-1. Download or clone this repository.
-2. Put `lostwsga.zip` next to `build.bat`.
-3. Run `build.bat` once. It takes a few minutes and downloads SDL3 and NVIDIA DLSS on the first run.
+1. Download the zip from [Releases](https://github.com/snicolast/LostWorldNative/releases) (or clone this repository).
+2. Put `lostwsga.zip` next to `setup.bat`.
+3. Double-click `setup.bat`. It installs [Python 3](https://www.python.org/downloads/) and
+   [Build Tools for Visual Studio 2022](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)
+   with winget if they are missing, then builds the game. It takes a few minutes and downloads
+   SDL3 and NVIDIA DLSS on the first run.
 4. Play with `LostWorld.exe`.
+
+With Python and the Build Tools (*Desktop development with C++*) already installed,
+`build.bat` does the build alone.
 
 ## Controls
 

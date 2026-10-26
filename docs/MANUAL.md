@@ -4,7 +4,8 @@ Everything about building, options, modes, texture packs and debugging. For the 
 
 ## Build and test
 
-Requirements: Python 3, Visual Studio 2022 Build Tools (MSVC + CMake).
+Requirements: Python 3, Visual Studio 2022 Build Tools (MSVC + CMake). `setup.bat` installs both
+with winget when they are missing and then calls `build.bat`.
 
 ```
 build.bat

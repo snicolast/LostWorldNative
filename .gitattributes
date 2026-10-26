@@ -1,1 +1,2 @@
 third_party/musashi/m68k_in.c -text
+*.bat text eol=crlf

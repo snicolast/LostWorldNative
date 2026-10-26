@@ -1,0 +1,27 @@
+# Pushing a tag v* packs the repository (git archive: code only, nothing from
+# the ROM, no third-party binaries) into a zip and attaches it to a draft release.
+# The draft is published by hand on GitHub.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pack
+        run: |
+          name="LostWorldNative-${GITHUB_REF_NAME}"
+          git archive --format=zip --prefix="$name/" -o "$name.zip" HEAD
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "LostWorldNative-${GITHUB_REF_NAME}.zip" \
+            --draft --title "Lost World Native ${GITHUB_REF_NAME}" --notes-file .github/release_notes.md
