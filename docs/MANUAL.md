@@ -121,9 +121,11 @@ saved games and are not versioned.
 
 ## Video and sound options
 
-- --aspect 16:9 (default), 21:9 or 4:3: maximum width of the 3D view. The
-  sky (background 2D layers) is also drawn at the sides; the HUD and the
-  gun area stay in the central 4:3.
+- --aspect 16:9 (default), 21:9 or 4:3 (or WIDESCREEN in the settings,
+  DISPLAY tab): maximum width of the 3D view. The sky (background 2D layers)
+  is also drawn at the sides; the HUD and the gun area stay in the central
+  4:3. WIDESCREEN 21:9 allows up to 2.4:1, so 2560x1080 and 3440x1440
+  monitors are filled edge to edge.
 - --msaa N (default 4; 1 = off): edge antialiasing, including the
   cut-out edges of plants.
 - --aa dlaa: NVIDIA DLAA (DLSS at native resolution) instead of MSAA. The 3D is

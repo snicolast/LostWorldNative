@@ -101,6 +101,9 @@ static void dump_scene(const R3DScene& scene, const uint32_t* back, const uint32
     fclose(f);
 }
 
+// Menu WIDESCREEN 4:3, 16:9, 21:9. Ultrawide monitors are 2.37 (2560x1080) to
+// 2.39 (3440x1440), wider than 21/9 = 2.33, so 21:9 allows up to 2.4
+static const float MAX_ASPECT[3] = {4.0f / 3.0f, 16.0f / 9.0f, 2.4f};
 static const float BLOOM_STRENGTH[4] = {0.0f, 0.6f, 1.0f, 1.6f};   // menu levels OFF, LOW, MEDIUM, HIGH
 
 // Keyboard and mouse (only while the window is active):
@@ -617,12 +620,14 @@ int main(int argc, char** argv) {
     // those always start from the same defaults
     g_opt.menu = !options_disable_menu(argc, argv, {"--trace-survival"});
     FrontendSettings ini;
+    int menu_aspect = ini.aspect;   // the WIDESCREEN setting in force
     if (g_opt.menu) {   // save/settings.ini, written by the options menu; command-line options win
         ini.load("save/settings.ini");
         g_opt.volume = float(ini.volume);
         g_opt.speakers = ini.speakers;
         g_opt.cubic_samples = ini.cubic_samples;
         g_opt.rear_boost = ini.rear_boost;
+        g_opt.max_aspect = MAX_ASPECT[menu_aspect = ini.aspect];
         g_opt.dlaa = ini.aa == 1;
         if (ini.aa == 2) g_opt.msaa = 1;
         g_opt.haze = ini.haze ? 1.0f : 0.0f;
@@ -1496,6 +1501,10 @@ int main(int argc, char** argv) {
                     Scsp::set_cubic(g_opt.cubic_samples = s.cubic_samples);
                     g_sound.set_rear_boost(g_opt.rear_boost = s.rear_boost);
                     g_audio.set_speakers(AudioStream::Speakers(g_opt.speakers = s.speakers));
+                    if (s.aspect != menu_aspect) {   // only when it changes: --aspect keeps until then
+                        menu_aspect = s.aspect;
+                        renderer.set_max_aspect(g_opt.max_aspect = MAX_ASPECT[s.aspect]);
+                    }
                     renderer.set_distance_haze(s.haze ? haze_strength : 0);
                     renderer.set_bloom(g_opt.bloom = BLOOM_STRENGTH[s.bloom]);
                     renderer.set_ambient_occlusion(s.ao ? ao_strength : 0);
