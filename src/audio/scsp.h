@@ -69,11 +69,6 @@ private:
     void write_common(int word, uint16_t v);
 
     static inline bool cubic_ = false;   // outside the state: game states keep their size
-    // +12 dB (4.12) on the direct output of the game's big effects: the slots
-    // it plays loud (DISDL >= 4) and also sends to the reverb. The T-Rex roars
-    // are played that way, while the gunfire (loud too, but with no reverb
-    // send) plays over them all through a fight and covered them
-    static constexpr int32_t kEffectBoost = 16306;
     static inline uint32_t restarted_ = 0;
 
     uint8_t* ram_ = nullptr;

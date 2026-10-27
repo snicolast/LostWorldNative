@@ -685,9 +685,8 @@ void Scsp::render(float& left, float& right) {
         int disdl = (w11 >> 13) & 7, dipan = (w11 >> 8) & 0x1F;
         int imxl = w10 & 7;
         if (disdl) {
-            int64_t direct = disdl >= 4 && imxl ? int64_t(sample) * kEffectBoost >> 12 : sample;
-            l += int32_t((direct * t.pan4l[tl][dipan][disdl]) >> 12);
-            r += int32_t((direct * t.pan4r[tl][dipan][disdl]) >> 12);
+            l += int32_t((int64_t(sample) * t.pan4l[tl][dipan][disdl]) >> 12);
+            r += int32_t((int64_t(sample) * t.pan4r[tl][dipan][disdl]) >> 12);
         }
         if (imxl) mixs_[(w10 >> 3) & 0xF] += int32_t((int64_t(sample) * t.pan4l[tl][0][imxl]) >> 10);
         if (g_voices) {
