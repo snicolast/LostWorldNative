@@ -14,6 +14,7 @@ const int WEIGHTS[WEATHER_COUNT] = {30, 25, 15, 18, 12};   // % of the rolls
 std::atomic<int> g_rolled{WEATHER_NONE};
 std::atomic<unsigned> g_rng{0};
 std::atomic<bool> g_forced{false};
+std::atomic<int> g_chosen{WEATHER_RANDOM};
 
 }  // namespace
 
@@ -29,6 +30,10 @@ int weather_from_name(const char* s) {
 }
 
 void weather_roll() {
+    if (g_chosen != WEATHER_RANDOM) {
+        g_rolled = g_chosen.load();
+        return;
+    }
     unsigned r = g_rng.load();
     if (!r) r = random_seed() | 1;
     int last = g_rolled.load(), w = last;
@@ -43,5 +48,7 @@ void weather_roll() {
 }
 
 int weather_rolled() { return g_rolled; }
+
+void weather_choose(int w) { g_chosen = w; }
 
 void weather_force(int w) { g_forced = w != WEATHER_NONE; }

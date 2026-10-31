@@ -2,6 +2,7 @@
 
 #include "../runtime/bosses.h"
 #include "../runtime/survival.h"
+#include "../runtime/weather.h"
 #include "crosshair_file.h"
 
 #include <algorithm>
@@ -10,6 +11,7 @@
 #include <cstring>
 #include <cwctype>
 #include <ctime>
+#include <iterator>
 #include <thread>
 
 #include <shellapi.h>
@@ -142,6 +144,22 @@ using FS = FrontendSettings;
 const std::vector<const char*> LEVEL_WORDS = {"off", "low", "medium", "high"};
 const std::vector<const wchar_t*> LEVELS = {L"OFF", L"LOW", L"MEDIUM", L"HIGH"};
 const std::vector<std::pair<const char*, int>> ON_IS_2 = {{"1", 2}, {"on", 2}, {"true", 2}};   // once a switch
+
+// The WEATHER screen before RANDOM SPAWNS and survival, in its order
+struct WeatherChoice {
+    const wchar_t *name, *hint;
+    int weather;   // runtime/weather.h
+};
+const WeatherChoice WEATHER_CHOICES[] = {
+    {L"RANDOM", L"A new weather every stage", WEATHER_RANDOM},
+    {L"SUNNY", L"Clear sky and a strong sun", WEATHER_SUNNY},
+    {L"CLOUDY", L"Grey sky, soft light and a light haze", WEATHER_CLOUDY},
+    {L"FOG", L"Thick fog over the jungle", WEATHER_FOG},
+    {L"RAIN", L"Rain all the way", WEATHER_RAIN},
+    {L"STORM", L"Dark sky, heavy rain and lightning", WEATHER_STORM},
+    {L"ORIGINAL", L"The arcade game's own weather", WEATHER_NONE},
+};
+constexpr int WEATHER_CHOICE_COUNT = int(std::size(WEATHER_CHOICES));
 }  // namespace
 
 // In each tab the rows are shown in this order
@@ -222,9 +240,6 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         {.id = OPT_RAIN, .tab = ATMOSPHERE_TAB, .label = L"RAIN", .key = "rain", .number = &FS::rain,
          .words = {"off", "light", "heavy"}, .also = ON_IS_2, .kind = CHOICE, .shown = {L"OFF", L"LIGHT", L"HEAVY"},
          .levels = true, .hint = L"Where it rains in the game: a dense fall of drops, wet ground, puddles and ripples"},
-        {.id = OPT_WEATHER, .tab = ATMOSPHERE_TAB, .label = L"RANDOM WEATHER", .key = "random_weather",
-         .flag = &FS::random_weather, .kind = TOGGLE,
-         .hint = L"RANDOM SPAWNS and SURVIVAL: sun, clouds, fog, rain or a storm, new every stage and every run"},
         {.id = OPT_SOFT, .tab = ATMOSPHERE_TAB, .label = L"SOFT PARTICLES", .key = "soft_particles", .flag = &FS::soft,
          .kind = TOGGLE, .hint = L"Smoke, fire and explosions blend softly where they touch the ground and walls"},
         // AUDIO
@@ -283,7 +298,10 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         {.id = OPT_SUBS, .tab = GAME_TAB, .label = L"SUBTITLES", .key = "subtitles", .number = &FS::subtitles,
          .words = {"off", "english", "japanese"}, .kind = CHOICE, .shown = {L"OFF", L"ENGLISH", L"JAPANESE"},
          .hint = L"Captions of what the characters say"},
-        // Only in the file: the guns picked in GUN TEST
+        // Only in the file: the WEATHER last picked before a run (in WEATHER_CHOICES' order)
+        {.id = NO_ROW, .key = "run_weather", .number = &FS::run_weather,
+         .words = {"random", "sunny", "cloudy", "fog", "rain", "storm", "original"}},
+        // and the guns picked in GUN TEST
         {.id = NO_ROW, .key = "gun_p1", .path = &FS::gun_p1},
         {.id = NO_ROW, .key = "gun_p2", .path = &FS::gun_p2},
     };
@@ -554,6 +572,18 @@ std::vector<Frontend::Item> Frontend::items() const {
                  L"Dinosaurs come from new places and at new times, and every boss takes a different number of shots.  "
                  L"Different every game"},
                 {BACK, L"BACK", L"", L"Return to the mode select"}};
+    case Screen::Weather: {
+        std::vector<Item> list;
+        for (int i = 0; i < WEATHER_CHOICE_COUNT; i++) {
+            std::wstring hint = WEATHER_CHOICES[i].hint;
+            if (weather_for_survival_ && WEATHER_CHOICES[i].weather == WEATHER_RANDOM) hint = L"A new weather every run";
+            if (WEATHER_CHOICES[i].weather != WEATHER_NONE)
+                hint += L".  Outdoors in daylight; caves and the night keep the game's own";
+            list.push_back({WEATHER_ENTRY, WEATHER_CHOICES[i].name, L"", hint, true, i});
+        }
+        list.push_back({BACK, L"BACK", L"", weather_for_survival_ ? L"Return to the arenas" : L"Return to CLASSIC ARCADE"});
+        return list;
+    }
     case Screen::Pause:
         if (boss_mode)
             return {{RESUME, L"RESUME", L"", L"Back to the fight"},
@@ -648,6 +678,10 @@ void Frontend::open_boss_list(bool over_game) {
             if (ready(i)) selected_ = i;
 }
 
+int Frontend::run_weather() const {
+    return WEATHER_CHOICES[std::clamp(settings.run_weather, 0, WEATHER_CHOICE_COUNT - 1)].weather;
+}
+
 void Frontend::select(int index) {
     if (index != selected_) dirty_ = true;
     selected_ = index;
@@ -663,7 +697,12 @@ void Frontend::activate(const Item& it, int dir) {
     case QUIT_TO_MENU: push(Action::QuitToMenu); break;
     case CLASSIC: open(Screen::Classic); selected_ = random_spawns ? 1 : 0; break;
     case ARCADE: random_spawns = false; push(Action::StartArcade); break;
-    case RANDOM: random_spawns = true; push(Action::StartArcade); break;
+    case RANDOM:   // the weather first
+        random_spawns = true;
+        weather_for_survival_ = false;
+        open(Screen::Weather);
+        selected_ = std::clamp(settings.run_weather, 0, WEATHER_CHOICE_COUNT - 1);
+        break;
     case BOSS: open_boss_list(false); break;
     case SURVIVAL: {
         open(Screen::Survival);
@@ -673,7 +712,17 @@ void Frontend::activate(const Item& it, int dir) {
         locked_notice_ = !any;
         break;
     }
-    case SURVIVAL_ENTRY: survival_choice = it.index; push(Action::StartSurvival); break;
+    case SURVIVAL_ENTRY:   // the weather first
+        survival_choice = it.index;
+        weather_for_survival_ = true;
+        open(Screen::Weather);
+        selected_ = std::clamp(settings.run_weather, 0, WEATHER_CHOICE_COUNT - 1);
+        break;
+    case WEATHER_ENTRY:   // kept for next time
+        settings.run_weather = it.index;
+        push(Action::SettingsChanged);
+        push(weather_for_survival_ ? Action::StartSurvival : Action::StartArcade);
+        break;
     case BOSS_ENTRY: boss_choice = it.index; push(Action::StartBoss); break;
     case PREPARE: push(Action::PrepareBosses); break;
     case RETRY: push(Action::StartBoss); break;
@@ -730,6 +779,15 @@ void Frontend::back() {
     case Screen::Records: open(Screen::Main); selected_ = 2; break;   // onto Records
     case Screen::Survival: open(Screen::Play); selected_ = 2; break;   // onto Survival
     case Screen::Classic: open(Screen::Play); selected_ = 0; break;    // onto Classic arcade
+    case Screen::Weather:   // onto the arena, or RANDOM SPAWNS
+        if (weather_for_survival_) {
+            open(Screen::Survival);
+            selected_ = survival_choice;
+        } else {
+            open(Screen::Classic);
+            selected_ = 1;
+        }
+        break;
     case Screen::Pause: push(Action::Resume); break;
     case Screen::Main: selected_ = 3; dirty_ = true; break;   // onto Quit
     case Screen::GunTest: {   // onto its row in CONTROLS
@@ -1617,6 +1675,7 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
         }
         const wchar_t* sub = screen_ == Screen::Play ? L"SELECT MODE" : screen_ == Screen::Survival ? L"SELECT ARENA"
                              : screen_ == Screen::Classic ? L"CLASSIC ARCADE"
+                             : screen_ == Screen::Weather ? L"WEATHER"
                              : boss ? L"SELECT BOSS" : nullptr;
         if (sub) {
             text(MONO, U(24), sub, tx, y0, talign, {0xF0C070, 0xE0A050});

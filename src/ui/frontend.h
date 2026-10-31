@@ -49,7 +49,6 @@ struct FrontendSettings {
     bool torch = true;     // modern flashlight at night (false: the original spotlight)
     bool lightning = true; // lightning in dark grey fog
     int rain = 2;          // rain where the game has its own: 0 off, 1 light, 2 heavy
-    bool random_weather = true;   // random weather in RANDOM SPAWNS and survival (runtime/weather.h)
     bool hd_text = true;
     bool crosshair = true;
     int crosshair_style = 1; // 0 the drawn rings, 1 the crosshair.png pictures when there are any (ui/crosshair_file.h)
@@ -66,6 +65,7 @@ struct FrontendSettings {
     int vibration = 2;      // gamepad vibration: 0 off, 1 low, 2 medium, 3 high
     int aim_assist = 2;     // gamepad aim assist: 0 off, 1 low, 2 medium, 3 high
     bool menu_music = true; // ui/menu_music.h, when there is a music file
+    int run_weather = 0;    // RANDOM SPAWNS and survival: the WEATHER last picked before a run (frontend.cpp)
     std::string gun_p1, gun_p2; // the guns picked in GUN TEST: device paths ("" = the first and second to fire)
 
     // save/settings.ini; missing keys keep their current value
@@ -82,7 +82,7 @@ struct FrontendSettings {
 
 class Frontend : UiCanvas {
 public:
-    enum class Screen { None, Main, Play, Options, Pause, Boss, Records, Survival, Classic, GunTest };
+    enum class Screen { None, Main, Play, Options, Pause, Boss, Records, Survival, Classic, GunTest, Weather };
     enum class Action { None, StartArcade, Resume, Quit, ToggleFullscreen, SettingsChanged,
                         StartBoss, PrepareBosses, LeaveBossMode, StartSurvival, QuitToMenu,
                         CrosshairChanged };   // a new crosshair picture (crosshair_pick)
@@ -121,6 +121,9 @@ public:
     int boss_choice = 0;
     int survival_choice = 0;   // StartSurvival: index in SURVIVAL_ZONES (runtime/survival.h)
     bool random_spawns = false;   // StartArcade: CLASSIC > RANDOM SPAWNS (runtime/random_spawns.h)
+    // RANDOM SPAWNS and survival: the weather picked on the WEATHER screen
+    // before the run (runtime/weather.h: WEATHER_RANDOM, one of them or WEATHER_NONE)
+    int run_weather() const;
     bool boss_mode = false;   // a boss fight is on: the pause menu offers retry and the list
     // The list of bosses, over the game (from the pause menu or after a fight) or on the menu backdrop
     void open_boss_list(bool over_game);
@@ -160,11 +163,11 @@ public:
 private:
     enum Id {
         PLAY, OPTIONS, QUIT, ARCADE, BOSS, BACK, RESUME, SETTINGS, QUIT_TO_MENU, TABS,
-        BOSS_ENTRY, PREPARE, RETRY, BOSS_LIST, LEAVE_BOSS, RECORDS, SURVIVAL, SURVIVAL_ENTRY, CLASSIC, RANDOM,
+        BOSS_ENTRY, PREPARE, RETRY, BOSS_LIST, LEAVE_BOSS, RECORDS, SURVIVAL, SURVIVAL_ENTRY, CLASSIC, RANDOM, WEATHER_ENTRY,
         OPT_DISPLAY, OPT_VOLUME, OPT_SPEAKERS, OPT_REAR, OPT_SAMPLES, OPT_AA, OPT_HAZE, OPT_BLOOM, OPT_AO, OPT_SKY, OPT_SUN, OPT_SHADOWS, OPT_SHAFTS, OPT_SOFT, OPT_HDR, OPT_RIM, OPT_RELIEF, OPT_SHARPEN, OPT_LIGHTNING, OPT_RAIN, OPT_TEXT, OPT_CROSS, OPT_MICE, OPT_SUBS,
         OPT_SAT, OPT_GAMMA, OPT_MOTION, OPT_PAD_SPEED, OPT_GYRO, OPT_GYRO_SPEED, OPT_VIBRATION, OPT_ASSIST, OPT_TORCH, OPT_RT, OPT_CROSS_HIDE, OPT_FREE_PLAY,
         OPT_QUALITY, OPT_SCALE, OPT_HALF_RATE, OPT_VSYNC,
-        OPT_CROSS_STYLE, OPT_CROSS_P1, OPT_CROSS_P2, OPT_MUSIC, OPT_ASPECT, OPT_GUN_TEST, OPT_WEATHER,
+        OPT_CROSS_STYLE, OPT_CROSS_P1, OPT_CROSS_P2, OPT_MUSIC, OPT_ASPECT, OPT_GUN_TEST,
         NO_ROW,   // a setting only kept in the file
     };
     // How an option row shows its value: a switch, a choice with a dot per
@@ -248,6 +251,7 @@ private:
 
     Screen screen_ = Screen::None;
     bool options_from_pause_ = false;
+    bool weather_for_survival_ = false;   // WEATHER: before a survival run (else RANDOM SPAWNS)
     bool boss_over_game_ = false;
     int selected_ = 0, hovered_ = -1;
     bool dirty_ = true;
