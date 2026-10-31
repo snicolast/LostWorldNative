@@ -272,6 +272,11 @@ saved games and are not versioned.
   speakers (slave SCSP), from -6 (quieter) to +12 in steps of 3. In the arcade they are in the
   seat, next to the head, and they carry the T-Rex roars and many effects.
   The T-Rex roars and the rest of the mix play at their original level.
+- --weather-sound off|low|medium|high (AUDIO tab, WEATHER SOUND; default
+  MEDIUM): not in the original. A loop of rain while the weather's rain falls
+  (RANDOM SPAWNS and survival, or --weather), and a clap of thunder after every
+  lightning strike, late and duller the farther it falls. The samples are in
+  res/sound/ (CC0 recordings from Freesound, see res/sound/CREDITS.md).
 - --linear-samples (AUDIO tab, SAMPLE QUALITY = ORIGINAL): linear
   sample interpolation like the original chip. Default is cubic
   (SMOOTH), with less harshness in low sounds and voices.

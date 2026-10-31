@@ -9,6 +9,7 @@
 
 #include "audio_stream.h"
 #include "scsp.h"
+#include "weather_sound.h"
 
 class AudioOut;
 
@@ -30,6 +31,8 @@ public:
     // Muted: the board keeps running but nothing reaches the output (the game
     // fast-forwarding behind a loading screen); unmuted, it fades in over 20 ms
     void set_muted(bool m) { muted_ = m; }
+    // The rain and thunder of our weather, mixed over the game's sound
+    WeatherSound& weather() { return weather_; }
     uint64_t frames_out() const { return frames_out_; }   // frames sent to the output so far
     // Game states (boss mode, runtime.cpp): the 68000, the SCSPs and their RAM.
     // save_state leaves `out` empty when the board is not running.
@@ -46,6 +49,7 @@ private:
     std::vector<uint8_t> program_, samples_;
     std::vector<uint8_t> ram_[2];
     Scsp scsp_[2];
+    WeatherSound weather_;
     uint8_t ctrl_ = 0;
     AudioOut* out_ = nullptr;
     double sample_acc_ = 0;

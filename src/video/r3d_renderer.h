@@ -6,6 +6,7 @@
 // depth and per-pixel motion vectors instead), then a full-screen pass composes back 2D layers, the 3D image and front 2D layers
 // into the swapchain image with letterboxing.
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
@@ -174,6 +175,12 @@ public:
     void set_rain(int level) { rain_.set_level(level); }
     // Weather over the game's light (r3d_weather.h); it changes over a few seconds
     void set_weather(const R3DWeather& w) { weather_target_ = w; }
+    // For the weather's sound (audio/weather_sound.h): how much of our own rain
+    // falls now, 0..1 (0 with RAIN off, and where only the game's rain falls),
+    // and the lightning strikes begun so far, with the id of the last one
+    float own_rain() const { return std::min(rain_.amount(), weather_.rain * outdoor_); }
+    int strikes() const { return strikes_; }
+    int last_strike() const { return bolt_id_; }
 
 private:
     struct Buffer {
@@ -334,7 +341,8 @@ private:
     bool soft_particles_ = false;
     bool hdr_ = false;
     bool lightning_ = false;
-    int bolt_id_ = -1, bolt_count_ = 0, bolt_main_ = 0;   // the lightning channel of the current strike
+    int bolt_id_ = -1, bolt_count_ = 0, bolt_main_ = 0;
+    int strikes_ = 0;   // strikes begun (own_rain, strikes)   // the lightning channel of the current strike
     float bolt_azimuth_ = 0;
     float bolt_seg_[BOLT_SEGMENTS * 4] = {};
     R3DRain rain_;

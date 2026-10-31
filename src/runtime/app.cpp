@@ -113,6 +113,7 @@ static void dump_scene(const R3DScene& scene, const uint32_t* back, const uint32
 static const float MAX_ASPECT[3] = {4.0f / 3.0f, 16.0f / 9.0f, 2.4f};
 static int aspect_level(float max_aspect) { return max_aspect < 1.5f ? 0 : max_aspect < 2.0f ? 1 : 2; }
 static const float BLOOM_STRENGTH[4] = {0.0f, 0.6f, 1.0f, 1.6f};   // menu levels OFF, LOW, MEDIUM, HIGH
+static const float WEATHER_SOUND_LEVEL[4] = {0.0f, 0.5f, 1.0f, 1.6f};   // WEATHER SOUND: OFF, LOW, MEDIUM, HIGH
 
 // The menu's settings as the options the game runs with: from save/settings.ini
 // at the start (the command line then has the last word) and from the menu
@@ -122,6 +123,7 @@ static void options_from_settings(const FrontendSettings& s, Options& o) {
     o.speakers = s.speakers;
     o.cubic_samples = s.cubic_samples;
     o.rear_boost = s.rear_boost;
+    o.weather_sound = s.weather_sound;
     o.dlaa = s.aa == 1;
     if (s.aa == 2) o.msaa = 1;
     o.supersample = s.scale / 100.0f;
@@ -163,6 +165,7 @@ static void settings_from_options(const Options& o, FrontendSettings& s) {
     s.speakers = std::clamp(o.speakers, 0, 2);
     s.cubic_samples = o.cubic_samples;
     s.rear_boost = std::clamp(o.rear_boost / 3 * 3, -6, 12);
+    s.weather_sound = std::clamp(o.weather_sound, 0, 3);
     s.aa = o.dlaa ? 1 : o.msaa <= 1 ? 2 : 0;
     s.scale = FrontendSettings::SCALES[0];   // the nearest step at or below
     for (int sc : FrontendSettings::SCALES)
@@ -1671,6 +1674,7 @@ void App::handle_menu_actions() {
             toast.set_volume(g_opt.volume);
             Scsp::set_cubic(g_opt.cubic_samples);
             g_sound.set_rear_boost(g_opt.rear_boost);
+            g_sound.weather().set_level(WEATHER_SOUND_LEVEL[std::clamp(g_opt.weather_sound, 0, 3)]);
             g_audio.set_speakers(AudioStream::Speakers(g_opt.speakers));
             renderer.set_supersample(g_opt.supersample);
             presenter.set_vsync(g_opt.vsync);
@@ -2106,6 +2110,15 @@ bool App::present_frame(double loop_from) {
             weather = weather_rolled();
         renderer.set_weather(R3DWeather::preset(weather));
         renderer.set_scene(scene);
+        // Its sound (audio/weather_sound.h): the rain we add, and thunder after each strike
+        {
+            static int strikes_heard = 0;
+            g_sound.weather().set_rain(renderer.own_rain());
+            if (renderer.strikes() != strikes_heard) {
+                strikes_heard = renderer.strikes();
+                g_sound.weather().strike(renderer.last_strike());
+            }
+        }
         if (g_sky_log) {
             std::lock_guard<std::mutex> lock(g_sky_log_mutex);
             fprintf(g_sky_log, "3d %llu", (unsigned long long)latest->vblank);
@@ -2403,6 +2416,8 @@ int main(int argc, char** argv) {
         g_sound.set_volume(g_opt.volume);
         Scsp::set_cubic(g_opt.cubic_samples);
         g_sound.set_rear_boost(g_opt.rear_boost);
+        g_sound.weather().load("res/sound");
+        g_sound.weather().set_level(WEATHER_SOUND_LEVEL[std::clamp(g_opt.weather_sound, 0, 3)]);
         g_audio.set_speakers(AudioStream::Speakers(g_opt.speakers));
     }
     g_ram = static_cast<uint8_t*>(calloc(RAM_SIZE + 8, 1));
