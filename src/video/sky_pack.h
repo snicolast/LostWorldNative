@@ -19,7 +19,7 @@
 //
 // With the procedural sky on, the stages' skies (any backdrop below the 3D
 // image that wraps around as a panorama) are drawn instead with soft drifting
-// clouds, at any resolution (compose.frag sky_procedural), in the colours of
+// clouds, at any resolution (shaders/sky_procedural.glsl), in the colours of
 // the original; the trees on the horizon still come from the original picture.
 #pragma once
 #include <cstdint>
