@@ -139,7 +139,6 @@ static void options_from_settings(const FrontendSettings& s, Options& o) {
     o.soft = s.soft;
     o.lightning = s.lightning;
     o.rain = s.rain;
-    o.random_weather = s.random_weather;
     o.hdr = s.hdr;
     o.rim = s.rim;
     o.relief = s.relief;
@@ -182,7 +181,6 @@ static void settings_from_options(const Options& o, FrontendSettings& s) {
     s.soft = o.soft;
     s.lightning = o.lightning;
     s.rain = o.rain;
-    s.random_weather = o.random_weather;
     s.hdr = o.hdr;
     s.rim = o.rim;
     s.relief = o.relief;
@@ -1630,6 +1628,7 @@ int main(int argc, char** argv) {
                 case Frontend::Action::StartArcade:   // the game at the SEGA logo is the home state QUIT TO MAIN MENU puts back
                     if (!g_boot_skip) game_state_keep_home();
                     random_spawns_set(frontend.random_spawns);   // CLASSIC > ARCADE or RANDOM SPAWNS
+                    if (frontend.random_spawns) weather_choose(frontend.run_weather());
                     [[fallthrough]];
                 case Frontend::Action::Resume:
                     boss_pending = -1;
@@ -1639,6 +1638,7 @@ int main(int argc, char** argv) {
                     const SurvivalZone& z = SURVIVAL_ZONES[frontend.survival_choice];
                     boss_pending = -1;
                     random_spawns_set(false);
+                    weather_choose(frontend.run_weather());
                     if (boss_fight >= 0 || frontend.boss_mode) {   // from boss mode: back to the arcade first
                         boss_fight = -1;
                         frontend.boss_mode = false;
@@ -2094,10 +2094,10 @@ int main(int argc, char** argv) {
             scene_seconds += now_seconds() - scene_from;
             g_select_aim = select_dot_on_screen(*scene);
             built = latest;
-            // The weather (weather.h): --weather in any game, or the one rolled
-            // for RANDOM SPAWNS and survival
+            // The weather (weather.h): --weather in any game, or the one picked
+            // (or rolled) for RANDOM SPAWNS and survival
             int weather = g_opt.weather;
-            if (weather == WEATHER_NONE && g_opt.random_weather && (random_spawns_playing() || survival_enabled()))
+            if (weather == WEATHER_NONE && (random_spawns_playing() || survival_enabled()))
                 weather = weather_rolled();
             renderer.set_weather(R3DWeather::preset(weather));
             renderer.set_scene(scene);

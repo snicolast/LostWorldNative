@@ -48,7 +48,6 @@ struct Options {
     bool soft = true;                // --no-soft: hard edges where translucent effects meet geometry
     bool lightning = true;           // --no-lightning: no lightning in stormy fog
     int rain = 2;                    // --rain off|light|heavy: rain where the game has its own
-    bool random_weather = true;      // menu option: random weather in RANDOM SPAWNS and survival (weather.h)
     int weather = -1;                // --weather NAME: this weather in any game (Weather; -1 = none)
     bool shadows = true;             // --no-shadows: no sun shadows
     int ray_tracing = 2;             // --rt off|shadows|ao (--no-rt): traced sun shadows (1) and ambient occlusion (2)
