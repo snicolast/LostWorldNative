@@ -18,7 +18,7 @@ uint32_t hash(uint32_t k) {
 float hash01(uint32_t k) { return float(hash(k) & 0xFFFFFF) / float(0x1000000); }
 
 const float kRainGain = 0.9f;       // the loop under the game's mix
-const float kThunderGain = 1.0f;    // a clap overhead: as loud as a roar
+const float kThunderGain = 1.5f;    // a clap overhead: over the game's mix, as a roar
 const float kRainFade = 1.5f;       // seconds to follow the rain in or out
 
 }   // namespace
@@ -106,6 +106,7 @@ void WeatherSound::set_rain(float amount) { rain_target_ = std::clamp(amount, 0.
 void WeatherSound::strike(int id) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (pending_.size() < 8) pending_.push_back(id);
+    if (thunder_.empty()) printf("[weather] strike %d: no thunder samples\n", id);
 }
 
 void WeatherSound::mix(float* frames, int n, float volume) {
@@ -123,6 +124,7 @@ void WeatherSound::mix(float* frames, int n, float volume) {
         int clip = int(hash01(k + 2) * float(thunder_.size())) % int(thunder_.size());
         if (clip == last_clip_ && thunder_.size() > 1) clip = (clip + 1) % int(thunder_.size());
         last_clip_ = clip;
+        printf("[weather] thunder %d (strike %d, distance %.2f)\n", clip + 1, id, double(d));
         // The voice to use: a free one, or the one nearest its end
         Voice* v = &voices_[0];
         float best = -1;
@@ -132,12 +134,12 @@ void WeatherSound::mix(float* frames, int n, float volume) {
         }
         *v = Voice{};
         v->clip = &thunder_[size_t(clip)];
-        v->delay = int((0.08f + 2.2f * d * d) * float(kRate));   // sound is slower than light
-        v->gain = 1.0f - 0.6f * d;
+        v->delay = int((0.05f + 1.5f * d * d) * float(kRate));   // sound is slower than light
+        v->gain = 1.0f - 0.35f * d;
         v->step = 1.0 - 0.12 * d + 0.06 * (double(hash01(k + 3)) - 0.5);   // farther: a little deeper
         v->pan = 0.2f + 0.6f * hash01(k + 4);
         v->rear = 0.35f + 0.3f * hash01(k + 5);
-        float cutoff = 16000.0f * std::pow(1500.0f / 16000.0f, d);
+        float cutoff = 16000.0f * std::pow(3000.0f / 16000.0f, d);
         v->lowpass = 1.0f - std::exp(-6.2831853f * cutoff / float(kRate));
     }
 
