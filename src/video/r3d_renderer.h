@@ -341,8 +341,8 @@ private:
     bool soft_particles_ = false;
     bool hdr_ = false;
     bool lightning_ = false;
-    int bolt_id_ = -1, bolt_count_ = 0, bolt_main_ = 0;
-    int strikes_ = 0;   // strikes begun (own_rain, strikes)   // the lightning channel of the current strike
+    int bolt_id_ = -1, bolt_count_ = 0, bolt_main_ = 0;   // the lightning channel of the current strike
+    int strikes_ = 0;   // strikes begun (strikes)
     float bolt_azimuth_ = 0;
     float bolt_seg_[BOLT_SEGMENTS * 4] = {};
     R3DRain rain_;
