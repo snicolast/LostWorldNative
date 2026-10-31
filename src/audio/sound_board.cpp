@@ -205,6 +205,7 @@ void SoundBoard::run_frame(double frame_hz) {
         int budget = 256 - overshoot_;
         overshoot_ = budget > 0 ? m68k_execute(budget) - budget : -budget;
     }
+    weather_.mix(buffer_.data(), samples, gain_ / 5.0f);   // at the game's volume (5 by default)
     if (wav_) {
         std::vector<int16_t> pcm(size_t(samples) * 2);
         for (size_t i = 0; i < size_t(samples); i++) {   // the stereo mix, as the output plays it

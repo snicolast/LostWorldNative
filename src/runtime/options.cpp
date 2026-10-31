@@ -135,6 +135,10 @@ const std::vector<Entry>& table() {
                    o.speakers = strcmp(v, "surround") == 0 ? 1 : strcmp(v, "headphones") == 0 ? 2 : 0;
                }),
         num("--rear-boost", &Options::rear_boost, "dB on the rear speakers, -6 to 12 (roars and effects; 0)"),
+        custom("--weather-sound", "off|low|medium|high", "rain and thunder of the weather and the lightning (medium)", false,
+               [](Options& o, const char* v) {
+                   o.weather_sound = strcmp(v, "off") == 0 ? 0 : strcmp(v, "low") == 0 ? 1 : strcmp(v, "high") == 0 ? 3 : 2;
+               }),
         off("--linear-samples", &Options::cubic_samples, "linear interpolation of the samples, like the original SCSP"),
         text("--wav", "FILE", &Options::wav_path, "record the sound to a WAV"),
         section("Players"),
