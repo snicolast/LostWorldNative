@@ -192,13 +192,22 @@ bool R3DRenderer::init(VkPresenter& vk, float supersample, int msaa, int aniso, 
     aniso_ = float(std::clamp(aniso, 0, 16));
     // DLAA does the anti-aliasing itself from aliased single-sample input
     if (dlaa && dlaa_.init(vk.instance(), vk.gpu(), dev_)) msaa = 1;
-    // Highest supported MSAA level not above the requested one
-    VkPhysicalDeviceProperties props;
-    vkGetPhysicalDeviceProperties(vk.gpu(), &props);
-    VkSampleCountFlags counts = props.limits.framebufferColorSampleCounts & props.limits.framebufferDepthSampleCounts;
-    samples_ = VK_SAMPLE_COUNT_1_BIT;
-    for (int s = 2; s <= std::min(msaa, 8); s *= 2)
-        if (counts & s) samples_ = VkSampleCountFlagBits(s);
+    msaa_wanted_ = msaa;
+    samples_ = msaa_level(msaa);
+    const VkPhysicalDeviceLimits& limits = vk.limits();
+    // The texture pack is an array of images indexed per polygon: it needs the
+    // descriptor indexing features, and as many slots as the GPU's limits
+    // leave after the other bindings of the sets that go with it (16 to spare)
+    if (!vk.descriptor_indexing()) {
+        fprintf(stderr, "[vulkan] this GPU lacks the descriptor indexing features the renderer needs (see above)\n");
+        return false;
+    }
+    uint32_t room = std::min({limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorSamplers,
+                              limits.maxDescriptorSetSampledImages, limits.maxDescriptorSetSamplers, limits.maxPerStageResources});
+    replacement_slots_ = std::clamp(room - std::min(room, 32u + Pack2D::MAX_SLOTS), 1u, TexturePack::MAX_SLOTS);
+    if (replacement_slots_ < TexturePack::MAX_SLOTS)
+        printf("[vulkan] descriptor limits of this GPU: %u texture pack slots instead of %u\n", replacement_slots_,
+               TexturePack::MAX_SLOTS);
 
     const VkImageUsageFlags sampled = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     if (!create_image(texture_ram_, 2048, 2048, VK_FORMAT_R16_UINT, sampled, VK_IMAGE_ASPECT_COLOR_BIT)) return false;
@@ -252,8 +261,8 @@ bool R3DRenderer::init(VkPresenter& vk, float supersample, int msaa, int aniso, 
     // Replacement textures: trilinear + anisotropic, repeating (mirroring is done in the shader)
     si.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    si.anisotropyEnable = VK_TRUE;
-    si.maxAnisotropy = std::min(16.0f, props.limits.maxSamplerAnisotropy);
+    si.anisotropyEnable = vk.anisotropy() ? VK_TRUE : VK_FALSE;
+    si.maxAnisotropy = vk.anisotropy() ? std::min(16.0f, limits.maxSamplerAnisotropy) : 1.0f;
     si.maxLod = VK_LOD_CLAMP_NONE;
     vkCreateSampler(dev_, &si, nullptr, &replace_sampler_);
     si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -268,7 +277,7 @@ bool R3DRenderer::init(VkPresenter& vk, float supersample, int msaa, int aniso, 
     // (3: the 2D back layer, which the distance haze fades the far scenery into)
     VkDescriptorSetLayoutBinding b0[8] = {
         {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-        {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, TexturePack::MAX_SLOTS, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, replacement_slots_, VK_SHADER_STAGE_FRAGMENT_BIT},
         {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
         {3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
         {4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},   // sun shadow map
@@ -323,7 +332,7 @@ bool R3DRenderer::init(VkPresenter& vk, float supersample, int msaa, int aniso, 
     vkCreateDescriptorSetLayout(dev_, &li, nullptr, &ao_set_layout_);
 
     VkDescriptorPoolSize ps[4] = {
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 34 + TexturePack::MAX_SLOTS + Pack2D::MAX_SLOTS},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 34 + replacement_slots_ + Pack2D::MAX_SLOTS},
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1},
         {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1},
@@ -437,7 +446,8 @@ bool R3DRenderer::init(VkPresenter& vk, float supersample, int msaa, int aniso, 
 VkPipeline R3DRenderer::make_pipeline(const PipelineDesc& d) {
     VkPipelineShaderStageCreateInfo stages[2]{};
     stages[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, d.vs, "main"};
-    stages[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, d.fs, "main"};
+    stages[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, d.fs, "main",
+                 d.fs_spec};
 
     VkVertexInputBindingDescription binding{0, sizeof(R3DVertex), VK_VERTEX_INPUT_RATE_VERTEX};
     VkVertexInputAttributeDescription attrs[9] = {
@@ -562,10 +572,13 @@ bool R3DRenderer::create_pipelines() {
                                        : make_module(dev_, spv_ao_frag, sizeof(spv_ao_frag));
     VkShaderModule aoa_fs = make_module(dev_, spv_ao_apply_frag, sizeof(spv_ao_apply_frag));
     bool motion = motion_pass_ = dlaa_.ready();
+    // r3d.frag sizes its texture pack array by this constant (constant_id 0)
+    VkSpecializationMapEntry slots_entry{0, 0, sizeof(uint32_t)};
+    VkSpecializationInfo r3d_spec{1, &slots_entry, sizeof(replacement_slots_), &replacement_slots_};
     // The world: 3D geometry into the HDR image, with the motion and glow slots
     PipelineDesc world{.vs = r3d_vs, .fs = r3d_fs, .layout = r3d_layout_, .color = VK_FORMAT_R16G16B16A16_SFLOAT,
                        .depth = true, .depth_write = true, .vertex_input = true, .samples = samples_,
-                       .motion = motion, .glow = true};
+                       .motion = motion, .glow = true, .fs_spec = &r3d_spec};
     opaque_ = make_pipeline(world);
     PipelineDesc translucent = world;
     translucent.depth_write = false;
@@ -575,7 +588,7 @@ bool R3DRenderer::create_pipelines() {
     trans_depth.depth_only = true;
     trans_depth_ = make_pipeline(trans_depth);
     shadow_ = make_pipeline({.vs = r3d_vs, .fs = r3d_fs, .layout = r3d_layout_, .color = VK_FORMAT_UNDEFINED,
-                             .depth = true, .depth_write = true, .vertex_input = true});
+                             .depth = true, .depth_write = true, .vertex_input = true, .fs_spec = &r3d_spec});
     // Full-screen passes: a triangle over the target, no vertex input
     compose_format_ = vk_->swap_format();
     PipelineDesc compose{.vs = c_vs, .fs = c_fs, .layout = compose_layout_, .color = compose_format_};
@@ -607,6 +620,39 @@ bool R3DRenderer::create_pipelines() {
             ok = false;
         }
     return ok;
+}
+
+void R3DRenderer::destroy_pipelines() {
+    for (VkPipeline* p : {&opaque_, &translucent_, &trans_depth_, &shadow_, &rays_, &compose_measure_, &compose_, &bloom_,
+                          &compose_glow_, &ao_pass_, &ao_apply_})
+        if (*p) vkDestroyPipeline(dev_, *p, nullptr), *p = VK_NULL_HANDLE;
+}
+
+VkSampleCountFlagBits R3DRenderer::msaa_level(int samples) const {
+    VkSampleCountFlags counts = vk_->limits().framebufferColorSampleCounts & vk_->limits().framebufferDepthSampleCounts;
+    VkSampleCountFlagBits level = VK_SAMPLE_COUNT_1_BIT;
+    for (int s = 2; s <= std::min(samples, 8); s *= 2)
+        if (counts & s) level = VkSampleCountFlagBits(s);
+    return level;
+}
+
+// MSAA changed in the menu: the world pipelines and the targets depend on the
+// sample count, so both are made again (between frames: nothing in flight)
+void R3DRenderer::apply_pending_msaa() {
+    if (!pending_msaa_) return;
+    int wanted = pending_msaa_;
+    pending_msaa_ = 0;
+    if (dlaa_.ready() || wanted == msaa_wanted_) return;
+    msaa_wanted_ = wanted;
+    VkSampleCountFlagBits level = msaa_level(wanted);
+    if (level == samples_) return;
+    vkDeviceWaitIdle(dev_);
+    samples_ = level;
+    destroy_pipelines();
+    if (!create_pipelines()) fprintf(stderr, "[vulkan] could not make the pipelines again for MSAA %dx\n", int(samples_));
+    destroy_image(color_);   // ensure_targets makes every target again
+    can_repeat_ = false;
+    printf("[video] antialiasing MSAA %dx\n", int(samples_));
 }
 
 void R3DRenderer::ensure_targets(uint32_t w, uint32_t h) {
@@ -2225,6 +2271,7 @@ void R3DRenderer::record_compose(const Frame& f, const ComposePush& pc, VkImageV
 
 // A frame, pass by pass (each one in its own function above)
 void R3DRenderer::record(VkCommandBuffer cmd, VkImageView target, VkExtent2D extent) {
+    apply_pending_msaa();
     flush_uploads(cmd);
     // Placement in the window (widescreen or 4:3) and internal 3D resolution
     Frame f{};
@@ -2370,8 +2417,7 @@ void R3DRenderer::gpu_time_mark(VkCommandBuffer cmd, uint32_t index) {
 void R3DRenderer::shutdown() {
     if (!dev_) return;
     vkDeviceWaitIdle(dev_);
-    for (auto p : {opaque_, translucent_, trans_depth_, shadow_, rays_, compose_measure_, compose_, bloom_, compose_glow_, ao_pass_, ao_apply_})
-        if (p) vkDestroyPipeline(dev_, p, nullptr);
+    destroy_pipelines();
     dlaa_.shutdown();
     rt_.shutdown();
     if (gpu_times_) vkDestroyQueryPool(dev_, gpu_times_, nullptr);

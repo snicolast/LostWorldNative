@@ -125,7 +125,9 @@ static void options_from_settings(const FrontendSettings& s, Options& o) {
     o.rear_boost = s.rear_boost;
     o.weather_sound = s.weather_sound;
     o.dlaa = s.aa == 1;
-    if (s.aa == 2) o.msaa = 1;
+    o.msaa = s.aa == 2 ? 1 : s.msaa;
+    o.aniso = s.aniso;
+    o.pixel_2d = !s.smooth_2d;
     o.supersample = s.scale / 100.0f;
     o.half_rate = s.half_rate;
     o.vsync = s.vsync;
@@ -167,6 +169,9 @@ static void settings_from_options(const Options& o, FrontendSettings& s) {
     s.rear_boost = std::clamp(o.rear_boost / 3 * 3, -6, 12);
     s.weather_sound = std::clamp(o.weather_sound, 0, 3);
     s.aa = o.dlaa ? 1 : o.msaa <= 1 ? 2 : 0;
+    if (o.msaa > 1) s.msaa = o.msaa >= 8 ? 8 : o.msaa >= 4 ? 4 : 2;
+    s.aniso = o.aniso <= 0 ? 0 : o.aniso < 4 ? 2 : o.aniso < 8 ? 4 : o.aniso < 16 ? 8 : 16;
+    s.smooth_2d = !o.pixel_2d;
     s.scale = FrontendSettings::SCALES[0];   // the nearest step at or below
     for (int sc : FrontendSettings::SCALES)
         if (sc <= int(o.supersample * 100 + 0.5f)) s.scale = sc;
@@ -1322,7 +1327,8 @@ bool App::init(int argc, char** argv, bool first_start) {
     // (not in test runs, nor over graphics options given on the command line)
     for (int i = 1; i < argc && first_start; i++)
         for (const char* o : {"--scale", "--half-rate", "--rt", "--no-rt", "--ao", "--no-ao", "--no-shadows", "--no-shafts",
-                              "--no-soft", "--sky", "--no-relief", "--bloom", "--no-bloom"})
+                              "--no-soft", "--sky", "--no-relief", "--bloom", "--no-bloom", "--msaa", "--aa", "--aniso",
+                              "--pixel2d"})
             if (strcmp(argv[i], o) == 0) first_start = false;
     if (first_start && g_opt.menu) {
         int q = suggest_quality(presenter);
@@ -1340,6 +1346,9 @@ bool App::init(int argc, char** argv, bool first_start) {
         g_opt.sky_procedural = ini.sky;
         g_opt.relief = ini.relief;
         g_opt.bloom = BLOOM_STRENGTH[ini.bloom];
+        g_opt.msaa = ini.aa == 2 ? 1 : ini.msaa;
+        g_opt.aniso = ini.aniso;
+        g_opt.pixel_2d = !ini.smooth_2d;
     }
     if (!renderer.init(presenter, g_opt.supersample, g_opt.msaa, g_opt.aniso, g_opt.dlaa)) {
         fprintf(stderr, "Could not start the 3D renderer on %s (see the [vulkan] line above)\n",
@@ -1381,6 +1390,7 @@ bool App::init(int argc, char** argv, bool first_start) {
     builder.set_remove_letterbox(!g_opt.letterbox);
     builder.set_hud_edges(!g_opt.hud_centre);
     pack.init("textures", g_opt.dump_textures ? "out/textures" : "");
+    pack.set_max_slots(renderer.replacement_slots());   // as many as this GPU's descriptor limits allow
     builder.set_texture_pack(&pack, &g_texture_ram);
     pack2d.init("textures/2d", 1, 27);
     pack2d_back.init("textures/2d_back", 28, SkyPack::FIRST_SLOT - 1);
@@ -1677,6 +1687,9 @@ void App::handle_menu_actions() {
             g_sound.weather().set_level(WEATHER_SOUND_LEVEL[std::clamp(g_opt.weather_sound, 0, 3)]);
             g_audio.set_speakers(AudioStream::Speakers(g_opt.speakers));
             renderer.set_supersample(g_opt.supersample);
+            renderer.set_msaa(g_opt.msaa);
+            renderer.set_aniso(g_opt.aniso);
+            renderer.set_smooth_2d(!g_opt.pixel_2d);
             presenter.set_vsync(g_opt.vsync);
             if (g_opt.max_aspect != was.max_aspect) renderer.set_max_aspect(g_opt.max_aspect);
             renderer.set_distance_haze(s.haze ? haze_strength : 0);   // at the strength of the start (--haze)

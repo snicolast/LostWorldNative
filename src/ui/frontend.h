@@ -29,7 +29,10 @@ struct FrontendSettings {
     int rear_boost = 0;  // dB on the rear pair: -6, -3, 0, 3, 6, 9, 12
     int weather_sound = 2;  // rain and thunder of our weather: 0 off, 1 low, 2 medium, 3 high
     bool cubic_samples = true;   // smooth (cubic) sample interpolation instead of the original linear one
-    int aa = 0;        // 0 MSAA, 1 DLAA, 2 off (takes effect on the next launch)
+    int aa = 0;        // 0 MSAA, 1 DLAA, 2 off (DLAA on or off takes effect on the next launch)
+    int msaa = 4;      // MSAA samples per pixel with aa = 0: 2, 4 or 8
+    int aniso = 8;     // anisotropic taps of the texture filtering: 0 (no mipmaps, original look), 2, 4, 8, 16
+    bool smooth_2d = true;   // HUD and 2D layers upscaled with xBR (false: square pixels, cheaper)
     int scale = 100;   // 3D resolution in % of the window's (SCALES)
     bool half_rate = false;   // above 100 Hz the 3D is drawn every other refresh
     bool vsync = true;        // off: images go out without waiting for the monitor's refresh
@@ -169,6 +172,7 @@ private:
         OPT_SAT, OPT_GAMMA, OPT_MOTION, OPT_PAD_SPEED, OPT_GYRO, OPT_GYRO_SPEED, OPT_VIBRATION, OPT_ASSIST, OPT_TORCH, OPT_RT, OPT_CROSS_HIDE, OPT_FREE_PLAY,
         OPT_QUALITY, OPT_SCALE, OPT_HALF_RATE, OPT_VSYNC,
         OPT_CROSS_STYLE, OPT_CROSS_P1, OPT_CROSS_P2, OPT_MUSIC, OPT_ASPECT, OPT_GUN_TEST, OPT_WEATHER_SOUND,
+        OPT_MSAA, OPT_ANISO, OPT_FILTER_2D,
         NO_ROW,   // a setting only kept in the file
     };
     // How an option row shows its value: a switch, a choice with a dot per

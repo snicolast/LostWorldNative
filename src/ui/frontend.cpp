@@ -168,8 +168,8 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         // DISPLAY
         {.id = OPT_QUALITY, .tab = DISPLAY_TAB, .label = L"QUALITY", .kind = CHOICE,   // FrontendSettings::quality()
          .shown = {L"LOW", L"MEDIUM", L"HIGH", L"ULTRA", L"CUSTOM"},
-         .hints = {L"Laptops and older cards: 75% resolution, half rate on fast monitors, original sky, no shadows or AO",
-                   L"Mid-range cards (RTX 3060, RX 6600): no ray tracing, half rate on fast monitors",
+         .hints = {L"Laptops and integrated graphics: 75% resolution, half rate, no MSAA, 2x anisotropic, square 2D pixels, original sky, no shadows, AO or surface detail",
+                   L"Mid-range cards (RTX 3060, RX 6600): no ray tracing, half rate on fast monitors, MSAA 2x, 4x anisotropic",
                    L"Fast cards: ray traced sun shadows and every effect",
                    L"Everything on: ray traced sun shadows and ambient occlusion",
                    L"Your own mix of the options.  Pick a level to set the costly ones at once"}},
@@ -190,8 +190,18 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
          .words = {"original", "smooth"}, .other = 1, .kind = CHOICE, .shown = {L"ORIGINAL", L"SMOOTH"},
          .hint = L"Smooth: the 3D is also drawn between the game's 57.5 frames, at your monitor's refresh rate"},
         {.id = OPT_AA, .tab = DISPLAY_TAB, .label = L"ANTI-ALIASING", .key = "aa", .number = &FS::aa,
-         .words = {"msaa", "dlaa", "none"}, .also = {{"off", 2}}, .kind = CHOICE, .shown = {L"MSAA 4X", L"DLAA", L"OFF"},
-         .hint = L"Edge smoothing (MSAA, NVIDIA DLAA or off).  Applies on the next start"},
+         .words = {"msaa", "dlaa", "none"}, .also = {{"off", 2}}, .kind = CHOICE, .shown = {L"MSAA", L"DLAA", L"OFF"},
+         .hint = L"Edge smoothing: MSAA (the samples below), NVIDIA DLAA or none.  DLAA applies on the next start"},
+        {.id = OPT_MSAA, .tab = DISPLAY_TAB, .label = L"MSAA SAMPLES", .key = "msaa", .number = &FS::msaa, .lo = 2, .hi = 8,
+         .kind = CHOICE, .shown = {L"2X", L"4X", L"8X"}, .steps = {2, 4, 8}, .levels = true,
+         .hint = L"Samples per pixel of the edge smoothing: more is smoother and costs more, above all on integrated graphics"},
+        {.id = OPT_ANISO, .tab = DISPLAY_TAB, .label = L"ANISOTROPIC FILTER", .key = "anisotropic", .number = &FS::aniso,
+         .lo = 0, .hi = 16, .kind = CHOICE, .shown = {L"OFF", L"2X", L"4X", L"8X", L"16X"}, .steps = {0, 2, 4, 8, 16},
+         .levels = true,
+         .hint = L"Texture detail on the ground and at grazing angles, with the game's mipmaps.  OFF: the original look, no mipmaps"},
+        {.id = OPT_FILTER_2D, .tab = DISPLAY_TAB, .label = L"2D FILTER", .key = "filter_2d", .flag = &FS::smooth_2d,
+         .words = {"pixels", "smooth"}, .other = 1, .kind = CHOICE, .shown = {L"PIXELS", L"SMOOTH"},
+         .hint = L"Smooth: the HUD and the 2D layers upscaled with xBR (edges redrawn); Pixels: square pixels, cheaper"},
         {.id = OPT_TEXT, .tab = DISPLAY_TAB, .label = L"HD TEXT", .key = "hd_text", .flag = &FS::hd_text, .kind = TOGGLE,
          .hint = L"Sharp fonts for menus, captions and score instead of the original pixels"},
         {.id = OPT_SAT, .tab = DISPLAY_TAB, .label = L"COLOR SATURATION", .key = "saturation", .number = &FS::saturation,
@@ -348,18 +358,23 @@ struct QualityLevel {
     int ray_tracing;   // 0 off, 1 sun shadows, 2 also ambient occlusion
     bool ao, shadows, shafts, soft, sky, relief;
     int bloom;
+    int msaa, aniso;   // samples per pixel (1 = off), anisotropic taps
+    bool smooth_2d;    // xBR on the 2D layers
 };
 const QualityLevel QUALITY_LEVELS[4] = {
-    // LOW: laptops and older cards. Measured on an RTX 5070 Ti at 1440p, the
-    // costly ones are the ambient occlusion, the 3D resolution, the procedural
-    // sky (its composition) and the sun shadows; the rest cost little
-    {75, true, 0, false, false, false, true, false, true, 1},
+    // LOW: laptops, integrated graphics and older cards. Measured on an RTX
+    // 5070 Ti at 1440p, the costly ones are the ambient occlusion, the 3D
+    // resolution, the procedural sky (its composition) and the sun shadows;
+    // on an integrated GPU, limited by memory bandwidth and fill rate, also
+    // the MSAA samples, the anisotropic taps (read by hand from the texture
+    // RAM), the surface detail and the xBR of the two 2D layers in every pixel
+    {75, true, 0, false, false, false, true, false, false, 1, 1, 2, false},
     // MEDIUM: mid-range cards (RTX 3060, RX 6600)
-    {100, true, 0, true, true, true, true, true, true, 1},
+    {100, true, 0, true, true, true, true, true, true, 1, 2, 4, true},
     // HIGH
-    {100, false, 1, true, true, true, true, true, true, 2},
+    {100, false, 1, true, true, true, true, true, true, 2, 4, 8, true},
     // ULTRA: everything (the defaults)
-    {100, false, 2, true, true, true, true, true, true, 2},
+    {100, false, 2, true, true, true, true, true, true, 2, 4, 8, true},
 };
 }  // namespace
 
@@ -376,14 +391,21 @@ void FrontendSettings::set_quality(int q) {
     sky = l.sky;
     relief = l.relief;
     bloom = l.bloom;
+    // MSAA off is the ANTI-ALIASING row; DLAA, picked by hand, is left alone
+    if (l.msaa == 1) aa = aa == 1 ? 1 : 2;
+    else if (aa == 2) aa = 0;
+    msaa = std::max(l.msaa, 2);
+    aniso = l.aniso;
+    smooth_2d = l.smooth_2d;
 }
 
 int FrontendSettings::quality() const {
     for (int q = LOW; q <= ULTRA; q++) {
         const QualityLevel& l = QUALITY_LEVELS[q];
+        bool msaa_same = aa == 1 || (l.msaa == 1 ? aa == 2 : aa == 0 && msaa == l.msaa);
         if (scale == l.scale && half_rate == l.half_rate && ray_tracing == l.ray_tracing && ao == l.ao &&
             shadows == l.shadows && shafts == l.shafts && soft == l.soft && sky == l.sky && relief == l.relief &&
-            bloom == l.bloom)
+            bloom == l.bloom && msaa_same && aniso == l.aniso && smooth_2d == l.smooth_2d)
             return q;
     }
     return CUSTOM;
@@ -518,8 +540,14 @@ std::vector<Frontend::Item> Frontend::option_items(const FrontendSettings& s) co
             it.pos = q == FrontendSettings::CUSTOM ? -1 : q, it.count = 4;
             break;
         }
-        case OPT_AA:
-            if (s.aa != aa_at_launch) it.hint = L"Edge smoothing.  Takes effect the next time the game starts";
+        case OPT_AA:   // MSAA and off change at once; DLAA starts (or stops) with the game
+            if ((s.aa == 1) != (aa_at_launch == 1)) it.hint = L"Edge smoothing.  DLAA takes effect the next time the game starts";
+            break;
+        case OPT_MSAA:
+            if (s.aa != 0) {
+                it.enabled = false;
+                it.hint = L"Only with ANTI-ALIASING: MSAA";
+            }
             break;
         case OPT_RT:
             if (!rt_available) {

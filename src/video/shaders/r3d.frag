@@ -20,7 +20,10 @@ layout(location = 8) in vec4 clip_now;
 layout(location = 9) in vec4 clip_before;
 
 layout(set = 0, binding = 0) uniform usampler2D texture_ram;   // 2048x2048 R16_UINT
-layout(set = 0, binding = 1) uniform sampler2D replacements[4096];   // texture pack, RGBA8 with mips
+// Texture pack, RGBA8 with mips: as many slots as the GPU's descriptor limits
+// allow (R3DRenderer::replacement_slots(), set when the pipeline is made)
+layout(constant_id = 0) const uint REPLACEMENT_SLOTS = 4096u;
+layout(set = 0, binding = 1) uniform sampler2D replacements[REPLACEMENT_SLOTS];
 
 layout(push_constant) uniform Viewport {
     mat4 proj;

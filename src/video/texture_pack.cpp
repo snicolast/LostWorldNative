@@ -81,7 +81,7 @@ uint32_t TexturePack::resolve(uint32_t tex, R3DTextureRam& ram, uint64_t& genera
 
     auto loaded = slots_.find(hash);
     if (loaded != slots_.end()) return loaded->second;
-    if (!available_.count(hash) || slots_.size() + 1 >= MAX_SLOTS) return 0;
+    if (!available_.count(hash) || slots_.size() + 1 >= max_slots_) return 0;
     RgbaImage img;
     if (!png_load(dir_ + name, img.w, img.h, img.rgba)) {
         fprintf(stderr, "[textures] could not read %s%s\n", dir_.c_str(), name);
