@@ -74,9 +74,9 @@ documented in `docs/game_ram.md`, or by intercepting calls.
 
 | Thread | Where | What |
 |---|---|---|
-| Game | `runtime.cpp`, started by `app.cpp` with a 512 MB stack (the recompiled code nests deeply) | Runs the recompiled game at real speed (`pace_frame`), publishes a Real3D frame at each command-port write (`r3d_flush`: unchanged 64 KB pages shared with the previous frame) and the 2D layer memory at each vblank (dirty pages only), drives the sound board, saves/loads states at safe points (`rt_state_point`) |
+| Game | `runtime.cpp`, started by `app.cpp` with a 512 MB stack (the recompiled code nests deeply) | Runs the recompiled game at real speed (`pace_frame`), publishes a Real3D frame at each command-port write (`r3d_flush`: unchanged 64 KB pages shared with the previous frame) and the 2D layer memory at each vblank (dirty pages only), drives the sound board, saves/loads states at safe points (`rt_state_point`: the copy is taken there, the file is written by a helper thread) |
 | Window | `app.cpp` (`App::run`) | Win32 messages, inputs (mice/light guns, gamepads), the menus, and one image per monitor refresh: picks the newest prepared frame, interpolates the 3D between game frames (`set_interpolation`), composes and presents (`VkPresenter::frame`) |
-| Preparation | `App::prepare_frames` | For every game frame as soon as it is published: builds the 3D scene (`R3DSceneBuilder`) and composes the 2D layers (`TileGen::compose`, 2D replacements, HD text) side by side, so the window thread only draws |
+| Preparation | `App::prepare_frames` | For every game frame as soon as it is published: builds the 3D scene (`R3DSceneBuilder`) while a helper thread (`Worker`) composes the 2D layers (`TileGen::compose`, 2D replacements, HD text), so the window thread only draws |
 | Audio | `src/audio/audio_out.cpp` | WASAPI output; pulls from the `AudioStream` queue the sound board fills (resampling and rate control there) |
 | Boss state makers | separate processes (`--make-boss-state N`) | Play headless up to each boss and save its state, one at a time while the game runs |
 
@@ -156,7 +156,8 @@ first start picks a QUALITY level from the GPU's name (`suggest_quality`).
 `ctest` (run by `build.bat`): tilegen composition against golden hashes, FNV-1a
 in C++ and Python, the options table, the sky scroll reconstruction, the audio
 queue, the ROM layout from the zip, the encounter script reader (against
-`tools/encounters.py`), the SCSP's part of the saved states, the weather sound
-and the procedural sky (CPU against GLSL). Full-game checks are headless runs
+`tools/encounters.py`), the SCSP's part of the saved states, the weather sound,
+the procedural sky (CPU against GLSL), the scene builder's cached frame reads
+(`R3DStateReader`) and the helper thread (`Worker`). Full-game checks are headless runs
 (`--headless --frames N`, deterministic: `out/ram.bin` and `out/real3d/*` can be
 compared by hash) and `--shot N` captures.

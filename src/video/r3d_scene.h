@@ -127,13 +127,13 @@ private:
     void node_ptr(uint32_t ptr, const Mat& m, const Attribs& a, int depth);
     void pointer_list(uint32_t addr, const Mat& m, const Attribs& a, int depth);
     void model(uint32_t addr, const Mat& m, const Attribs& a);
-    uint32_t model_word(uint32_t addr) const;
-    Mat matrix(uint32_t index) const;
+    uint32_t model_word(uint32_t addr);
+    Mat matrix(uint32_t index);
     void link_previous(R3DScene& out);
     uint32_t instance_key(uint32_t model_addr);
     void apply_texture_pack(R3DScene& out);
 
-    const R3DFrameState* s_ = nullptr;
+    R3DStateReader s_;   // the frame being built, read with its pages cached
     const uint8_t* vrom_ = nullptr;
     size_t vrom_words_ = 0;
     R3DScene* out_ = nullptr;
@@ -167,7 +167,12 @@ private:
     };
     std::vector<PrevInstance> prev_instances_;   // for pairing identical copies by place
     void pair_copies();
-    std::unordered_map<uint32_t, std::array<float, 9>> prev_axes_;   // model instance -> its axes last frame
+    // pair_copies' tables, kept from frame to frame (cleared, their buckets stay)
+    std::unordered_map<uint32_t, std::vector<R3DInstance*>> copies_now_;
+    std::unordered_map<uint32_t, std::vector<const PrevInstance*>> copies_before_;
+    std::unordered_map<uint32_t, uint32_t> rekey_;
+    std::unordered_map<uint32_t, std::array<float, 9>> prev_axes_, axes_;   // model instance -> its axes last frame, this frame
+    std::unordered_set<uint32_t> spinning_;   // instances that turned a lot since the previous frame
     std::unordered_map<uint32_t, uint32_t> instance_count_;
     uint32_t node_key_ = 0, viewport_key_ = 0;
     bool hud_edges_ = true;

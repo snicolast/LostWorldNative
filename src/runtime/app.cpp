@@ -15,7 +15,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
-#include <future>
 #include <memory>
 #include <mutex>
 #include <map>
@@ -41,6 +40,7 @@
 #include "weather.h"
 #include "../audio/sound_board.h"
 #include "../common/paths.h"
+#include "../common/worker.h"
 #include "../ui/achievement_toast.h"
 #include "../ui/crosshair_file.h"
 #include "../ui/frontend.h"
@@ -941,6 +941,7 @@ struct App {
     std::atomic<bool> prep_on{false}, prep_stop{false};
     std::atomic<uint64_t> prep_us{0}, prep_frames{0};   // its work, read once a second
     std::thread prep_thread;
+    Worker layers_worker;   // composes the 2D layers while prep_thread builds the 3D scene
     // LW_FRAMELOG: a thread notes when each present reaches the screen
     std::atomic<uint64_t> presented_id{0};
     std::thread shown_waiter;
@@ -1227,14 +1228,13 @@ void App::prepare_frames() {
         {
             std::lock_guard<std::mutex> lock(prep_mutex);
             take_snapshot(state->vblank, p->layers);   // the 2D layers of the frame's vblank
-            std::future<void> layers;
-            if (p->layers.frame != ~0ull)
-                layers = std::async(std::launch::async, [&] { compose_2d(p->layers); });
+            bool layers = p->layers.frame != ~0ull;
+            if (layers) layers_worker.run([&] { compose_2d(p->layers); });
             double from = now_seconds();
             builder.build(*state, p->scene);
             double built_at = now_seconds();
             pictures.replacements = pack.take_new_images();
-            if (layers.valid()) layers.get();
+            if (layers) layers_worker.wait();
             double took = now_seconds() - from;
             prep_us += uint64_t(took * 1e6);
             prep_frames++;
