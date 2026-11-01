@@ -55,7 +55,9 @@ void R3DRayTracer::build_info(VkAccelerationStructureBuildGeometryInfoKHR& info,
     geo[1].flags = 0;                            // the shader looks at the texture first
     info = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
     info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    info.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;   // rebuilt every image
+    // Built for each new game frame and refitted for the images between
+    info.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR |
+                 VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
     info.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     info.geometryCount = 2;
     info.pGeometries = geo;
@@ -101,7 +103,7 @@ bool R3DRayTracer::reserve(uint32_t triangles) {
         l.address = vkGetAccelerationStructureDeviceAddressKHR(dev_, &ai);
         // Their own parts of the scratch buffer: they are built side by side
         l.scratch_offset = scratch;
-        scratch = align(scratch + sizes.buildScratchSize);
+        scratch = align(scratch + std::max(sizes.buildScratchSize, sizes.updateScratchSize));
     }
 
     // The top level: its part of the scratch buffer after the bottom levels'
@@ -158,6 +160,7 @@ bool R3DRayTracer::init(VkPresenter& vk) {
         inst[i].accelerationStructureReference = levels_[i].address;
     }
     memcpy(instances_.mapped, inst, sizeof(inst));
+    dirty_ = rebuild_ = true;
     vk.run_once([&](VkCommandBuffer cmd) { record(cmd); });
     return true;
 }
@@ -177,8 +180,19 @@ void R3DRayTracer::shutdown() {
     dev_ = VK_NULL_HANDLE;
 }
 
-void R3DRayTracer::prepare(const R3DScene& scene, const R3DViewport& world, float interp, const float up[3],
-                           float camera_height, float max_height, bool high) {
+void R3DRayTracer::prepare(const R3DScene& scene, uint64_t serial, const R3DViewport& world, float interp,
+                           const float up[3], float camera_height, float max_height, bool high) {
+    Key key;
+    key.serial = serial;
+    key.world = &world;
+    key.interp = interp;
+    for (int i = 0; i < 3; i++) key.up[i] = up[i];
+    key.camera_height = camera_height;
+    key.max_height = max_height;
+    key.high = high;
+    if (key == key_) return;   // the same image again: the structures hold it (or will, if not recorded yet)
+    bool same_scene = key.serial == key_.serial && key.world == key_.world;
+    key_ = key;
     for (Level& l : levels_) {
         l.solid_pos.clear();
         l.cut_pos.clear();
@@ -218,6 +232,8 @@ void R3DRayTracer::prepare(const R3DScene& scene, const R3DViewport& world, floa
     for (Level& l : levels_) total += uint32_t((l.solid_pos.size() + l.cut_pos.size()) / 9);
     if (!reserve(total)) {
         for (Level& l : levels_) l.solid = l.cut = 0;
+        dirty_ = rebuild_ = true;
+        key_ = Key{};
         return;
     }
     float* pos = static_cast<float*>(positions_.mapped);
@@ -244,9 +260,16 @@ void R3DRayTracer::prepare(const R3DScene& scene, const R3DViewport& world, floa
         first_cut += l.cut;
     }
     memcpy(instances_.mapped, inst, sizeof(inst));
+    // Between two game frames the same triangles only move: a refit, unless
+    // the buffers were made again or a triangle crossed max_height (other counts)
+    bool same_counts = true;
+    for (const Level& l : levels_) same_counts &= l.solid == l.built_solid && l.cut == l.built_cut;
+    rebuild_ = !same_scene || !same_counts || generation_ != built_generation_;
+    dirty_ = true;
 }
 
 void R3DRayTracer::record(VkCommandBuffer cmd) {
+    if (!dirty_) return;
     VkDeviceAddress scratch = (scratch_.address + scratch_align_ - 1) / scratch_align_ * scratch_align_;
     VkAccelerationStructureBuildGeometryInfoKHR infos[2];
     VkAccelerationStructureGeometryKHR geos[2][2];
@@ -256,6 +279,10 @@ void R3DRayTracer::record(VkCommandBuffer cmd) {
         const Level& l = levels_[i];
         build_info(infos[i], geos[i], l);
         infos[i].dstAccelerationStructure = l.blas;
+        if (!rebuild_) {   // in place, from what it holds
+            infos[i].mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+            infos[i].srcAccelerationStructure = l.blas;
+        }
         infos[i].scratchData.deviceAddress = scratch + l.scratch_offset;
         ranges[i][0] = {l.solid, 0, 0, 0};
         ranges[i][1] = {l.cut, 0, 0, 0};
@@ -288,4 +315,10 @@ void R3DRayTracer::record(VkCommandBuffer cmd) {
     mb.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_SHADER_READ_BIT;
     vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 1, &mb, 0, nullptr, 0, nullptr);
+    for (Level& l : levels_) {
+        l.built_solid = l.solid;
+        l.built_cut = l.cut;
+    }
+    built_generation_ = generation_;
+    dirty_ = rebuild_ = false;
 }

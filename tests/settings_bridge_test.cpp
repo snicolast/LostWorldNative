@@ -1,7 +1,8 @@
 // The options menu and the command-line options (runtime/settings_bridge):
 // every menu value survives the trip to Options and back, QUALITY levels are
-// recognised after being set, and the first start's quality_options matches
-// what options_from_settings gives for the same settings
+// recognised after being set, the first start's quality_options matches
+// what options_from_settings gives for the same settings, and its guess of
+// the level from the graphics card's name
 #include <cmath>
 #include <cstdio>
 
@@ -164,7 +165,53 @@ static void test_quality_options() {
     }
 }
 
+// The first start's guess from the graphics card's name (Vulkan's deviceName)
+static void test_suggest_quality() {
+    enum { L = FrontendSettings::LOW, M = FrontendSettings::MEDIUM, H = FrontendSettings::HIGH, U = FrontendSettings::ULTRA };
+    struct Card {
+        const char* name;
+        bool integrated;
+        int quality;
+    };
+    static const Card cards[] = {
+        {"NVIDIA GeForce RTX 5070 Ti", false, U},
+        {"NVIDIA GeForce RTX 4090", false, U},
+        {"NVIDIA GeForce RTX 3080", false, H},
+        {"NVIDIA GeForce RTX 3060", false, M},
+        {"NVIDIA GeForce RTX 2060", false, M},
+        {"NVIDIA GeForce RTX 3050", false, M},
+        {"NVIDIA GeForce RTX 4060 Laptop GPU", false, M},
+        {"NVIDIA GeForce RTX 2060 with Max-Q Design", false, L},
+        {"NVIDIA GeForce GTX 1660 Ti", false, M},
+        {"NVIDIA GeForce GTX 1660 SUPER", false, M},
+        {"NVIDIA GeForce GTX 1660 Ti with Max-Q Design", false, L},
+        {"NVIDIA GeForce GTX 1650", false, L},
+        {"NVIDIA GeForce GTX 1080 Ti", false, M},
+        {"NVIDIA GeForce GTX 1060 6GB", false, L},
+        {"NVIDIA GeForce GTX 970", false, L},
+        {"AMD Radeon RX 9070 XT", false, H},
+        {"AMD Radeon RX 7900 XTX", false, H},
+        {"AMD Radeon RX 6600", false, M},
+        {"AMD Radeon RX 5700 XT", false, M},
+        {"AMD Radeon RX 580 Series", false, L},
+        {"AMD Radeon RX Vega", false, L},
+        {"Intel(R) Arc(TM) A770 Graphics", false, M},
+        {"Intel(R) Arc(TM) B580 Graphics", false, M},
+        {"Intel(R) Arc(TM) A380 Graphics", false, L},
+        {"Intel(R) Arc(TM) Graphics", true, L},
+        {"AMD Radeon 780M Graphics", true, L},
+        {"Intel(R) UHD Graphics 630", true, L},
+        {"Some Future GPU 9000", false, M},
+    };
+    for (const Card& c : cards) {
+        int q = suggest_quality(c.name, c.integrated);
+        if (q != c.quality) printf("  %s: %d, expected %d\n", c.name, q, c.quality);
+        CHECK(q == c.quality);
+    }
+}
+
 int main() {
+    test_suggest_quality();
     test_round_trip();
     test_aspect_kept();
     test_quality();

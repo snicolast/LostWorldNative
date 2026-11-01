@@ -179,7 +179,8 @@ saved games and are not versioned.
   detail, bloom, MSAA, anisotropic filter, 2D filter); CUSTOM when they are
   mixed. On the first start (no save/settings.ini) a level is picked from the
   graphics card's name: an RTX 3060 laptop gets MEDIUM, a 4070 HIGH, a 5070 Ti
-  ULTRA, an integrated GPU LOW. Measured on an RTX 5070 Ti at 1440p, the most
+  ULTRA, a GTX 1660 or 1080 and an Intel Arc A750 or B580 MEDIUM, a GTX 1650
+  and an integrated GPU LOW. Measured on an RTX 5070 Ti at 1440p, the most
   expensive effects are the ambient occlusion, the render resolution, the
   procedural sky and the sun shadows; on integrated graphics, limited by
   memory bandwidth, also the MSAA samples, the anisotropic taps, the surface
@@ -258,9 +259,11 @@ saved games and are not versioned.
 - --rt off|shadows|ao (RAY TRACING in the settings, LIGHTING tab: OFF,
   SHADOWS, SHADOWS + AO; --no-rt is --rt off): on a GPU with ray tracing
   (Vulkan ray queries: NVIDIA RTX, AMD RX 6000 or newer) the sun shadows and
-  the ambient occlusion are traced by default. Every image, the opaque game
-  world (a few thousand triangles, already in view space and interpolated
-  like the picture) goes into acceleration structures rebuilt from scratch:
+  the ambient occlusion are traced by default. The opaque game world (a few
+  thousand triangles, already in view space and interpolated like the
+  picture) goes into acceleration structures, built from scratch for each
+  game frame and refitted for the images between (an image that repeats the
+  last one builds nothing):
   what stands near the ground, which casts the sun shadows as with the shadow
   map, and what is higher up (canopies, roofs), which only the occlusion sees.
   The 3D pass sends a few rays from each sunlit point towards the sun's disc:

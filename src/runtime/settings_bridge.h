@@ -3,6 +3,8 @@
 // place that turns each into the other, so the two directions and the first
 // start's QUALITY cannot drift apart (tests/settings_bridge_test.cpp)
 #pragma once
+#include <string>
+
 #include "options.h"
 
 struct FrontendSettings;
@@ -22,3 +24,8 @@ void quality_options(const FrontendSettings& s, Options& o);
 // And back: what the menu shows at the start, the file's settings with the
 // command line's options over them (rounded to the menu's steps)
 void settings_from_options(const Options& o, FrontendSettings& s);
+
+// QUALITY for the first start, from the graphics card's name (as Vulkan
+// gives it) and whether it is integrated: a rough guess at its speed. The
+// options menu changes it
+int suggest_quality(const std::string& device_name, bool integrated);
