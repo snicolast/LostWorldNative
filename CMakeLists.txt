@@ -109,6 +109,7 @@ add_executable(LostWorld
     src/ui/survival_ui.cpp
     src/ui/achievement_toast.cpp
     src/runtime/options.cpp
+    src/runtime/settings_bridge.cpp
     src/runtime/rom_zip.cpp
     ${MINIZ_DIR}/miniz.c
     src/video/tilegen.cpp
@@ -125,6 +126,7 @@ add_executable(LostWorld
     src/ui/crosshair_file.cpp
     src/ui/menu_music.cpp
     src/ui/frontend.cpp
+    src/ui/frontend_settings.cpp
     src/video/r3d_state.cpp
     src/video/r3d_scene.cpp
     src/video/r3d_screen.cpp
@@ -194,8 +196,12 @@ if(LW_TESTS)
     add_executable(sky_procedural_test tests/sky_procedural_test.cpp src/video/sky_procedural.cpp)
     add_executable(r3d_state_test tests/r3d_state_test.cpp)
     add_executable(worker_test tests/worker_test.cpp)
+    add_executable(settings_bridge_test tests/settings_bridge_test.cpp src/runtime/settings_bridge.cpp
+                   src/ui/frontend_settings.cpp)
+    add_executable(pack2d_test tests/pack2d_test.cpp src/video/pack2d.cpp)
     foreach(t tilegen_test fnv_test options_test sky_motion_test audio_stream_test rom_zip_test encounter_script_test
-              scsp_state_test weather_sound_test sky_procedural_test r3d_state_test worker_test)
+              scsp_state_test weather_sound_test sky_procedural_test r3d_state_test worker_test settings_bridge_test
+              pack2d_test)
         target_include_directories(${t} PRIVATE src/video src/common src/runtime src/audio ${MINIZ_DIR})
         if(MSVC)
             target_compile_options(${t} PRIVATE /W4 /utf-8)
@@ -214,6 +220,8 @@ if(LW_TESTS)
     add_test(NAME sky_procedural COMMAND sky_procedural_test)
     add_test(NAME r3d_state COMMAND r3d_state_test)
     add_test(NAME worker COMMAND worker_test)
+    add_test(NAME settings_bridge COMMAND settings_bridge_test)
+    add_test(NAME pack2d COMMAND pack2d_test)
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         add_test(NAME fnv_python COMMAND Python3::Interpreter ${CMAKE_SOURCE_DIR}/tests/fnv_test.py
