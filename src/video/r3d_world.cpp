@@ -77,7 +77,9 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
     // Scenery models of this frame, by instance and by model (the n-th time
     // a model is drawn): the game sometimes rebuilds its display list in
     // another place, which changes every instance key at once
-    Scenery scenery;
+    Scenery& scenery = scenery_now_;
+    scenery.by_key.clear();
+    scenery.by_model.clear();
     scenery_models_.clear();
     if (best >= 0) {
         std::unordered_map<uint32_t, uint32_t> seen;
@@ -188,7 +190,8 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
     bool continuous = !fresh && (kept * 2 >= scenery.by_key.size() || size_t(agree) * 2 >= scenery.by_key.size());
     const uint64_t frame = out.frame, memory = 120;
     if (fresh) seen_.clear();   // the camera position starts over: old places no longer match
-    std::unordered_map<uint32_t, std::vector<Seen>> seen;
+    auto& seen = seen_now_;
+    seen.clear();
     size_t appearing = 0;
     for (const R3DInstance& in : viewport_instances[best]) {
         if (!same_axes(in.axes, axes)) continue;
@@ -249,10 +252,10 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
                     covered = true;
             if (!covered) now.push_back(s);
         }
-    seen_ = std::move(seen);
+    seen_.swap(seen);
 
     tracking_ = true;
-    scenery_prev_ = std::move(scenery);
+    std::swap(scenery_prev_, scenery_now_);
 
     // Ground: median height of the upward-facing surfaces below the camera
     R3DViewport& v = out.viewports[best];

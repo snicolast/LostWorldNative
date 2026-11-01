@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <thread>
 
 #include "bosses.h"
 #include "eeprom.h"
@@ -91,6 +92,7 @@ AutoInput g_auto;
 std::shared_ptr<const R3DFrameState> g_r3d_latest;                  // last closed 3D frame
 std::condition_variable g_r3d_cv;                                   // notified when it changes
 std::mutex g_r3d_mutex;
+std::thread g_state_writer;   // writes a captured game state to its file (rt_state_point) off the game thread
 R3DTextureRam g_texture_ram;
 std::mutex g_video_mutex;
 std::vector<uint8_t> g_video_vram(TILEGEN_SIZE);
@@ -331,12 +333,20 @@ void texture_port_word(uint32_t w) {
         const uint16_t* p = reinterpret_cast<const uint16_t*>(g_vrom.data() + start * 4);
         g_texture_ram.upload_direct(header, p, (words_total - start) * 2);
     } else {
-        // Polygon RAM source: copy the (at most 1 MB) rest of it
-        std::vector<uint16_t> buf((0x100000 - src) * 2);
-        for (size_t i = 0; i < buf.size() / 2; i++) {
-            uint32_t v = le32_at(dev_ptr(0x98000000 + uint32_t(src + i) * 4));
-            buf[2 * i] = uint16_t(v);
-            buf[2 * i + 1] = uint16_t(v >> 16);
+        // Polygon RAM source: the rest of it (at most 1M words), page by page
+        // into a buffer kept between uploads. The device words are stored
+        // little-endian, so their 16-bit halves are the texels in order
+        static std::vector<uint16_t> buf;
+        buf.resize((0x100000 - src) * 2);
+        uint32_t byte = src * 4;   // into polygon RAM
+        size_t done = 0;
+        while (byte < 0x400000) {
+            uint32_t page_end = (byte | 0xFFFF) + 1, n = std::min(page_end, 0x400000u) - byte;
+            auto it = g_dev.find((0x98000000 + byte) >> 16);
+            if (it == g_dev.end() || it->second.empty()) memset(buf.data() + done, 0, n);
+            else memcpy(buf.data() + done, it->second.data() + (byte & 0xFFFF), n);
+            done += n / 2;
+            byte += n;
         }
         g_texture_ram.upload_direct(header, buf.data(), buf.size());
     }
@@ -800,6 +810,7 @@ ULONGLONG g_boot_ms = GetTickCount64();
 // stopped here before the process goes away
 [[noreturn]] void exit_from_game_thread(int code) {
     fflush(stdout);
+    if (g_state_writer.joinable()) g_state_writer.join();   // a state still being written
     g_audio.stop();
     ExitProcess(code);
 }
@@ -839,6 +850,9 @@ struct GameState {
     Ctx ctx{};
     std::vector<uint8_t> ram;
     std::vector<std::pair<uint32_t, std::vector<uint8_t>>> pages;
+    // Real3D pages unchanged since the last frame closed: shared with it
+    // (r3d_flush keeps them immutable) instead of copied
+    std::vector<std::pair<uint32_t, std::shared_ptr<const R3DPage>>> shared;
     std::vector<uint16_t> texture;
     std::vector<uint8_t> sound;   // empty without the sound board
     uint8_t midi_ctrl = 0;
@@ -906,7 +920,18 @@ std::unique_ptr<GameState> capture_state(const Ctx& c) {
     st->chain = call_chain(g_ram, c.r[1]);
     st->ctx = c;
     st->ram.assign(g_ram, g_ram + RAM_SIZE);
-    for (auto& [key, page] : g_dev) st->pages.emplace_back(key, std::vector<uint8_t>(page.begin(), page.end()));
+    // A Real3D page not written since the last flush is the one that frame
+    // holds (only this thread writes them and r3d_flush copies the dirty ones)
+    const R3DFrameState* latest = g_r3d_latest.get();
+    for (auto& [key, page] : g_dev) {
+        uint32_t region = key >> 8;
+        if (latest && (region == 0x8C || region == 0x8E || region == 0x98) && !g_r3d_dirty.count(key))
+            if (auto it = latest->pages.find(key); it != latest->pages.end()) {
+                st->shared.emplace_back(key, it->second);
+                continue;
+            }
+        st->pages.emplace_back(key, std::vector<uint8_t>(page.begin(), page.end()));
+    }
     g_texture_ram.copy_all(st->texture);
     g_sound.save_state(st->sound);
     st->midi_ctrl = g_midi_ctrl;
@@ -921,11 +946,15 @@ bool write_state(const char* path, const GameState& st) {
     fwrite(st.chain.data(), 4, st.chain.size(), f);
     fwrite(&st.ctx, sizeof(Ctx), 1, f);
     put_packed(f, st.ram.data(), st.ram.size());
-    uint32_t count = uint32_t(st.pages.size());
+    uint32_t count = uint32_t(st.pages.size() + st.shared.size());
     fwrite(&count, 4, 1, f);
     for (auto& [key, page] : st.pages) {
         fwrite(&key, 4, 1, f);
         put_packed(f, page.data(), page.size());
+    }
+    for (auto& [key, page] : st.shared) {
+        fwrite(&key, 4, 1, f);
+        put_packed(f, page->data(), page->size());
     }
     put_packed(f, reinterpret_cast<const uint8_t*>(st.texture.data()), st.texture.size() * 2);
     put_packed(f, st.sound.data(), st.sound.size());
@@ -973,6 +1002,7 @@ void apply_state(Ctx& c, const GameState& st) {
     memcpy(g_ram, st.ram.data(), RAM_SIZE);
     for (auto& [key, page] : g_dev) memset(page.data(), 0, page.size());
     for (auto& [key, page] : st.pages) memcpy(dev_ptr(key << 16), page.data(), 0x10000);
+    for (auto& [key, page] : st.shared) memcpy(dev_ptr(key << 16), page->data(), 0x10000);
     for (auto& [key, page] : g_dev)
         if ((key >> 8) == 0x8C || (key >> 8) == 0x8E || (key >> 8) == 0x98) g_r3d_dirty.insert(key);
     g_tilegen_dirty = (1u << TILEGEN_PAGES) - 1;
@@ -989,6 +1019,7 @@ void apply_state(Ctx& c, const GameState& st) {
 // and game_state_load_home() puts it back (to leave boss mode).
 void game_state_save(const std::string& path) {
     std::lock_guard<std::mutex> lock(g_state_mutex);
+    if (g_state_writer.joinable()) g_state_writer.join();   // the previous file first (its result is read already)
     g_state_path = path;
     g_state_result = 0;
     g_state_op = 1;
@@ -1059,7 +1090,12 @@ void rt_state_point(Ctx& c) {
     if (g_in_irq) return;
     std::lock_guard<std::mutex> lock(g_state_mutex);
     if (g_state_op == 1) {
-        g_state_result = write_state(g_state_path.c_str(), *capture_state(c)) ? 1 : -1;
+        // The copy is brief; the file is written by another thread, so the
+        // game does not stop for the disk (the result comes when it is done)
+        if (g_state_writer.joinable()) g_state_writer.join();
+        g_state_writer = std::thread([path = g_state_path, st = std::shared_ptr<GameState>(capture_state(c))] {
+            g_state_result = write_state(path.c_str(), *st) ? 1 : -1;
+        });
         g_state_op = 0;
     } else if (g_state_op == 2 && g_state) {
         // Only from the same chain of calls (the main loop); anywhere else

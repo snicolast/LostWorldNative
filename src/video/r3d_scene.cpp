@@ -57,10 +57,10 @@ inline float vertex_normal(uint32_t w) {   // signed byte in bits 0-7
 
 }  // namespace
 
-R3DSceneBuilder::Mat R3DSceneBuilder::matrix(uint32_t index) const {
+R3DSceneBuilder::Mat R3DSceneBuilder::matrix(uint32_t index) {
     // 12 floats: translation, then rows 0..2 (spec 4.1)
     float f[12];
-    for (int i = 0; i < 12; i++) f[i] = s_->cullf(matrix_base_ + index * 12 + i);
+    for (int i = 0; i < 12; i++) f[i] = s_.cullf(matrix_base_ + index * 12 + i);
     Mat m{};
     m.m[0] = f[3]; m.m[4] = f[4]; m.m[8] = f[5];  m.m[12] = f[0];
     m.m[1] = f[6]; m.m[5] = f[7]; m.m[9] = f[8];  m.m[13] = f[1];
@@ -69,9 +69,9 @@ R3DSceneBuilder::Mat R3DSceneBuilder::matrix(uint32_t index) const {
     return m;
 }
 
-uint32_t R3DSceneBuilder::model_word(uint32_t addr) const {
+uint32_t R3DSceneBuilder::model_word(uint32_t addr) {
     addr &= 0xFFFFFF;
-    if (addr < 0x100000) return s_->poly(addr);
+    if (addr < 0x100000) return s_.poly(addr);
     if (!vrom_words_) return 0;
     uint32_t v;
     memcpy(&v, vrom_ + size_t(addr % vrom_words_) * 4, 4);   // VROM mirrored over 64 MB
@@ -79,7 +79,7 @@ uint32_t R3DSceneBuilder::model_word(uint32_t addr) const {
 }
 
 void R3DSceneBuilder::build(const R3DFrameState& state, R3DScene& out) {
-    s_ = &state;
+    s_.attach(&state);
     out_ = &out;
     keys_.clear();
     instance_count_.clear();
@@ -112,15 +112,23 @@ uint32_t R3DSceneBuilder::instance_key(uint32_t model_addr) {
 // bob up and down. Each copy takes the key of the nearest copy of the
 // previous frame instead.
 void R3DSceneBuilder::pair_copies() {
-    std::unordered_map<uint32_t, std::vector<R3DInstance*>> now;
+    auto& now = copies_now_;
+    auto& before = copies_before_;
+    auto& rekey = rekey_;
+    // The lists keep their room; the paths come and go slowly (with the
+    // stages), so the tables start over before they fill up with old ones
+    if (now.size() > 4096) now.clear();
+    if (before.size() > 4096) before.clear();
+    for (auto& [path, list] : now) list.clear();
+    for (auto& [path, list] : before) list.clear();
+    rekey.clear();
     for (auto& list : viewport_instances_)
         for (R3DInstance& in : list) now[in.path].push_back(&in);
-    std::unordered_map<uint32_t, std::vector<const PrevInstance*>> before;
     for (const PrevInstance& p : prev_instances_) before[p.path].push_back(&p);
-    std::unordered_map<uint32_t, uint32_t> rekey;
     for (auto& [path, copies] : now) {
-        auto it = before.find(path);
-        if (it == before.end() || (copies.size() < 2 && it->second.size() < 2)) continue;
+        if (copies.empty()) continue;
+        auto it = before.find(path);   // (an empty list: the path was not drawn last frame)
+        if (it == before.end() || it->second.empty() || (copies.size() < 2 && it->second.size() < 2)) continue;
         if (copies.size() > 64 || it->second.size() > 64) continue;   // scenery repeated everywhere: as drawn
         const auto& old = it->second;
         // Closest pairs first. Moving copies (fence posts as the camera pans)
@@ -180,8 +188,10 @@ void R3DSceneBuilder::pair_copies() {
 void R3DSceneBuilder::link_previous(R3DScene& out) {
     out.moving = 0;
     pair_copies();
-    std::unordered_map<uint32_t, std::array<float, 9>> axes;
-    std::unordered_set<uint32_t> spinning;
+    auto& axes = axes_;
+    auto& spinning = spinning_;
+    axes.clear();
+    spinning.clear();
     for (const auto& list : viewport_instances_)
         for (const R3DInstance& in : list) {
             std::array<float, 9>& a = axes[in.key];
@@ -258,9 +268,9 @@ void R3DSceneBuilder::apply_texture_pack(R3DScene& out) {
 }
 
 void R3DSceneBuilder::viewport(uint32_t addr, int depth) {
-    if (depth > 64 || !s_->cull_valid(addr) || !visited_viewports_.insert(addr & 0xFFFFFF).second) return;
-    auto vp = [&](uint32_t i) { return s_->cull(addr + i); };
-    auto vpf = [&](uint32_t i) { return s_->cullf(addr + i); };
+    if (depth > 64 || !s_.cull_valid(addr) || !visited_viewports_.insert(addr & 0xFFFFFF).second) return;
+    auto vp = [&](uint32_t i) { return s_.cull(addr + i); };
+    auto vpf = [&](uint32_t i) { return s_.cullf(addr + i); };
     uint32_t w0 = vp(0);
     if (vp(1) == 0) return;   // memory not set up yet
 
@@ -380,16 +390,16 @@ void R3DSceneBuilder::node_ptr(uint32_t ptr, const Mat& m, const Attribs& a, int
 
 void R3DSceneBuilder::pointer_list(uint32_t addr, const Mat& m, const Attribs& a, int depth) {
     for (uint32_t i = 0; i < 0x10000; i++) {
-        uint32_t e = s_->cull(addr + i);
+        uint32_t e = s_.cull(addr + i);
         if (!(e & 0x01000000)) node(e & 0xFFFFFF, m, a, depth + 1);
         if (e & 0x02000000) break;
     }
 }
 
 void R3DSceneBuilder::node(uint32_t addr, const Mat& parent, Attribs a, int depth) {
-    if (depth > 1024 || !s_->cull_valid(addr)) return;
+    if (depth > 1024 || !s_.cull_valid(addr)) return;
     uint32_t w[10];
-    for (int i = 0; i < 10; i++) w[i] = s_->cull(addr + i);
+    for (int i = 0; i < 10; i++) w[i] = s_.cull(addr + i);
     if ((w[0] & 3) == 0) return;               // viewport reached as a node
     if ((w[0] & 0x300) == 0x300) return;       // discarded with its children
 
@@ -450,8 +460,8 @@ void R3DSceneBuilder::node(uint32_t addr, const Mat& parent, Attribs a, int dept
     float lod_scale = (a.no_cull || no_lod || dist == 0) ? 1e30f : std::max(0.0f, blend_r / dist);
     float del[4], fac[4];
     for (int k = 0; k < 4; k++) {
-        del[k] = s_->cullf(lod_base_ + lod_index * 8 + k * 2);
-        fac[k] = s_->cullf(lod_base_ + lod_index * 8 + k * 2 + 1);
+        del[k] = s_.cullf(lod_base_ + lod_index * 8 + k * 2);
+        fac[k] = s_.cullf(lod_base_ + lod_index * 8 + k * 2 + 1);
     }
     static const bool debug_no_lod = getenv("LW_NOLOD") != nullptr;   // debugging aid
     if (!debug_no_lod && !a.no_cull && !no_lod && lod_scale < del[3]) return;   // too far away
@@ -460,7 +470,7 @@ void R3DSceneBuilder::node(uint32_t addr, const Mat& parent, Attribs a, int dept
     if (w[0] & 0x08) {   // 4-entry LOD table
         uint32_t table = child & 0xFFFFFF;
         uint32_t entry[4];
-        for (int k = 0; k < 4; k++) entry[k] = s_->cull(table + k);
+        for (int k = 0; k < 4; k++) entry[k] = s_.cull(table + k);
         int k = 0;
         for (; k < 3; k++)
             if (lod_scale >= del[k] && (entry[k] & 0x01000000)) break;
@@ -551,7 +561,7 @@ void R3DSceneBuilder::model(uint32_t addr, const Mat& m, const Attribs& a) {
                 g = (h[4] >> 16) & 0xFF;
                 b = (h[4] >> 8) & 0xFF;
             } else {
-                uint32_t c = s_->poly(color_table_ + ((h[4] >> 8) & 0xFFF));
+                uint32_t c = s_.poly(color_table_ + ((h[4] >> 8) & 0xFFF));
                 r = (c >> 16) & 0xFF;
                 g = (c >> 8) & 0xFF;
                 b = c & 0xFF;

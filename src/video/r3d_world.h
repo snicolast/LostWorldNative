@@ -41,7 +41,7 @@ private:
     struct Scenery {
         std::unordered_map<uint32_t, Placement> by_key, by_model;
     };
-    Scenery scenery_prev_;   // last frame
+    Scenery scenery_prev_, scenery_now_;   // last frame; this frame (swapped: the buckets are kept)
     std::unordered_set<uint32_t> scenery_models_;   // model addresses of the last scenery tracked
     // Scenery seen recently, by model address: where it stood in the world,
     // the last frame it was drawn and how dissolved it was (fading in after
@@ -52,7 +52,7 @@ private:
         uint64_t frame;
         float fade;
     };
-    std::unordered_map<uint32_t, std::vector<Seen>> seen_;
+    std::unordered_map<uint32_t, std::vector<Seen>> seen_, seen_now_;   // this frame's is built in seen_now_, then swapped in
     float camera_[3] = {}, velocity_[3] = {};
     float loop_offset_[3] = {};   // added to the camera for the atmosphere when the game loops its scenery
     int lost_ = 0;   // frames in a row the scenery could not be matched

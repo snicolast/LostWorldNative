@@ -57,6 +57,53 @@ struct R3DFrameState {
     uint32_t poly(uint32_t addr) const { return read(0x98000000 + (addr & 0xFFFFF) * 4); }
 };
 
+// The same reads with the page of the last one kept per memory (culling and
+// polygon RAM: a scene build reads thousands of words in a row from each), so
+// most reads skip the page lookup. For one thread, over one frame at a time
+class R3DStateReader {
+public:
+    void attach(const R3DFrameState* s) {
+        s_ = s;
+        for (Slot& slot : slots_) slot = Slot{};
+    }
+    const R3DFrameState* state() const { return s_; }
+
+    bool cull_valid(uint32_t addr) const { return s_->cull_valid(addr); }
+    uint32_t cull(uint32_t addr) {
+        addr &= 0xFFFFFF;
+        if (addr >= 0x800000 && addr < 0x840000) return read(0x8E000000 + (addr & 0x3FFFF) * 4, slots_[1]);
+        if (addr < 0x100000) return read(0x8C000000 + addr * 4, slots_[0]);
+        return 0;
+    }
+    float cullf(uint32_t addr) {
+        uint32_t v = cull(addr);
+        float f;
+        memcpy(&f, &v, 4);
+        return f;
+    }
+    uint32_t poly(uint32_t addr) { return read(0x98000000 + (addr & 0xFFFFF) * 4, slots_[2]); }
+
+private:
+    struct Slot {
+        uint32_t key = ~0u;              // PPC address >> 16 of the page below, ~0 = none looked up
+        const uint8_t* page = nullptr;   // null: the frame has no such page (reads 0)
+    };
+    uint32_t read(uint32_t ppc_addr, Slot& slot) {
+        uint32_t key = ppc_addr >> 16;
+        if (key != slot.key) {
+            slot.key = key;
+            auto it = s_->pages.find(key);
+            slot.page = it == s_->pages.end() ? nullptr : it->second->data();
+        }
+        if (!slot.page) return 0;
+        uint32_t v;
+        memcpy(&v, slot.page + (ppc_addr & 0xFFFC), 4);
+        return v;
+    }
+    const R3DFrameState* s_ = nullptr;
+    Slot slots_[3];   // culling RAM low, culling RAM high, polygon RAM
+};
+
 // 2048x2048 16-bit texture RAM (two 2048x1024 pages), filled from the
 // texture FIFO at each flush (spec 6.1 - 6.4).
 class R3DTextureRam {

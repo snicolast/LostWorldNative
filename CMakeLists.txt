@@ -177,8 +177,8 @@ endif()
 # hash of C++ and Python against the same vectors, the command-line table and
 # the audio queue, the ROM layout read from the zip, the encounter script
 # reader (with tools/encounters.py's opcode table), the SCSP's part of the
-# game states, the weather's sound and the procedural sky (CPU against GLSL).
-# build.bat runs them.
+# game states, the weather's sound, the procedural sky (CPU against GLSL), the
+# scene builder's cached frame reads and the helper thread. build.bat runs them.
 option(LW_TESTS "Build the unit tests" ON)
 if(LW_TESTS)
     enable_testing()
@@ -192,8 +192,10 @@ if(LW_TESTS)
     add_executable(scsp_state_test tests/scsp_state_test.cpp src/audio/scsp.cpp)
     add_executable(weather_sound_test tests/weather_sound_test.cpp src/audio/weather_sound.cpp)
     add_executable(sky_procedural_test tests/sky_procedural_test.cpp src/video/sky_procedural.cpp)
+    add_executable(r3d_state_test tests/r3d_state_test.cpp)
+    add_executable(worker_test tests/worker_test.cpp)
     foreach(t tilegen_test fnv_test options_test sky_motion_test audio_stream_test rom_zip_test encounter_script_test
-              scsp_state_test weather_sound_test sky_procedural_test)
+              scsp_state_test weather_sound_test sky_procedural_test r3d_state_test worker_test)
         target_include_directories(${t} PRIVATE src/video src/common src/runtime src/audio ${MINIZ_DIR})
         if(MSVC)
             target_compile_options(${t} PRIVATE /W4 /utf-8)
@@ -210,6 +212,8 @@ if(LW_TESTS)
     add_test(NAME scsp_state COMMAND scsp_state_test)
     add_test(NAME weather_sound COMMAND weather_sound_test)
     add_test(NAME sky_procedural COMMAND sky_procedural_test)
+    add_test(NAME r3d_state COMMAND r3d_state_test)
+    add_test(NAME worker COMMAND worker_test)
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         add_test(NAME fnv_python COMMAND Python3::Interpreter ${CMAKE_SOURCE_DIR}/tests/fnv_test.py
