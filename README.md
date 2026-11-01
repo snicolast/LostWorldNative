@@ -45,9 +45,9 @@ versions of the game will not work.
 
 ## Install
 
-You need Windows 10/11 (64-bit), a GPU with a Vulkan 1.3 driver (most cards and
-integrated graphics from 2016 on, with current drivers; the console's first
-`[vulkan]` line says what yours offers), [Python 3](https://www.python.org/downloads/)
+You need Windows 10/11 (64-bit), a GPU with a Vulkan 1.3 driver, or a 1.2 one
+that offers `VK_KHR_dynamic_rendering` (most cards and integrated graphics from 2016 on,
+with current drivers; the console's first `[vulkan]` line says what yours offers), [Python 3](https://www.python.org/downloads/)
 and [Build Tools for Visual Studio 2022](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)
 with the *Desktop development with C++* workload.
 

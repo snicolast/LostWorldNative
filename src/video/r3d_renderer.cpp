@@ -387,7 +387,7 @@ bool R3DRenderer::init(VkPresenter& vk, float supersample, int msaa, int aniso, 
     ai.pSetLayouts = &bloom_set_layout_;
     for (VkDescriptorSet& s : bloom_sets_) vkAllocateDescriptorSets(dev_, &ai, &s);
     vkAllocateDescriptorSets(dev_, &ai, &rays_set_);
-    for (VkDescriptorSet& s : diff_sets_) vkAllocateDescriptorSets(dev_, &ai, &s);
+    vkAllocateDescriptorSets(dev_, &ai, &diff_set_);
     ai.pSetLayouts = &ao_set_layout_;
     vkAllocateDescriptorSets(dev_, &ai, &ao_set_);
 
@@ -596,7 +596,7 @@ VkPipeline R3DRenderer::make_pipeline(const PipelineDesc& d) {
     gp.pDynamicState = &dy;
     gp.layout = d.layout;
     VkPipeline p = VK_NULL_HANDLE;
-    if (VkResult r = vkCreateGraphicsPipelines(dev_, VK_NULL_HANDLE, 1, &gp, nullptr, &p); r != VK_SUCCESS)
+    if (VkResult r = vkCreateGraphicsPipelines(dev_, vk_->pipeline_cache(), 1, &gp, nullptr, &p); r != VK_SUCCESS)
         fprintf(stderr, "[vulkan] vkCreateGraphicsPipelines failed (%d)\n", int(r));
     return p;
 }
@@ -832,19 +832,19 @@ void R3DRenderer::ensure_targets(uint32_t w, uint32_t h) {
         create_image(*img, std::max(1u, w / 4), std::max(1u, h / 4), VK_FORMAT_R8G8B8A8_UNORM, target,
                      VK_IMAGE_ASPECT_COLOR_BIT);
     {
-        VkDescriptorImageInfo src[3] = {{linear_, diff_a_.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-                                        {linear_, diff_b_.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+        // (the first blur reads the scene from rays_a_, through rays_set_)
+        VkDescriptorImageInfo src[2] = {{linear_, diff_b_.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                                         {linear_, diff_a_.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}};
-        VkWriteDescriptorSet dw[3];
-        for (int i = 0; i < 3; i++) {
+        VkWriteDescriptorSet dw[2];
+        for (int i = 0; i < 2; i++) {
             dw[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            dw[i].dstSet = i < 2 ? diff_sets_[i] : compose_set_;
-            dw[i].dstBinding = i < 2 ? 0 : 12;
+            dw[i].dstSet = i == 0 ? diff_set_ : compose_set_;
+            dw[i].dstBinding = i == 0 ? 0 : 12;
             dw[i].descriptorCount = 1;
             dw[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             dw[i].pImageInfo = &src[i];
         }
-        vkUpdateDescriptorSets(dev_, 3, dw, 0, nullptr);
+        vkUpdateDescriptorSets(dev_, 2, dw, 0, nullptr);
     }
     composed_view_ = VK_NULL_HANDLE;
     if (dlaa_.ready()) bind_scene_image(dlaa_out_.view, dlaa_alpha_.view);
@@ -2190,18 +2190,29 @@ void R3DRenderer::begin_quarter(VkCommandBuffer cmd, Image& to, VkAttachmentLoad
 void R3DRenderer::record_bloom(const Frame& f, const ComposePush& pc) {
     VkCommandBuffer cmd = f.cmd;
     // Bloom: the glow reduced to a quarter of the size, then blurred across and down
+    // The composition's own results (bloom_a_, rays_b_, diff_a_) are in its
+    // descriptor set, and the composition draws the sky glow, the shaft mask
+    // and the diffusion's scene: those images must be in the layout the set
+    // says even where this frame does not read them (Vulkan checks each
+    // draw), whether their pass is on or not and after they are recreated
+    for (Image* img : {&bloom_a_, &rays_b_, &diff_a_})
+        if (img->layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            transition(cmd, *img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     if (glow_pass_) {
+        // The first step draws the composition (sky glow) too, so it cannot
+        // write bloom_a_, which the composition's set holds: it writes
+        // rays_a_ (same size, free outside the shafts' own passes)
         struct Step {
-            int source;   // bloom_sets_ index
+            VkDescriptorSet source;
             Image* from;
             Image* to;
             float mode, spread;
-        } steps[5] = {{0, &glow_, &bloom_a_, 0, 0},
-                      {1, &bloom_a_, &bloom_b_, 1, 2.0f},
-                      {2, &bloom_b_, &bloom_a_, 2, 2.0f},
+        } steps[5] = {{bloom_sets_[0], &glow_, &rays_a_, 0, 0},
+                      {rays_set_, &rays_a_, &bloom_b_, 1, 2.0f},
+                      {bloom_sets_[2], &bloom_b_, &bloom_a_, 2, 2.0f},
                       // A second, wider round: the glow spreads across the screen
-                      {1, &bloom_a_, &bloom_b_, 1, 5.0f},
-                      {2, &bloom_b_, &bloom_a_, 2, 5.0f}};
+                      {bloom_sets_[1], &bloom_a_, &bloom_b_, 1, 5.0f},
+                      {bloom_sets_[2], &bloom_b_, &bloom_a_, 2, 5.0f}};
         // The sky glows less than fire: it is large and only its brightest part
         // counts. Only behind the game world: title and menu screens are 2D pictures
         float sky_glow = has_world_ ? 0.6f : 0.0f;
@@ -2220,7 +2231,7 @@ void R3DRenderer::record_bloom(const Frame& f, const ComposePush& pc) {
             bi.colorAttachmentCount = 1;
             bi.pColorAttachments = &ba;
             vkCmdBeginRendering(cmd, &bi);
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bloom_layout_, 0, 1, &bloom_sets_[st.source], 0,
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bloom_layout_, 0, 1, &st.source, 0,
                                     nullptr);
             VkViewport bv{0, 0, float(st.to->w), float(st.to->h), 0, 1};
             vkCmdSetViewport(cmd, 0, 1, &bv);
@@ -2244,8 +2255,6 @@ void R3DRenderer::record_bloom(const Frame& f, const ComposePush& pc) {
             vkCmdEndRendering(cmd);
             transition(cmd, *st.to, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
-    } else if (bloom_a_.layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-        transition(cmd, bloom_a_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);   // bound, though not read
     }
 }
 
@@ -2269,8 +2278,6 @@ void R3DRenderer::record_light_shafts(const Frame& f, const ComposePush& pc, boo
         vkCmdDraw(cmd, 3, 1, 0, 0);
         vkCmdEndRendering(cmd);
         transition(cmd, rays_b_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    } else if (rays_b_.layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-        transition(cmd, rays_b_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);   // bound, though not read
     }
 }
 
@@ -2278,30 +2285,31 @@ void R3DRenderer::record_diffusion(const Frame& f, const ComposePush& pc) {
     VkCommandBuffer cmd = f.cmd;
     // Diffusion (BLOOM): the picture behind the HUD, then blurred across and down
     if (bloom_strength_ > 0) {
-        begin_quarter(cmd, diff_a_, VK_ATTACHMENT_LOAD_OP_CLEAR);   // cleared: the scene pass adds onto it
+        // The scene is drawn by the composition, whose set holds diff_a_: it
+        // goes to rays_a_ (same size, the shafts are done with it) and is
+        // blurred from there into diff_b_ and back into diff_a_
+        begin_quarter(cmd, rays_a_, VK_ATTACHMENT_LOAD_OP_CLEAR);   // cleared: the scene pass adds onto it
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compose_glow_);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compose_layout_, 0, 1, &compose_set_, 0, nullptr);
-        ComposePush dp = reduced(pc, diff_a_);
+        ComposePush dp = reduced(pc, rays_a_);
         dp.sky[3] = 3;       // scene mode
         dp.effects[0] = 0;   // (no diffusion of the diffusion)
         vkCmdPushConstants(cmd, compose_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(dp), &dp);
         vkCmdDraw(cmd, 3, 1, 0, 0);
         vkCmdEndRendering(cmd);
-        transition(cmd, diff_a_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        transition(cmd, rays_a_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bloom_);
         for (int pass = 0; pass < 2; pass++) {
             Image& to = pass == 0 ? diff_b_ : diff_a_;
             begin_quarter(cmd, to, VK_ATTACHMENT_LOAD_OP_DONT_CARE);
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bloom_layout_, 0, 1, &diff_sets_[pass], 0,
-                                    nullptr);
+            VkDescriptorSet source = pass == 0 ? rays_set_ : diff_set_;
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bloom_layout_, 0, 1, &source, 0, nullptr);
             float bp[4] = {1.0f / float(to.w), 1.0f / float(to.h), pass == 0 ? 1.0f : 2.0f, 3.0f};
             vkCmdPushConstants(cmd, bloom_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(bp), bp);
             vkCmdDraw(cmd, 3, 1, 0, 0);
             vkCmdEndRendering(cmd);
             transition(cmd, to, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
-    } else if (diff_a_.layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-        transition(cmd, diff_a_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);   // bound, though not read
     }
 }
 
