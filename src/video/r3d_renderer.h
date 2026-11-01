@@ -43,6 +43,13 @@ public:
     bool init(VkPresenter& vk, float supersample, int msaa, int aniso, bool dlaa = false);
     int msaa_samples() const { return int(samples_); }
     bool dlaa_active() const { return dlaa_.ready(); }
+    // Texture pack slots this GPU's descriptor limits allow (TexturePack::set_max_slots)
+    uint32_t replacement_slots() const { return replacement_slots_; }
+    // MSAA samples per pixel from the next frame on (1 = off; nothing while
+    // DLAA is on): the pipelines and the targets are made again
+    void set_msaa(int samples) { pending_msaa_ = std::clamp(samples, 1, 8); }
+    // Anisotropic taps of the texture filtering (0 = no mipmaps, original look)
+    void set_aniso(int taps) { aniso_ = float(std::clamp(taps, 0, 16)); }
 
     // How much light the scene is given: a multiplier on the sun and on the ambient.
     void set_light_gain(float gain) {
@@ -206,6 +213,8 @@ private:
     void transition(VkCommandBuffer cmd, Image& img, VkImageLayout to,
                     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT);
     bool create_pipelines();
+    void destroy_pipelines();
+    void apply_pending_msaa();   // set_msaa, at the start of a frame
     // What a pipeline differs in; the rest (triangle list, no culling, reverse
     // Z, dynamic viewport and scissor) is the same for all
     struct PipelineDesc {
@@ -222,6 +231,7 @@ private:
         bool additive = false;                 // colour += output (sky glow)
         float ease = 0;                        // > 0: colour moves this fraction towards the output
         bool depth_only = false;               // no colour writes
+        const VkSpecializationInfo* fs_spec = nullptr;   // specialization constants of the fragment shader
     };
     VkPipeline make_pipeline(const PipelineDesc& d);
     void bind_scene_image(VkImageView view, VkImageView alpha);
@@ -264,6 +274,7 @@ private:
         float hud[4], sky[4], effects[4], motion[4], crosshair2[4];
     };
     Frame repeat_frame_{};        // the last record(), for record_repeat()
+    static_assert(sizeof(ComposePush) <= 128, "push constant budget (AMD and Intel offer 128 bytes)");
     ComposePush repeat_push_{};
     bool can_repeat_ = false;
     void place_crosshairs(const ScreenLayout& lay, ComposePush& pc) const;
@@ -285,7 +296,10 @@ private:
     VkDevice dev_ = VK_NULL_HANDLE;
     float supersample_ = 1.0f;
     VkSampleCountFlagBits samples_ = VK_SAMPLE_COUNT_1_BIT;
+    int msaa_wanted_ = 1, pending_msaa_ = 0;   // --msaa / the menu; pending_msaa_: set_msaa not applied yet
+    VkSampleCountFlagBits msaa_level(int samples) const;   // the highest the GPU has, not above `samples`
     float aniso_ = 0.0f;
+    uint32_t replacement_slots_ = TexturePack::MAX_SLOTS;
     const R3DScene* scene_ = nullptr;
     bool has_world_ = false;   // a viewport of scene_ shows the game world
 

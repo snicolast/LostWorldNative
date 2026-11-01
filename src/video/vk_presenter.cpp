@@ -186,6 +186,9 @@ bool VkPresenter::init(const char* title, int width, int height, bool with_ngx) 
         return false;
     }
     vkGetPhysicalDeviceMemoryProperties(gpu_, &memory_);   // for find_memory
+    VkPhysicalDeviceProperties props;
+    vkGetPhysicalDeviceProperties(gpu_, &props);
+    limits_ = props.limits;
 
     float prio = 1.0f;
     VkDeviceQueueCreateInfo qci{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
@@ -251,19 +254,39 @@ bool VkPresenter::init(const char* title, int width, int height, bool with_ngx) 
     }
     std::vector<const char*> dev_ext;
     for (auto& e : dev_names) dev_ext.push_back(e.c_str());
+    // Only the features this GPU has are asked for (asking for one it lacks
+    // fails vkCreateDevice with no word of which): what is missing is said
+    // here and the renderer does without it
+    VkPhysicalDeviceVulkan12Features have12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    VkPhysicalDeviceFeatures2 have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+    have.pNext = &have12;
+    vkGetPhysicalDeviceFeatures2(gpu_, &have);
+    std::string missing;
+    auto want = [&](VkBool32 has, const char* name) {
+        if (!has) missing += std::string(missing.empty() ? "" : ", ") + name;
+        return has;
+    };
     VkPhysicalDeviceVulkan12Features f12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
-    // Texture pack: an array of replacement images indexed per polygon
-    f12.descriptorBindingPartiallyBound = VK_TRUE;
-    f12.descriptorBindingUpdateUnusedWhilePending = VK_TRUE;
-    f12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-    if (with_ngx) {   // NGX reads its own buffers through device addresses
-        VkPhysicalDeviceVulkan12Features have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
-        VkPhysicalDeviceFeatures2 query{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-        query.pNext = &have;
-        vkGetPhysicalDeviceFeatures2(gpu_, &query);
-        f12.bufferDeviceAddress = have.bufferDeviceAddress;
+    // Texture pack and 2D replacements: arrays of images indexed per polygon,
+    // filled while earlier frames may still use the set
+    bool partially = want(have12.descriptorBindingPartiallyBound, "descriptorBindingPartiallyBound");
+    bool pending = want(have12.descriptorBindingUpdateUnusedWhilePending, "descriptorBindingUpdateUnusedWhilePending");
+    bool nonuniform = want(have12.shaderSampledImageArrayNonUniformIndexing, "shaderSampledImageArrayNonUniformIndexing");
+    descriptor_indexing_ = partially && pending && nonuniform;
+    if (descriptor_indexing_) {
+        f12.descriptorBindingPartiallyBound = VK_TRUE;
+        f12.descriptorBindingUpdateUnusedWhilePending = VK_TRUE;
+        f12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
     }
+    if (with_ngx) f12.bufferDeviceAddress = have12.bufferDeviceAddress;   // NGX reads its own buffers through device addresses
     if (ray_query_) f12.bufferDeviceAddress = VK_TRUE;   // acceleration structures are built from buffer addresses
+    anisotropy_ = want(have.features.samplerAnisotropy, "samplerAnisotropy");
+    // DLAA: the translucent pass blends colour but leaves the motion vectors alone
+    if (with_ngx && !want(have.features.independentBlend, "independentBlend")) with_ngx = false;
+    printf("[vulkan] %s: Vulkan %u.%u, %u sampled images per stage, %u bytes of push constants%s%s\n", device_name_.c_str(),
+           VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion),
+           limits_.maxPerStageDescriptorSampledImages, limits_.maxPushConstantsSize, missing.empty() ? "" : "; without ",
+           missing.c_str());
     VkPhysicalDeviceVulkan13Features f13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     f13.pNext = &f12;
     f13.dynamicRendering = VK_TRUE;
@@ -277,8 +300,7 @@ bool VkPresenter::init(const char* title, int width, int height, bool with_ngx) 
     }
     VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
     features.pNext = &f13;
-    features.features.samplerAnisotropy = VK_TRUE;
-    // DLAA: the translucent pass blends colour but leaves the motion vectors alone
+    features.features.samplerAnisotropy = anisotropy_ ? VK_TRUE : VK_FALSE;
     features.features.independentBlend = with_ngx ? VK_TRUE : VK_FALSE;
     VkDeviceCreateInfo dci{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     dci.pNext = &features;

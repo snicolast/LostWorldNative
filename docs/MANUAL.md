@@ -142,7 +142,11 @@ saved games and are not versioned.
   wider view the runtime gives the game the aim itself (rt_gun_aimed, in
   fn_0000CBF0), where its X is drawn and its shots land.
 - --msaa N (default 4; 1 = off): edge antialiasing, including the
-  cut-out edges of plants.
+  cut-out edges of plants. In the settings: ANTI-ALIASING (MSAA, DLAA or OFF)
+  and MSAA SAMPLES (2X, 4X, 8X), DISPLAY tab, applied at once (the pipelines
+  and the render targets are made again); only DLAA needs a restart. On
+  integrated graphics the samples are the single biggest cost: LOW turns MSAA
+  off and MEDIUM uses 2X.
 - --aa dlaa: NVIDIA DLAA (DLSS at native resolution) instead of MSAA. The 3D is
   drawn without MSAA with a different subpixel jitter each frame, together
   with its depth and a per-pixel motion vector, and DLSS turns it into
@@ -151,7 +155,11 @@ saved games and are not versioned.
   tools/get_dlss.bat the first time and copies the DLL); if anything is missing, MSAA is used. --aa none disables
   antialiasing.
 - --aniso N (default 8; 0 = original look without mipmaps): texture
-  filtering with the game's own mipmaps and N anisotropic samples.
+  filtering with the game's own mipmaps and N anisotropic samples. In the
+  settings: ANISOTROPIC FILTER (OFF, 2X, 4X, 8X, 16X), applied at once. The
+  samples are read by hand from the 16-bit texture RAM (the formats are the
+  Real3D's, no hardware sampler can take them), so each one costs: LOW uses
+  2X and MEDIUM 4X.
 - --scale F: internal 3D resolution (2 = 2x2 supersampling; 0.75 = 75%, faster).
   In the settings: RENDER RESOLUTION (50-100%, DISPLAY tab), applied at once.
 - --half-rate (or FRAME RATE: HALF in the settings): on monitors above 100 Hz
@@ -168,16 +176,21 @@ saved games and are not versioned.
 - QUALITY (settings, DISPLAY tab): LOW, MEDIUM, HIGH and ULTRA set together the
   options that cost the most (render resolution, frame rate, ray tracing,
   ambient occlusion, sun shadows, light shafts, soft particles, sky, surface
-  detail, bloom); CUSTOM when they are mixed. On the first start (no
-  save/settings.ini) a level is picked from the graphics card's name: an RTX
-  3060 laptop gets MEDIUM, a 4070 HIGH, a 5070 Ti ULTRA. Measured on an RTX
-  5070 Ti at 1440p, the most expensive effects are the ambient occlusion, the
-  render resolution, the procedural sky and the sun shadows.
+  detail, bloom, MSAA, anisotropic filter, 2D filter); CUSTOM when they are
+  mixed. On the first start (no save/settings.ini) a level is picked from the
+  graphics card's name: an RTX 3060 laptop gets MEDIUM, a 4070 HIGH, a 5070 Ti
+  ULTRA, an integrated GPU LOW. Measured on an RTX 5070 Ti at 1440p, the most
+  expensive effects are the ambient occlusion, the render resolution, the
+  procedural sky and the sun shadows; on integrated graphics, limited by
+  memory bandwidth, also the MSAA samples, the anisotropic taps, the surface
+  detail and the xBR of the 2D layers, which LOW turns off or down.
 - --letterbox: keeps the black bars in scenes (removed by default).
 - --boot: shows the boot screens (WARNING notice and copyright). By
   default they run at full speed with a black screen (about 2 s instead of
   15) and the game appears at the SEGA logo, with the same state and sound.
-- --pixel2d: HUD and 2D layers with square pixels, without xBR scaling.
+- --pixel2d (or 2D FILTER: PIXELS in the settings, DISPLAY tab): HUD and 2D
+  layers with square pixels, without xBR scaling. xBR reads 25 texels of each
+  2D layer for every pixel of the window; LOW picks PIXELS.
 - --classic-text: letters and numbers in the original pixel art (scaled like the
   rest of the 2D). By default, if textures/text/ exists, the menus, INSERT
   COIN/CREDITS and the score are drawn with sharp vector fonts.

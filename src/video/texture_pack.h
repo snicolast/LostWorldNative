@@ -6,6 +6,7 @@
 // out/textures/<hash>.png; a file with the same name in textures/ replaces
 // it, at any resolution and with its own alpha channel.
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -18,6 +19,9 @@
 class TexturePack {
 public:
     static constexpr uint32_t MAX_SLOTS = 4096;   // replacement images on the GPU (slot 0 = none)
+    // Fewer slots than MAX_SLOTS when the GPU's descriptor limits are small
+    // (R3DRenderer::replacement_slots()); 1 = no replacements at all
+    void set_max_slots(uint32_t slots) { max_slots_ = std::min(slots, MAX_SLOTS); }
 
     // dir: folder with replacement PNGs; dump_dir: where new textures are
     // written (empty = no dumping)
@@ -40,6 +44,7 @@ private:
     uint32_t resolve(uint32_t tex, R3DTextureRam& ram, uint64_t& generation);
 
     std::string dir_, dump_dir_;
+    uint32_t max_slots_ = MAX_SLOTS;
     std::unordered_map<uint32_t, Entry> cache_;            // texture word -> slot
     std::unordered_set<uint64_t> available_;               // hashes with a replacement file
     std::unordered_map<uint64_t, uint32_t> slots_;         // loaded hash -> slot
