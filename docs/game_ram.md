@@ -280,7 +280,12 @@ screens in src/ui/survival_ui.cpp, startup in app.cpp):
   known enemies ahead of it (the remaining stops only lead to the next
   zone; in the lobby, the corridor door). When it is cleared: fade
   to black, the saved state is reloaded and lives and
-  score are restored (0x1C1D54 to -1 so the counter shows it). If a walk changes
+  score are restored (0x1C1D54 to -1 so the counter shows it). The state was kept
+  before the encounter's first words ran, so the first wave of the new lap
+  starts with what the encounter does before its first camera turn and enemy
+  (calls and settings, no waits): in the Service corridor that opens the room
+  behind the tanks (fn_0003B46C); without it the raptors stayed inside and
+  wave 2 never ended. If a walk changes
   zone or doesn't reach any stop within a minute, the lap ends there.
 - Ambush: on 35 % of walks (those longer than 40 units), halfway
   to the next stop the walker is stopped and a short batch from a section
