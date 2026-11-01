@@ -133,6 +133,7 @@ add_executable(LostWorld
     src/video/r3d_world.cpp
     src/video/r3d_renderer.cpp
     src/video/r3d_rain.cpp
+    src/video/r3d_shelter.cpp
     src/video/r3d_raytrace.cpp
     third_party/volk/volk.c
     ${MUSASHI_DIR}/m68kcpu.c
@@ -199,9 +200,10 @@ if(LW_TESTS)
     add_executable(settings_bridge_test tests/settings_bridge_test.cpp src/runtime/settings_bridge.cpp
                    src/ui/frontend_settings.cpp)
     add_executable(pack2d_test tests/pack2d_test.cpp src/video/pack2d.cpp)
+    add_executable(r3d_shelter_test tests/r3d_shelter_test.cpp src/video/r3d_shelter.cpp)
     foreach(t tilegen_test fnv_test options_test sky_motion_test audio_stream_test rom_zip_test encounter_script_test
               scsp_state_test weather_sound_test sky_procedural_test r3d_state_test worker_test settings_bridge_test
-              pack2d_test)
+              pack2d_test r3d_shelter_test)
         target_include_directories(${t} PRIVATE src/video src/common src/runtime src/audio ${MINIZ_DIR})
         if(MSVC)
             target_compile_options(${t} PRIVATE /W4 /utf-8)
@@ -222,6 +224,7 @@ if(LW_TESTS)
     add_test(NAME worker COMMAND worker_test)
     add_test(NAME settings_bridge COMMAND settings_bridge_test)
     add_test(NAME pack2d COMMAND pack2d_test)
+    add_test(NAME r3d_shelter COMMAND r3d_shelter_test)
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         add_test(NAME fnv_python COMMAND Python3::Interpreter ${CMAKE_SOURCE_DIR}/tests/fnv_test.py

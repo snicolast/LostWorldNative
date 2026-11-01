@@ -320,8 +320,9 @@ haze), FOG, RAIN, STORM (dark, heavy rain and lightning) or ORIGINAL (the
 game's own). The last one picked comes up selected next time
 (`run_weather` in settings.ini). CLASSIC ARCADE > ARCADE always keeps the
 original weather. It is laid over the game's own light, only outdoors in
-daylight (caves, corridors and the night keep theirs), and changes over a
-few seconds. The rain and the lightning follow the RAIN and LIGHTNING
+daylight (caves, corridors and the night keep theirs) and never under a
+roof (the buildings: looking straight up from the camera finds a ceiling),
+and changes over a few seconds. The rain and the lightning follow the RAIN and LIGHTNING
 settings. `--weather sunny|cloudy|fog|rain|storm` forces one in every game
 (tests, screenshots).
 
@@ -517,6 +518,7 @@ normal behaviour when unset):
 | LW_FLASH=brightness | Fixes the grey-fog lightning brightness and shows its bolt |
 | LW_RAIN=amount | Fixes the rain amount (0 to 1) even if the game isn't raining |
 | LW_RAINDBG | Prints per frame the game's rain streaks, their direction and the camera |
+| LW_SHELTERDBG | Prints per frame how many of the nine rays looking up from the camera hit a roof (6 or more: indoors, no weather) |
 | LW_BOSS=N | Starts the boss mode fight with boss N (1-4) directly |
 | LW_BOSS_LIFE=PCT | Random spawns: every boss gets PCT % of its life instead of a random share |
 | LW_SEED=N | Survival, random spawns and random weather: the same random numbers every run (N instead of the clock) |
