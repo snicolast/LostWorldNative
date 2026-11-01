@@ -10,7 +10,7 @@ contains ROM data (`data/` is in `.gitignore`).
 | Part | Original | In the port |
 |---|---|---|
 | CPU | PowerPC 603e, 100 MHz | Code translated to C++ (static recompilation) |
-| GPU | Real3D Pro-1000 (scene graph in memory, matrices, textures in VROM) | Own Vulkan 1.3 renderer (`src/video`) that reads the same structures |
+| GPU | Real3D Pro-1000 (scene graph in memory, matrices, textures in VROM) | Own Vulkan renderer (`src/video`; 1.3, or 1.2 with `VK_KHR_dynamic_rendering`) that reads the same structures |
 | 2D layer | Tilegen (HUD, text) | Own 2D layer over the 3D scene |
 | Sound | 68000 + 2× SCSP | Musashi 68000 + own SCSP (`src/audio`), resampled to the output device |
 | Guns | Analog position read | Mice and light guns (raw input), gamepads (SDL3, with gyro) |
@@ -123,7 +123,9 @@ for 3D textures (`textures/`, by hash of the decoded texture).
 
 `save/` holds `settings.ini` (the menu; one table in `frontend.cpp` drives the
 file, the rows and their behaviour), `eeprom.bin` (the arcade's settings and
-records), `survival/` (arenas unlocked, records) and the game states: the
+records), `survival/` (arenas unlocked, records), `pipeline_cache.bin` (the
+GPU's compiled pipelines, `VkPipelineCache`; ignored when it comes from
+another GPU or driver) and the game states: the
 bosses' in `save/boss/` and the survival arenas' in `save/survival/`, in the
 `LGWS` format (version 2):
 the call chain, the CPU context, RAM, device pages, texture RAM and the sound

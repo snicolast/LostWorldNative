@@ -20,7 +20,40 @@ bool check(VkResult r, const char* what) {
     return true;
 }
 
+constexpr const char* PIPELINE_CACHE = "save/pipeline_cache.bin";
+
+// What vkGetPipelineCacheData wrote for this very GPU and driver (header
+// version one: size, version, vendor, device, cache UUID); anything else,
+// a file from another card or an older driver, is left out
+bool cache_matches(const std::vector<uint8_t>& data, const VkPhysicalDeviceProperties& props) {
+    if (data.size() < 16 + VK_UUID_SIZE) return false;
+    uint32_t head[4];
+    memcpy(head, data.data(), sizeof(head));
+    return head[0] >= 16 + VK_UUID_SIZE && head[0] <= data.size() && head[1] == VK_PIPELINE_CACHE_HEADER_VERSION_ONE &&
+           head[2] == props.vendorID && head[3] == props.deviceID &&
+           !memcmp(data.data() + 16, props.pipelineCacheUUID, VK_UUID_SIZE);
+}
+
 }  // namespace
+
+void VkPresenter::save_pipeline_cache() {
+    if (!pipeline_cache_) return;
+    size_t size = 0;
+    if (vkGetPipelineCacheData(device_, pipeline_cache_, &size, nullptr) != VK_SUCCESS || size == 0 ||
+        size == pipeline_cache_saved_)
+        return;   // nothing new compiled since it was loaded or written
+    std::vector<uint8_t> data(size);
+    if (vkGetPipelineCacheData(device_, pipeline_cache_, &size, data.data()) != VK_SUCCESS) return;
+    CreateDirectoryA("save", nullptr);
+    // Written aside and then moved over: a run cut short leaves the old file whole
+    std::string tmp = std::string(PIPELINE_CACHE) + ".tmp";
+    FILE* f = fopen(tmp.c_str(), "wb");
+    if (!f) return;
+    bool ok = fwrite(data.data(), 1, size, f) == size;
+    ok = fclose(f) == 0 && ok;
+    if (ok && MoveFileExA(tmp.c_str(), PIPELINE_CACHE, MOVEFILE_REPLACE_EXISTING)) pipeline_cache_saved_ = size;
+    else DeleteFileA(tmp.c_str());
+}
 
 void vk_image_barrier(VkCommandBuffer cmd, VkImage image, VkImageLayout from, VkImageLayout to,
                       VkImageAspectFlags aspect, uint32_t layers) {
@@ -153,7 +186,21 @@ bool VkPresenter::init(const char* title, int width, int height, bool with_ngx) 
     sci.hwnd = hwnd_;
     if (!check(vkCreateWin32SurfaceKHR(instance_, &sci, nullptr, &surface_), "vkCreateWin32SurfaceKHR")) return false;
 
-    // GPU: prefer a discrete one with Vulkan 1.3 and a graphics queue that can present
+    // GPU: prefer a discrete one with a graphics queue that can present.
+    // Rendering without render passes is core in Vulkan 1.3 and the same
+    // calls with a KHR name in 1.2 drivers that offer VK_KHR_dynamic_rendering
+    // (older GPUs whose drivers stopped at 1.2: AMD GCN 1-3, NVIDIA Kepler)
+    auto dynamic_rendering = [](VkPhysicalDevice g, uint32_t api) {
+        if (api >= VK_API_VERSION_1_3) return true;
+        if (api < VK_API_VERSION_1_2) return false;
+        uint32_t count = 0;
+        vkEnumerateDeviceExtensionProperties(g, nullptr, &count, nullptr);
+        std::vector<VkExtensionProperties> exts(count);
+        vkEnumerateDeviceExtensionProperties(g, nullptr, &count, exts.data());
+        for (const VkExtensionProperties& e : exts)
+            if (!strcmp(e.extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)) return true;
+        return false;
+    };
     uint32_t n = 0;
     vkEnumeratePhysicalDevices(instance_, &n, nullptr);
     std::vector<VkPhysicalDevice> gpus(n);
@@ -162,7 +209,11 @@ bool VkPresenter::init(const char* title, int width, int height, bool with_ngx) 
     for (auto g : gpus) {
         VkPhysicalDeviceProperties p;
         vkGetPhysicalDeviceProperties(g, &p);
-        if (p.apiVersion < VK_API_VERSION_1_3) continue;
+        if (!dynamic_rendering(g, p.apiVersion)) {
+            printf("[vulkan] %s skipped: Vulkan %u.%u without dynamic rendering\n", p.deviceName,
+                   VK_API_VERSION_MAJOR(p.apiVersion), VK_API_VERSION_MINOR(p.apiVersion));
+            continue;
+        }
         uint32_t qn = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(g, &qn, nullptr);
         std::vector<VkQueueFamilyProperties> qs(qn);
@@ -182,7 +233,7 @@ bool VkPresenter::init(const char* title, int width, int height, bool with_ngx) 
         }
     }
     if (!gpu_) {
-        fprintf(stderr, "[vulkan] no GPU with Vulkan 1.3 that can present to the window\n");
+        fprintf(stderr, "[vulkan] no GPU with Vulkan 1.3 (or 1.2 with VK_KHR_dynamic_rendering) that can present to the window\n");
         return false;
     }
     vkGetPhysicalDeviceMemoryProperties(gpu_, &memory_);   // for find_memory
@@ -196,6 +247,10 @@ bool VkPresenter::init(const char* title, int width, int height, bool with_ngx) 
     qci.queueCount = 1;
     qci.pQueuePriorities = &prio;
     std::vector<std::string> dev_names = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    // A 1.2 driver: dynamic rendering is an extension (its dependencies,
+    // depth_stencil_resolve and get_physical_device_properties2, are core in 1.2)
+    khr_dynamic_rendering_ = props.apiVersion < VK_API_VERSION_1_3;
+    if (khr_dynamic_rendering_) dev_names.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
     // The extensions this GPU/driver offers
     uint32_t ext_count = 0;
     vkEnumerateDeviceExtensionProperties(gpu_, nullptr, &ext_count, nullptr);
@@ -283,23 +338,29 @@ bool VkPresenter::init(const char* title, int width, int height, bool with_ngx) 
     anisotropy_ = want(have.features.samplerAnisotropy, "samplerAnisotropy");
     // DLAA: the translucent pass blends colour but leaves the motion vectors alone
     if (with_ngx && !want(have.features.independentBlend, "independentBlend")) with_ngx = false;
-    printf("[vulkan] %s: Vulkan %u.%u, %u sampled images per stage, %u bytes of push constants%s%s\n", device_name_.c_str(),
-           VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion),
+    printf("[vulkan] %s: Vulkan %u.%u%s, %u sampled images per stage, %u bytes of push constants%s%s\n",
+           device_name_.c_str(), VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion),
+           khr_dynamic_rendering_ ? " (dynamic rendering through VK_KHR_dynamic_rendering)" : "",
            limits_.maxPerStageDescriptorSampledImages, limits_.maxPushConstantsSize, missing.empty() ? "" : "; without ",
            missing.c_str());
+    // Dynamic rendering: the 1.3 feature block or, on a 1.2 driver, the
+    // extension's own (the 1.3 block is not valid there)
     VkPhysicalDeviceVulkan13Features f13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
-    f13.pNext = &f12;
     f13.dynamicRendering = VK_TRUE;
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR fdr{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR};
+    fdr.dynamicRendering = VK_TRUE;
+    void** chain = khr_dynamic_rendering_ ? &fdr.pNext : &f13.pNext;
+    *chain = &f12;
     if (present_wait_) {
-        fwait.pNext = f13.pNext;
-        f13.pNext = &fid;
+        fwait.pNext = *chain;
+        *chain = &fid;
     }
     if (ray_query_) {
-        frq.pNext = f13.pNext;
-        f13.pNext = &fas;
+        frq.pNext = *chain;
+        *chain = &fas;
     }
     VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-    features.pNext = &f13;
+    features.pNext = khr_dynamic_rendering_ ? static_cast<void*>(&fdr) : static_cast<void*>(&f13);
     features.features.samplerAnisotropy = anisotropy_ ? VK_TRUE : VK_FALSE;
     features.features.independentBlend = with_ngx ? VK_TRUE : VK_FALSE;
     VkDeviceCreateInfo dci{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
@@ -310,7 +371,45 @@ bool VkPresenter::init(const char* title, int width, int height, bool with_ngx) 
     dci.ppEnabledExtensionNames = dev_ext.data();
     if (!check(vkCreateDevice(gpu_, &dci, nullptr, &device_), "vkCreateDevice")) return false;
     volkLoadDevice(device_);
+    if (khr_dynamic_rendering_) {   // the core names (used everywhere) call the extension's entry points
+        vkCmdBeginRendering = vkCmdBeginRenderingKHR;
+        vkCmdEndRendering = vkCmdEndRenderingKHR;
+    }
+    if (!vkCmdBeginRendering || !vkCmdEndRendering) {
+        fprintf(stderr, "[vulkan] the driver gave no vkCmdBeginRendering/vkCmdEndRendering\n");
+        return false;
+    }
     vkGetDeviceQueue(device_, queue_family_, 0, &queue_);
+
+    // Pipelines compiled in earlier runs: the drivers of NVIDIA and AMD keep
+    // their own disk cache, others do not and recompile every shader at start-up
+    {
+        std::vector<uint8_t> data;
+        if (FILE* f = fopen(PIPELINE_CACHE, "rb")) {
+            fseek(f, 0, SEEK_END);
+            long size = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            if (size > 0) {
+                data.resize(size_t(size));
+                if (fread(data.data(), 1, data.size(), f) != data.size()) data.clear();
+            }
+            fclose(f);
+        }
+        if (!data.empty() && !cache_matches(data, props)) {
+            printf("[vulkan] %s is from another GPU or driver: compiling the pipelines again\n", PIPELINE_CACHE);
+            data.clear();
+        }
+        VkPipelineCacheCreateInfo cci{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
+        cci.initialDataSize = data.size();
+        cci.pInitialData = data.empty() ? nullptr : data.data();
+        if (vkCreatePipelineCache(device_, &cci, nullptr, &pipeline_cache_) != VK_SUCCESS && !data.empty()) {
+            cci.initialDataSize = 0;   // the driver refused the file: an empty cache
+            cci.pInitialData = nullptr;
+            vkCreatePipelineCache(device_, &cci, nullptr, &pipeline_cache_);
+        } else {
+            pipeline_cache_saved_ = data.size();
+        }
+    }
 
     VkCommandPoolCreateInfo pci{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     pci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -564,6 +663,8 @@ void VkPresenter::shutdown() {
         if (pool_) vkDestroyCommandPool(device_, pool_, nullptr);   // (and cmd_)
         if (capture_buffer_) vkDestroyBuffer(device_, capture_buffer_, nullptr);
         if (capture_memory_) vkFreeMemory(device_, capture_memory_, nullptr);
+        save_pipeline_cache();
+        if (pipeline_cache_) vkDestroyPipelineCache(device_, pipeline_cache_, nullptr);
         vkDestroyDevice(device_, nullptr);
     }
     if (surface_) vkDestroySurfaceKHR(instance_, surface_, nullptr);

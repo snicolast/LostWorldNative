@@ -351,10 +351,13 @@ private:
     int gpu_frames_ = 0;
     bool gpu_pending_ = false;
     void gpu_time_mark(VkCommandBuffer cmd, uint32_t index);
-    Image rays_a_, rays_b_;            // light shafts: mask, then smeared towards the sun (quarter size)
+    // Light shafts: mask, then smeared towards the sun (quarter size). rays_a_
+    // is also where bloom's first step and the diffusion's scene are drawn
+    // (by the composition, which cannot draw into an image its own set holds)
+    Image rays_a_, rays_b_;
     VkDescriptorSet rays_set_ = VK_NULL_HANDLE;   // source: rays_a_
     Image diff_a_, diff_b_;            // diffusion (BLOOM): the picture behind the HUD, blurred, quarter size
-    VkDescriptorSet diff_sets_[2] = {};   // sources: diff_a_, diff_b_
+    VkDescriptorSet diff_set_ = VK_NULL_HANDLE;   // source: diff_b_ (the first blur reads rays_a_)
     VkPipeline rays_ = VK_NULL_HANDLE;
     float rays_strength_ = 0;
     float sun_uv_[2] = {}, sun_light_ = 0;   // the sun in the 3D image this frame, 0 = behind the camera

@@ -95,7 +95,7 @@ bool UiOverlay::init(VkPresenter& vk) {
     gp.pColorBlendState = &cb;
     gp.pDynamicState = &dy;
     gp.layout = layout_;
-    if (vkCreateGraphicsPipelines(dev_, VK_NULL_HANDLE, 1, &gp, nullptr, &pipeline_) != VK_SUCCESS)
+    if (vkCreateGraphicsPipelines(dev_, vk_->pipeline_cache(), 1, &gp, nullptr, &pipeline_) != VK_SUCCESS)
         fprintf(stderr, "[vulkan] could not create the menu pipeline\n");
     vkDestroyShaderModule(dev_, vs, nullptr);
     vkDestroyShaderModule(dev_, fs, nullptr);

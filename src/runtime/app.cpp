@@ -1409,6 +1409,7 @@ bool App::init(int argc, char** argv, bool first_start) {
         if (!frontend.init("third_party/fonts")) printf("[menu] fonts missing: using the Windows ones\n");
         if (!ui.init(presenter)) g_opt.menu = false;
     }
+    presenter.save_pipeline_cache();   // what start-up compiled, kept even if the run ends without shutdown()
     if (g_opt.menu) {
         FrontendSettings& s = frontend.settings;
         s = ini;   // the window, the menu music, the gamepad and the guns picked: as the file has them
