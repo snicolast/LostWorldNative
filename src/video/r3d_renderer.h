@@ -15,6 +15,7 @@
 #include "r3d_rain.h"
 #include "r3d_raytrace.h"
 #include "r3d_scene.h"
+#include "r3d_shelter.h"
 #include "r3d_weather.h"
 #include "pack2d.h"
 #include "sky_motion.h"
@@ -370,7 +371,8 @@ private:
     float bolt_seg_[BOLT_SEGMENTS * 4] = {};
     R3DRain rain_;
     R3DWeather weather_target_, weather_;   // asked for, and shown (eased towards it)
-    float outdoor_ = 0;   // 0..1: how much the weather shows (daylight, a backdrop behind the world)
+    float outdoor_ = 0;   // 0..1: how much the weather shows (daylight, a backdrop behind the world, no roof)
+    R3DShelter shelter_;  // a roof over the camera
     void step_weather(const R3DScene& scene);
     // The weather's light and fog on a viewport of the world
     void weather_light(const R3DViewport& v, float& sun, float& ambient, float& fog_density, float fog_color[4]) const;

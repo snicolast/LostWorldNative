@@ -1342,13 +1342,28 @@ void R3DRenderer::step_sky_sun(const WorldPose& pose, const float view[4], float
 // The weather (r3d_weather.h), once per game frame: the shown one moves
 // towards the one asked for over a few seconds, and it shows only outdoors
 // in daylight, with a backdrop behind the world (not in the caves, the
-// corridors or the night, where the backdrop is black)
+// corridors or the night, where the backdrop is black) and no roof over the
+// camera (r3d_shelter.h: the buildings, whose backdrop may still be the sky)
 void R3DRenderer::step_weather(const R3DScene& scene) {
     const R3DViewport* w = nullptr;
     for (const R3DViewport& v : scene.viewports)
         if (v.world) w = &v;
-    float outdoor = w && !back_black_ && w->sun_intensity > 0.15f ? 1.0f : 0.0f;
-    outdoor_ += 0.02f * (outdoor - outdoor_);
+    if (w) {
+        size_t first = std::min<size_t>(w->opaque_first, scene.vertices.size());
+        size_t count = std::min<size_t>(w->opaque_count, scene.vertices.size() - first);
+        shelter_.step(scene.vertices.data() + first, count, w->world_axes);
+    } else {
+        shelter_.clear();
+    }
+    static const bool debug = getenv("LW_SHELTERDBG") != nullptr;   // debugging aid
+    if (debug && w)
+        printf("[shelter] %d/%d rays covered%s\n", shelter_.last_hits(), R3DShelter::RAYS,
+               shelter_.sheltered() ? ", sheltered" : "");
+    bool sheltered = shelter_.sheltered();
+    float outdoor = w && !back_black_ && w->sun_intensity > 0.15f && !sheltered ? 1.0f : 0.0f;
+    // Into a building the weather goes in a few frames (often a cut), out of it as before
+    outdoor_ += (sheltered ? 0.15f : 0.02f) * (outdoor - outdoor_);
+    rain_.set_sheltered(sheltered);
     const float k = 0.01f;   // about four seconds to change
     R3DWeather& a = weather_;
     const R3DWeather& b = weather_target_;

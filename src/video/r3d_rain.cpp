@@ -103,7 +103,9 @@ void R3DRain::observe(const R3DScene& scene) {
     float target = count >= 12 ? 1.0f : 0.0f;
     game_amount_ += (target - game_amount_) * (target > game_amount_ ? 1.0f / 90.0f : 1.0f / 240.0f);
     target = std::max(target, forced_);
-    amount_ += (target - amount_) * (target > amount_ ? 1.0f / 90.0f : 1.0f / 240.0f);
+    // Under a roof, rain that is only ours stops within a few frames
+    float fade_out = sheltered_ && game_amount_ < 0.05f ? 1.0f / 8.0f : 1.0f / 240.0f;
+    amount_ += (target - amount_) * (target > amount_ ? 1.0f / 90.0f : fade_out);
     static const char* force = getenv("LW_RAIN");   // debugging aid: fixed amount (0 to 1)
     if (force) amount_ = game_amount_ = float(atof(force));
     float dl = std::sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);

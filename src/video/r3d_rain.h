@@ -17,6 +17,9 @@ public:
     void set_level(int level) { level_ = level; }
     // Rain of our own where the game has none (the weather, r3d_weather.h), 0..1
     void set_forced(float amount) { forced_ = amount; }
+    // The camera is under a roof (r3d_shelter.h): our rain goes at once
+    // instead of easing out over four seconds
+    void set_sheltered(bool sheltered) { sheltered_ = sheltered; }
     // Once per new game frame: finds the game's rain in the world viewport
     // and eases ours in (over a second and a half) or out (over four)
     void observe(const R3DScene& scene);
@@ -40,6 +43,7 @@ private:
     float amount_ = 0;
     float game_amount_ = 0;   // the game's own share of it
     float forced_ = 0;
+    bool sheltered_ = false;
     float fall_[3] = {0, -1, 0};    // direction of the fall in the world frame, with the wind
     float camera_velocity_[3] = {}; // world units per second, eased
     float last_camera_[3] = {};
