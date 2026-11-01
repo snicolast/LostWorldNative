@@ -379,6 +379,12 @@ struct Run {
     uint32_t last_sig = 0;        // the wave before (the same one never comes twice in a row)
     std::vector<std::vector<int32_t>> first_enemies, first_looks;
     std::vector<int32_t> first_setup;
+    // What the arena's encounter does before its first camera turn and enemy
+    // (doors, lights: in the Service corridor fn_0003B46C opens the room the
+    // raptors come from). The state a lap goes back to was kept before that
+    // ran, so the first wave of each new lap does it again
+    std::vector<int32_t> first_prelude;
+    bool prelude_due = false;
     int saved_lives = 0, saved_score = 0;   // kept over the state put back at a new lap
     uint64_t fade_in_at = 0;      // the picture comes back from black (after a new lap)
     double lap_started = 0;       // banner
@@ -433,8 +439,16 @@ struct Survival : Run {
         size_t count_at = 0;    // the countdown's word in out
         bool first_enemy = true;
         int32_t bad = 0;
+        std::vector<int32_t> prelude;
+        bool in_prelude = true;
         bool ok = script::walk(ram_word, h, [&](const script::Item& it) {
             if (it.end()) return;
+            if (in_prelude && (it.op() == -9 || it.enemy())) in_prelude = false;
+            if (in_prelude && it.op() != -10 && it.op() != -21 && it.fn() != FN_DEAD_TRICERATOPS) {
+                std::vector<int32_t> item = it.w;
+                if (it.call()) item[0] = 0;   // all at once, before the countdown
+                prelude.insert(prelude.end(), item.begin(), item.end());
+            }
             if (!it.call()) {
                 const std::vector<int32_t>& item = it.w;
                 int32_t op = it.op();
@@ -475,6 +489,7 @@ struct Survival : Run {
             printf("[survival] encounter %d has no known enemies\n", encounter);
             return false;
         }
+        first_prelude = prelude;
         uint32_t base = FREE_RAM;
         write_script(base, out, calls);
         wr32(VM_PC, script_pc(base));
@@ -810,6 +825,7 @@ struct Survival : Run {
             wr32(SCORE[1], ~0u);   // the counter shows it
             enemies = first_enemies, looks = first_looks, setup = first_setup;
             encounter = first_encounter;
+            prelude_due = true;
         } else {
             printf("[survival] could not go back to the first stop: the lap goes on here\n");
         }
@@ -901,8 +917,11 @@ struct Survival : Run {
         std::vector<int32_t> w;
         std::vector<uint32_t> calls;
         int batches = 0;
+        // Back at the first stop: what its encounter did before its enemies, again
+        std::vector<int32_t> pre = prelude_due ? first_prelude : std::vector<int32_t>{};
+        prelude_due = false;
         for (int attempt = 0; attempt < 6 && !pool.empty(); attempt++) {
-            w.clear();
+            w = pre;
             calls.clear();
             batches = 0;
             uint32_t sig = 0;
