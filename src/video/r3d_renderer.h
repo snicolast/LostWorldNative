@@ -195,6 +195,7 @@ private:
         VkDeviceMemory memory = VK_NULL_HANDLE;
         void* mapped = nullptr;
         size_t size = 0;
+        bool device_local = false;   // in the GPU's own memory (written through the BAR)
     };
     struct Image {
         VkImage image = VK_NULL_HANDLE;
@@ -205,7 +206,10 @@ private:
         uint32_t w = 0, h = 0;
     };
 
-    bool create_buffer(Buffer& b, size_t size, VkBufferUsageFlags usage);
+    // Host-visible, mapped. device_local: in memory the GPU reads at full speed
+    // when there is some the host can also write (the BAR; all of it on an
+    // integrated GPU), else as without
+    bool create_buffer(Buffer& b, size_t size, VkBufferUsageFlags usage, bool device_local = false);
     void destroy_buffer(Buffer& b);
     bool create_image(Image& img, uint32_t w, uint32_t h, VkFormat format, VkImageUsageFlags usage,
                       VkImageAspectFlags aspect, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
@@ -214,7 +218,7 @@ private:
                     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT);
     bool create_pipelines();
     void destroy_pipelines();
-    void apply_pending_msaa();   // set_msaa, at the start of a frame
+    void apply_pending();   // set_msaa, set_bloom on or off: pipelines (and targets) again, at the start of a frame
     // What a pipeline differs in; the rest (triangle list, no culling, reverse
     // Z, dynamic viewport and scissor) is the same for all
     struct PipelineDesc {
@@ -279,6 +283,7 @@ private:
     bool can_repeat_ = false;
     void place_crosshairs(const ScreenLayout& lay, ComposePush& pc) const;
     void record_uploads(const Frame& f);
+    void record_sky_fields(const Frame& f);
     void record_shadows(const Frame& f);
     void record_world(const Frame& f);
     void record_world_depth(const Frame& f, const R3DViewport& w, bool msaa, bool ao_on);
@@ -311,6 +316,7 @@ private:
     Image glow_, glow_ms_;      // bloom source written by the 3D pass (glow_ms_: MSAA, resolved into glow_)
     Image bloom_a_, bloom_b_;   // bloom at a quarter of the size: reduced and blurred (ends in bloom_a_)
     float bloom_strength_ = 0;
+    bool glow_pass_ = true;     // the world pipelines and targets have the glow attachment (bloom on)
     float saturation_ = 1, gamma_ = 1;
     Image depth_resolved_;   // MSAA: sample 0 of the world's depth, for the ambient occlusion
     Image ao_;               // raw ambient occlusion (R8)
@@ -338,7 +344,7 @@ private:
     void record_ray_tracing(const Frame& f);
     // Debugging aid (LW_GPUTIME): GPU time of each pass and of the whole
     // frame, averaged over 300 images and printed (names in record())
-    static constexpr int GPU_MARKS = 12;
+    static constexpr int GPU_MARKS = 13;
     VkQueryPool gpu_times_ = VK_NULL_HANDLE;
     float timestamp_period_ = 1;
     double gpu_sum_[GPU_MARKS] = {};
@@ -433,6 +439,17 @@ private:
     uint64_t sky_motion_serial_ = 0;
     void solve_sky_motion();    // the frame fed last, if not solved yet
     void update_sky_motion();   // solve_sky_motion and its texels to the staging buffer
+    // The procedural sky's clouds (sky_fields.frag) as a panorama of the pair
+    // of sky layers, a strip of rows of it redrawn every frame (all of it the
+    // first time): compose.frag shades it with the sky's colours
+    static constexpr uint32_t SKY_FIELDS_W = 1024, SKY_FIELDS_H = 2048;   // 2 texels per layer pixel each way
+    static constexpr uint32_t SKY_FIELDS_ROWS = 64;                       // per frame: the whole in 32 frames
+    Image sky_fields_;
+    VkSampler sky_sampler_ = VK_NULL_HANDLE;   // linear, wrapping around
+    VkPipelineLayout sky_layout_ = VK_NULL_HANDLE;
+    VkPipeline sky_fields_pipe_ = VK_NULL_HANDLE;
+    uint32_t sky_fields_row_ = 0;   // the next strip starts here
+    bool sky_fields_all_ = true;    // the next frame draws the whole panorama
     // The sun drawn in the sky, carried along with the sky picture's scroll
     uint64_t sky_sun_serial_ = 0;
     bool sky_sun_carried_ = false;

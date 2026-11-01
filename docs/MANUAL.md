@@ -436,7 +436,9 @@ the bottom. The stages' sky is 7d020e12272dd059.png.
 
 By default the stages' sky is procedural (SKY setting in EFFECTS, or
 --sky procedural|original): a gradient with soft clouds drifting
-slowly, drawn at screen resolution and in perspective, with the
+slowly, drawn in perspective at twice the layer's resolution (the clouds
+are kept in a panorama texture that is redrawn a strip per frame, so they
+cost the same on every GPU), with the
 same scrolling, fades and fog as the original, and with the colours
 of each stage's sky (it works for all the game's skies); the trees on the
 horizon come from the original image. With ORIGINAL the game's image is used
@@ -510,7 +512,7 @@ normal behaviour when unset):
 | LW_FOGDBG | Prints per frame the camera, the ground and the models matched by the world tracking |
 | LW_FOGSUN=x,y,z | Forces the sun direction (view space) for the sun disc and shadows |
 | LW_RTSPLIT | Ray traced shadows and occlusion on the left half of the picture, the shadow map and the depth based occlusion on the right, to compare them |
-| LW_GPUTIME | Every 300 images, the GPU time of the whole frame and of each pass (ray tracing build, shadow map, 3D opaque, ambient occlusion, rest of the 3D, DLAA, bloom, light shafts, diffusion, exposure, composition) |
+| LW_GPUTIME | Every 300 images, the GPU time of the whole frame and of each pass (sky panorama, ray tracing build, shadow map, 3D opaque, ambient occlusion, rest of the 3D, DLAA, bloom, light shafts, diffusion, exposure, composition) |
 | LW_MIST=rise,banks | Sets the two distance haze parameters |
 | LW_FLASH=brightness | Fixes the grey-fog lightning brightness and shows its bolt |
 | LW_RAIN=amount | Fixes the rain amount (0 to 1) even if the game isn't raining |
