@@ -19,7 +19,10 @@ inline uint32_t r3d_mix_key(uint32_t h, uint32_t v) {
 // vertices of the viewport's lists are its
 struct R3DInstance {
     uint32_t key;
-    uint32_t model;    // model address
+    // Where the model's polygon list ends (read once it is drawn): as unique
+    // to the model as its start, the key the tracker knows each piece of
+    // scenery by. Not the model's own address: compare it only with itself
+    uint32_t model_end;
     float axes[9];     // model x, y, z axes in view space (normalised)
     float origin[3];   // model origin in view space
     uint32_t polygons;

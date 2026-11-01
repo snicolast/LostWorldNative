@@ -804,7 +804,7 @@ void pace_frame() {
     }
 }
 
-ULONGLONG g_boot_ms = GetTickCount64();
+double g_boot_s = now_seconds();   // when the process started (the boot skip reports how long it took)
 
 // Exit from the game thread itself: nothing else pushes audio, so it is
 // stopped here before the process goes away
@@ -1238,10 +1238,10 @@ void rt_event(Ctx& c) {
                 g_inputs.p[p].playing = state == 1 || state == 2;
             }
             if (g_frame % 60 == 0) {
-                static ULONGLONG last_ms = GetTickCount64();
-                ULONGLONG now = GetTickCount64();
-                double fps = now > last_ms ? 60000.0 / double(now - last_ms) : 0.0;
-                last_ms = now;
+                static double last_s = now_seconds();
+                double now = now_seconds();
+                double fps = now > last_s ? 60.0 / (now - last_s) : 0.0;
+                last_s = now;
                 printf("  frame %llu  (pc ~%08X)  %.0f fps\n", (unsigned long long)g_frame, c.pc_hint, fps);
                 fflush(stdout);
             }
@@ -1264,7 +1264,7 @@ void rt_event(Ctx& c) {
                 g_sound.set_dsp_enabled(true);
                 g_sound.set_muted(false);   // fades in from silence
                 printf("[boot] start screens skipped in %.1f s (frame %llu)\n",
-                       double(GetTickCount64() - g_boot_ms) / 1000.0, (unsigned long long)g_frame);
+                       now_seconds() - g_boot_s, (unsigned long long)g_frame);
                 LARGE_INTEGER now;   // real-time pacing starts from here
                 QueryPerformanceCounter(&now);
                 g_start_time.QuadPart = now.QuadPart - LONGLONG(double(g_frame) / FRAME_HZ * double(g_qpf.QuadPart));

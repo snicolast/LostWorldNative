@@ -36,7 +36,7 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
         };
         std::vector<Group> groups;
         for (size_t i = 0; i < list.size(); i++) {
-            uint32_t was = tracking_ && scenery_models_.count(list[i].model) ? 1 : 0;
+            uint32_t was = tracking_ && scenery_models_.count(list[i].model_end) ? 1 : 0;
             bool found = false;
             for (auto& g : groups)
                 if (same_axes(list[g.first].axes, list[i].axes)) {
@@ -85,12 +85,12 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
         std::unordered_map<uint32_t, uint32_t> seen;
         for (const R3DInstance& in : viewport_instances[best])
             if (same_axes(in.axes, axes)) {
-                scenery_models_.insert(in.model);
+                scenery_models_.insert(in.model_end);
                 Placement p;
                 memcpy(p.origin, in.origin, sizeof(p.origin));
                 memcpy(p.axes, in.axes, sizeof(p.axes));
                 scenery.by_key[in.key] = p;
-                scenery.by_model[r3d_mix_key(in.model, seen[in.model]++)] = p;
+                scenery.by_model[r3d_mix_key(in.model_end, seen[in.model_end]++)] = p;
             }
     }
     // A world is many models placed around the camera; the title screens and
@@ -203,7 +203,7 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
         float d = std::sqrt(in.origin[0] * in.origin[0] + in.origin[1] * in.origin[1] + in.origin[2] * in.origin[2]);
         float tolerance = 2.0f + 0.025f * d;
         const Seen* match = nullptr;
-        auto it = seen_.find(in.model);
+        auto it = seen_.find(in.model_end);
         if (it != seen_.end())
             for (const Seen& s : it->second)
                 if (frame - s.frame <= memory &&
@@ -233,7 +233,7 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
         } else if (continuous) {
             if (d > 0.3f * far_) now.fade = 1;
         }
-        seen[in.model].push_back(now);
+        seen[in.model_end].push_back(now);
         if (now.fade <= 0) continue;
         appearing++;
         uint32_t code = uint32_t(now.fade * 255.0f + 0.5f) << R3D_FADE_IN_SHIFT;

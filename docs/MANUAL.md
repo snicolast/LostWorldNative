@@ -539,3 +539,7 @@ normal behaviour when unset):
 | LW_SURV_SHOTS=1 | Survival: saves each screen of the mode to out/survival_<mode>.bmp and fires by itself (=2: returns to the menu after the results) |
 | LW_SURV_AMBUSH=1 | Survival: an ambush on every walk between stops |
 | LW_SURV_BONUS=1 | Survival: the BONUS target appears on every walk and is shot automatically after a second |
+| LW_SURV_NO_CACHE=1 | Survival: never loads a kept arena state (save/survival/), always reaches the arena again |
+| LW_AIM_BOX=up,w,h | Gamepad aim assist: the box around each enemy, in world units (up from its feet, half width, half height; 7,6,5 by default) |
+| LW_PROJ_LOG=path | Writes every call of the game's screen projection with its caller (to find more enemy kinds for the aim assist) |
+| LW_SPOTLOG=path | Writes the world viewport's lighting every game frame (spotlight, sun, ambient, fog, sky scroll, night) |

@@ -41,7 +41,7 @@ struct Device {
     POINT pos{};          // client pixels
     bool trigger = false, reload = false;
     unsigned presses = 0; // left button presses so far
-    ULONGLONG last_input = 0;   // GetTickCount64 of its last report (0: none yet)
+    double last_input = 0;   // now_seconds() of its last report (0: none yet)
     int player = -1;      // whose gun it is now (0, 1; -1 none)
 };
 std::vector<Device> devices(HWND hwnd);
