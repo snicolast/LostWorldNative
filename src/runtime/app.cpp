@@ -596,44 +596,15 @@ static std::string full_path(const std::string& path) {
     return n && n < MAX_PATH ? std::string(full, n) : path;
 }
 
-// The zip the ROM came from (empty when it came from a data folder): the boss
-// state makers are started on the same ROM
-// QUALITY for the first start, from the graphics card's name: a rough guess
-// at its speed (NVIDIA RTX and AMD RX by series and model, a laptop's a step
-// lower; MEDIUM when the name says nothing). The options menu changes it.
+// QUALITY for the first start, from the graphics card (settings_bridge.cpp)
 static int suggest_quality(const VkPresenter& vk) {
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(vk.gpu(), &props);
-    if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) return FrontendSettings::LOW;
-    std::string name = props.deviceName;
-    for (char& c : name) c = char(tolower((unsigned char)c));
-    auto number_after = [&](const char* word) {
-        size_t at = name.find(word);
-        return at == std::string::npos ? 0 : atoi(name.c_str() + at + strlen(word));
-    };
-    bool laptop = name.find("laptop") != std::string::npos || name.find("mobile") != std::string::npos ||
-                  name.find("max-q") != std::string::npos;
-    // Ti, Super, XT: half a model up. Scores: 60 a desktop RTX 2060, +10 a model, +10 a series
-    bool plus = name.find(" ti") != std::string::npos || name.find("super") != std::string::npos ||
-                name.find(" xt") != std::string::npos;
-    int score = 0, cap = FrontendSettings::ULTRA;
-    if (int n = number_after("rtx "); n >= 2000) {   // 2060, 3070, 4080, 5090...
-        score = n % 100 + (n / 1000 - 2) * 10;
-    } else if (int r = number_after("rx "); r >= 5000 && r < 10000) {   // 6600, 7800 XT, 9070 XT...
-        int series = r / 1000, model = (r / 100) % 10 ? (r / 100) % 10 : (r / 10) % 10;
-        score = model * 10 + (series >= 9 ? 20 : (series - 6) * 10);
-        cap = FrontendSettings::HIGH;   // slower ray tracing than NVIDIA's
-    } else if (name.find("gtx") != std::string::npos || name.find("radeon") != std::string::npos) {
-        return FrontendSettings::LOW;   // older cards without ray tracing (or an unknown Radeon)
-    } else {
-        return FrontendSettings::MEDIUM;
-    }
-    score += (plus ? 5 : 0) - (laptop ? 10 : 0);
-    int q = score >= 100 ? FrontendSettings::ULTRA : score >= 85 ? FrontendSettings::HIGH
-          : score >= 60 ? FrontendSettings::MEDIUM : FrontendSettings::LOW;
-    return std::min(q, cap);
+    return suggest_quality(props.deviceName, props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
 }
 
+// The zip the ROM came from (empty when it came from a data folder): the boss
+// state makers are started on the same ROM
 static std::string g_rom_zip;
 
 // Loads the ROM from the first of: --rom or LW_ROM_ZIP (lostwsga.zip read

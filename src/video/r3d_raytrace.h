@@ -4,8 +4,11 @@
 // ambient occlusion (ao.frag).
 //
 // The scene arrives as a triangle soup already in view space, rebuilt every
-// game frame, so the world is rebuilt from scratch every image (a few
-// thousand triangles: a fraction of a millisecond). Two bottom levels, two
+// game frame, so the world is built from scratch for each new game frame (a
+// few thousand triangles: a fraction of a millisecond). The images between
+// two game frames only move the same triangles (interpolation): the bottom
+// levels are then refitted (updated in place), and an image that repeats the
+// last one (half rate, no interpolation) builds nothing. Two bottom levels, two
 // instances: what stands near the ground (instance mask RT_LOW, the only
 // shadow casters, as with the shadow map, and what the ambient occlusion
 // sees) and what is higher up (RT_HIGH: canopies and roofs, built only on
@@ -43,10 +46,13 @@ public:
     // between the previous and the current game frame (interp). What stands up
     // to max_height above the ground (height of a view-space point:
     // dot(p, up) + camera_height) goes into the low level; with `high`, the
-    // rest goes into the high one, otherwise it is left out
-    void prepare(const R3DScene& scene, const R3DViewport& world, float interp, const float up[3],
+    // rest goes into the high one, otherwise it is left out. serial: the game
+    // frame's (it changes with each new scene); the same serial and arguments
+    // as the last call leave the structures as they are
+    void prepare(const R3DScene& scene, uint64_t serial, const R3DViewport& world, float interp, const float up[3],
                  float camera_height, float max_height, bool high);
-    // Builds the structures; afterwards fragment shaders can trace through them
+    // Builds (or refits) the structures; afterwards fragment shaders can trace
+    // through them. Records nothing when prepare() found nothing new
     void record(VkCommandBuffer cmd);
 
     VkAccelerationStructureKHR tlas() const { return tlas_; }
@@ -73,6 +79,7 @@ private:
         VkDeviceAddress address = 0;
         VkDeviceSize scratch_offset = 0;
         uint32_t solid = 0, cut = 0;   // triangles this image
+        uint32_t built_solid = 0, built_cut = 0;   // in the structure as last built (a refit needs the same)
         uint32_t first = 0;            // where its positions start (in triangles)
         std::vector<float> solid_pos, cut_pos;
         std::vector<Cutout> cut_data;
@@ -94,4 +101,20 @@ private:
     Level levels_[2];
     VkAccelerationStructureKHR tlas_ = VK_NULL_HANDLE;
     uint32_t generation_ = 0;
+    // What the structures hold: the arguments of the last prepare() that
+    // changed them, and what the next record() has to do
+    struct Key {
+        uint64_t serial = ~0ull;
+        const R3DViewport* world = nullptr;
+        float interp = 0, up[3] = {}, camera_height = 0, max_height = 0;
+        bool high = false;
+        bool operator==(const Key& o) const {
+            return serial == o.serial && world == o.world && interp == o.interp && up[0] == o.up[0] &&
+                   up[1] == o.up[1] && up[2] == o.up[2] && camera_height == o.camera_height &&
+                   max_height == o.max_height && high == o.high;
+        }
+    } key_;
+    bool dirty_ = true;     // record() builds or refits
+    bool rebuild_ = true;   // a full build (new scene, other triangle counts, new buffers)
+    uint32_t built_generation_ = ~0u;
 };

@@ -1749,7 +1749,7 @@ void R3DRenderer::record_ray_tracing(const Frame& f) {
     if (!rt_frame_ || !rt_world_) return;
     // Nothing traces what is higher up any more: the ambient occlusion leaves
     // the canopies out too (ao_common.glsl, AO_HIGH)
-    rt_.prepare(*scene_, *rt_world_, interp_, shadow_up_, shadow_height_, 35.0f, false);
+    rt_.prepare(*scene_, scene_serial_, *rt_world_, interp_, shadow_up_, shadow_height_, 35.0f, false);
     if (rt_.generation() != rt_generation_) {
         rt_generation_ = rt_.generation();
         VkDescriptorBufferInfo cut{rt_.cutouts(), 0, VK_WHOLE_SIZE};
