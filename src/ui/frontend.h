@@ -99,11 +99,11 @@ public:
         y0 = partial_y0_, y1 = partial_y1_;
         return partial_;
     }
-    bool locked_notice_ = false;   // SURVIVAL: every arena locked, the notice saying how they unlock
-    void draw_locked_notice();
     void invalidate() { dirty_ = true; }
 
 private:
+    bool locked_notice_ = false;   // SURVIVAL: every arena locked, the notice saying how they unlock
+    void draw_locked_notice();
     enum Id {
         PLAY, OPTIONS, QUIT, ARCADE, BOSS, BACK, RESUME, SETTINGS, QUIT_TO_MENU, TABS,
         BOSS_ENTRY, PREPARE, RETRY, BOSS_LIST, LEAVE_BOSS, RECORDS, SURVIVAL, SURVIVAL_ENTRY, CLASSIC, RANDOM, WEATHER_ENTRY,

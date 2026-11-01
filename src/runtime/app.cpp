@@ -40,6 +40,7 @@
 #include "survival.h"
 #include "weather.h"
 #include "../audio/sound_board.h"
+#include "../common/clock.h"
 #include "../common/paths.h"
 #include "../common/worker.h"
 #include "../ui/achievement_toast.h"
@@ -255,14 +256,14 @@ static void load_crosshairs(R3DRenderer& renderer) {
 // gun's start button) leaves no crosshair standing still on the screen
 static bool crosshair_idle(int p, const PlayerAim& aim) {
     static float at_x[2] = {-9, -9}, at_y[2] = {-9, -9};
-    static ULONGLONG used_at[2] = {};
-    ULONGLONG now = GetTickCount64();
+    static double used_at[2] = {};
+    double now = now_seconds();
     const PlayerInputs& pl = g_inputs.p[p];
     if (pl.trigger || pl.offscreen || std::fabs(aim.x - at_x[p]) > 0.01f || std::fabs(aim.y - at_y[p]) > 0.01f) {
         at_x[p] = aim.x, at_y[p] = aim.y;
         used_at[p] = now;
     }
-    return g_opt.crosshair_hide > 0 && now - used_at[p] > ULONGLONG(g_opt.crosshair_hide) * 1000;
+    return g_opt.crosshair_hide > 0 && now - used_at[p] > double(g_opt.crosshair_hide);
 }
 
 // Gamepads (gamepad.h), after the keyboard and mouse: their buttons are added
@@ -765,7 +766,7 @@ struct App {
     std::vector<uint16_t> tex_rows;
     uint64_t shown = ~0ull, presents = 0;
     double scene_total = 0;   // seconds of 2D composition and scene building since the last title
-    ULONGLONG last_title = 0;
+    double last_title = 0;   // now_seconds() of the last title update
 
     // PC front end: main menu at launch, pause menu on Esc
     Frontend frontend;
@@ -931,7 +932,7 @@ void App::start_maker(int i) {
     const std::wstring exe = exe_path_w();
     const std::string& rom = g_rom_zip.empty() ? g_data_dir : g_rom_zip;
     std::wstring cmd = L"\"" + exe + L"\" --make-boss-state " + std::to_wstring(i + 1) +
-                       (g_rom_zip.empty() ? L" --data \"" : L" --rom \"") + std::wstring(rom.begin(), rom.end()) +
+                       (g_rom_zip.empty() ? L" --data \"" : L" --rom \"") + widen(rom) +
                        L"\"";
     STARTUPINFOW si{};
     si.cb = sizeof(si);
@@ -1258,7 +1259,7 @@ bool App::init(int argc, char** argv, bool first_start) {
     if ((g_opt.menu || !g_opt.classic_text) && text.init("textures/text")) renderer.set_text_atlas(text);
     load_crosshairs(renderer);
     builder.set_vrom(g_vrom.data(), g_vrom.size());
-    last_title = GetTickCount64();
+    last_title = now_seconds();
     raw_mice::init(presenter.hwnd());   // a second mouse can be player 2's gun
     if (g_opt.several_mice) raw_mice::set_saved(ini.gun_p1, ini.gun_p2);   // the guns picked in GUN TEST
     presenter.raw_input = raw_mice::on_input;
@@ -1710,7 +1711,7 @@ void App::update_menus() {
     // them while the players' guns are being picked
     static std::map<std::string, unsigned> gun_presses;
     if (frontend.gun_test_open()) {
-        ULONGLONG now = GetTickCount64();
+        double now = now_seconds();
         std::vector<raw_mice::Device> devs = raw_mice::devices(presenter.hwnd());
         std::vector<Frontend::GunView> view;
         int hidden = 0;
@@ -1727,7 +1728,7 @@ void App::update_menus() {
                 hidden++;
                 continue;
             }
-            Frontend::GunView g{d.path, d.name, d.absolute, d.last_input && now - d.last_input < 1000, d.has_pos,
+            Frontend::GunView g{d.path, d.name, d.absolute, d.last_input > 0 && now - d.last_input < 1.0, d.has_pos,
                                 int(d.pos.x), int(d.pos.y), d.trigger, d.reload, d.player};
             view.push_back(g);
         }
@@ -2152,8 +2153,8 @@ bool App::present_frame(double loop_from) {
 
 // Once a second: the window title (and every 5 s the log) with where the time goes
 void App::update_title() {
-    ULONGLONG now = GetTickCount64();
-    if (now - last_title >= 1000) {
+    double now = now_seconds();
+    if (now - last_title >= 1.0) {
         // Where the time goes, in ms per frame: the game thread (CPU, without
         // its waits), the preparation thread (per game frame), this thread's
         // scene work and command recording, and the time blocked on the GPU
@@ -2165,20 +2166,21 @@ void App::update_title() {
         double scene_ms = presents ? scene_total * 1000.0 / double(presents) : 0;
         uint64_t prep_total = prep_us.exchange(0), prep_n = prep_frames.exchange(0);
         double prep_ms = prep_n ? double(prep_total) / 1000.0 / double(prep_n) : 0;
+        unsigned long long hz = (unsigned long long)(double(presents) / (now - last_title) + 0.5);
         char title[256];
         snprintf(title, sizeof(title),
                  "Lost World Native - %llu Hz display - frame %llu - %zu polygons | ms/frame: game %.1f, "
                  "prep %.1f, scene %.1f, render %.1f, GPU %.1f",
-                 (unsigned long long)(presents * 1000 / (now - last_title)), (unsigned long long)shown,
+                 hz, (unsigned long long)shown,
                  scene->polygons, game_ms, prep_ms, scene_ms, t.record * per, (t.gpu_wait + t.present) * per);
         SetWindowTextA(presenter.hwnd(), title);
-        static ULONGLONG last_log = now;
-        if (now - last_log >= 5000) {   // the same, in the log, every 5 s
+        static double last_log = now;
+        if (now - last_log >= 5.0) {   // the same, in the log, every 5 s
             last_log = now;
             printf("[timing] frame %llu  %zu polygons  ms/frame: game %.2f  prep %.2f  scene %.2f  render %.2f  "
                    "GPU wait %.2f  present %.2f  (%llu Hz display)\n",
                    (unsigned long long)shown, scene->polygons, game_ms, prep_ms, scene_ms, t.record * per,
-                   t.gpu_wait * per, t.present * per, (unsigned long long)(presents * 1000 / (now - last_title)));
+                   t.gpu_wait * per, t.present * per, hz);
             fflush(stdout);
         }
         presents = 0;

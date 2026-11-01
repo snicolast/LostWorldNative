@@ -10,6 +10,8 @@
 #include <cstdio>
 #include <string>
 
+#include "../common/clock.h"
+
 namespace {
 template <typename T>
 void release(T*& p) {
@@ -115,7 +117,7 @@ bool AudioOut::play_default_device() {
     }
 
     std::wstring id = ok ? default_device_id(enumerator) : std::wstring();
-    ULONGLONG checked = GetTickCount64();
+    double checked = now_seconds();
     while (ok && running_) {
         WaitForSingleObject(event, 100);
         UINT32 padding = 0;
@@ -132,8 +134,8 @@ bool AudioOut::play_default_device() {
             stream_.pull(reinterpret_cast<float*>(data), room, now_mode);
             render->ReleaseBuffer(room, 0);
         }
-        if (GetTickCount64() - checked > 1000) {   // the user picked another default output
-            checked = GetTickCount64();
+        if (now_seconds() - checked > 1.0) {   // the user picked another default output
+            checked = now_seconds();
             if (default_device_id(enumerator) != id) break;
         }
     }

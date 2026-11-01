@@ -8,6 +8,8 @@
 #include <cwchar>
 #include <vector>
 
+#include "../common/clock.h"
+
 namespace raw_mice {
 namespace {
 
@@ -21,7 +23,7 @@ struct Mouse {
     std::wstring name;
     bool absolute = false;
     unsigned presses = 0;
-    ULONGLONG last_input = 0;
+    double last_input = 0;
 };
 
 std::vector<Mouse> g_mice;
@@ -119,7 +121,7 @@ void on_input(HRAWINPUT input) {
     int i = find(ri.header.hDevice);
     Mouse& m = g_mice[i];
     const RAWMOUSE& rm = ri.data.mouse;
-    m.last_input = GetTickCount64();
+    m.last_input = now_seconds();
     if (g_owner[0] < 0 && g_owner[1] >= 0 && i != g_owner[1]) g_owner[0] = i;   // only player 2's gun was picked
     if (rm.usFlags & MOUSE_MOVE_ABSOLUTE) {
         m.absolute = true;   // tablets and light guns: 0..65535 over the screen
@@ -206,13 +208,20 @@ Gun gun(int player, HWND hwnd) {
 
 std::vector<Device> devices(HWND hwnd) {
     std::vector<Device> out;
-    UINT n = 0;
-    std::vector<RAWINPUTDEVICELIST> list;
-    if (GetRawInputDeviceList(nullptr, &n, sizeof(RAWINPUTDEVICELIST)) == 0 && n) {
-        list.resize(n);
-        n = GetRawInputDeviceList(list.data(), &n, sizeof(RAWINPUTDEVICELIST));
-        if (n == UINT(-1)) n = 0;
-        list.resize(n);
+    // GUN TEST asks at every refresh: the devices plugged in are listed again
+    // four times a second, what each one does is read every time
+    static std::vector<RAWINPUTDEVICELIST> list;
+    static double listed_at = -1;
+    if (double now = now_seconds(); listed_at < 0 || now - listed_at >= 0.25) {
+        listed_at = now;
+        UINT n = 0;
+        list.clear();
+        if (GetRawInputDeviceList(nullptr, &n, sizeof(RAWINPUTDEVICELIST)) == 0 && n) {
+            list.resize(n);
+            n = GetRawInputDeviceList(list.data(), &n, sizeof(RAWINPUTDEVICELIST));
+            if (n == UINT(-1)) n = 0;
+            list.resize(n);
+        }
     }
     for (const RAWINPUTDEVICELIST& d : list) {
         if (d.dwType != RIM_TYPEMOUSE) continue;

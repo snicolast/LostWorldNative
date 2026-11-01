@@ -172,7 +172,6 @@ const std::vector<Entry>& table() {
 }
 
 const Entry* find(const char* name) {
-    if (strcmp(name, "--luz") == 0) name = "--light-gain";   // its old name, still accepted
     for (const Entry& e : table())
         if (e.name && strcmp(e.name, name) == 0) return &e;
     return nullptr;

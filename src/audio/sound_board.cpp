@@ -94,6 +94,11 @@ bool SoundBoard::load_state(const std::vector<uint8_t>& in) {
         p += 4;
         return v;
     };
+    // Legacy: a sound board saved before the SNDS header and version
+    // (October 2026). Boss and arena states made by older builds still carry
+    // it. Remove this branch, and LegacyScsp in scsp.cpp, the next time the
+    // game state format (LGWS) changes version: every older state is then
+    // rebuilt anyway
     bool legacy = !(in.size() >= 8 && get32() == STATE_MAGIC);
     if (legacy) {
         if (in.size() != 2 * kRamSize + 2 * Scsp::legacy_size() + ctx + 1) return false;

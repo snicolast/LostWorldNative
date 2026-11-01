@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <utility>
 
+#include "../common/paths.h"   // widen
+
 namespace {
 
 // One WIC factory for the process (packs, crosshairs, menus); COM is set up
@@ -20,9 +22,6 @@ IWICImagingFactory* wic() {
     }();
     return factory;
 }
-
-// Path for the Win32 wide-character file APIs (the project's paths are ASCII)
-std::wstring widen(const std::string& s) { return std::wstring(s.begin(), s.end()); }
 
 // The first frame of a picture file in that pixel format, 4 bytes per pixel
 template <class T>
