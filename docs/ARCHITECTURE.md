@@ -94,12 +94,13 @@ blocked by drawing.
    the 2D layers of the same vblank (`Layers2D`), and queues the result.
 3. At each monitor vblank (`DisplayClock`, DWM timing or `VK_KHR_present_wait`)
    the window thread takes the frame due, sets the interpolation fraction and
-   records the GPU passes (`R3DRenderer::record`): ray tracing build (if any),
-   sun shadow map, the world into HDR colour + motion + glow (MSAA or DLAA),
+   records the GPU passes (`R3DRenderer::record`): a strip of the procedural
+   sky's cloud panorama, ray tracing build (if any), sun shadow map, the world
+   into HDR colour + motion + glow (MSAA or DLAA; the glow only with bloom on),
    ambient occlusion at half resolution, bloom, light shafts, diffusion,
    exposure, and the composition into the swapchain image (2D back layer or
-   procedural sky, the 3D image, 2D front layer and HD text, replacement
-   pictures, sharpening, crosshairs).
+   procedural sky where the 3D leaves them visible, the 3D image, 2D front
+   layer and HD text, replacement pictures, sharpening, crosshairs).
 4. One frame is in flight at a time (a single fence), which keeps the light
    gun's latency low; with `VK_KHR_present_wait` at most two images wait for
    the screen.
@@ -112,7 +113,9 @@ blocked by drawing.
 pattern), `Pack2D` recognises 8x8-cell pictures by hash and swaps in PNGs
 (`textures/2d`, `textures/2d_back`), `SkyPack` recognises the 512x512 backdrops
 by hash and either swaps in a PNG (`textures/sky`) or draws the procedural sky
-(`sky_procedural.glsl`, with a CPU twin for the tests), and `SkyMotion` moves
+(`sky_procedural.glsl`, with a CPU twin for the tests: its clouds are kept in a
+panorama texture redrawn a strip per frame, `sky_fields.frag`, and shaded with
+the sky's colours in the composition), and `SkyMotion` moves
 the back layers between game frames with the camera. `TexturePack` does the same
 for 3D textures (`textures/`, by hash of the decoded texture).
 
