@@ -91,7 +91,9 @@ without extracting it), `--data FOLDER`, `data\` in the current folder or next t
 (what `build.bat` extracts), and `lostwsga.zip` next to the exe or in the current
 folder. If none is found, a message says where it looked and how to give it the path.
 
-Finally it runs the tests in `tests/` (ctest): 2D composition against reference
+Once LostWorld.exe is built and copied, it builds and runs the tests in
+`tests/` (ctest). A test that does not build or pass only prints a warning
+at the end: the game is already in place. The tests: 2D composition against reference
 hashes, the C++ and Python FNV-1a hash against the same vectors, the
 audio queue (click-free resampling with mismatched clocks), the encounter
 script reader shared by survival and random spawns, and the sound chips' part

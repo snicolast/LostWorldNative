@@ -45,13 +45,18 @@ set "CTEST=%VSDIR%\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.
 if not exist "%CMAKE%" goto no_vs
 echo [5/5] Building
 "%CMAKE%" -S . -B build\cmake -G Ninja -DCMAKE_BUILD_TYPE=Release || goto fail
-"%CMAKE%" --build build\cmake || goto fail
-"%CTEST%" --test-dir build\cmake --output-on-failure || goto fail
+"%CMAKE%" --build build\cmake --target LostWorld || goto fail
 copy /y build\cmake\LostWorld.exe LostWorld.exe >nul
 rem NVIDIA DLSS runtime (official signed DLL) for --aa dlaa
 if exist third_party\ngx\bin\nvngx_dlss.dll copy /y third_party\ngx\bin\nvngx_dlss.dll nvngx_dlss.dll >nul
+rem The tests after the game: one that does not build or pass (a new compiler's
+rem bug, say) is reported but does not take LostWorld.exe away
+set "TESTS_OK=1"
+"%CMAKE%" --build build\cmake || set "TESTS_OK="
+if defined TESTS_OK "%CTEST%" --test-dir build\cmake --output-on-failure || set "TESTS_OK="
 echo.
 echo Done: LostWorld.exe
+if not defined TESTS_OK echo Warning: the tests did not build or did not pass ^(see above^). The game is built and can be played.
 if defined PAUSE_AT_END pause
 exit /b 0
 
