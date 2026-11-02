@@ -256,7 +256,7 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         {.id = OPT_VOLUME, .tab = AUDIO_TAB, .label = L"VOLUME", .key = "volume", .number = &FS::volume, .lo = 0, .hi = 10,
          .kind = SLIDER, .hint = L"Sound volume"},
         {.id = OPT_MUSIC, .tab = AUDIO_TAB, .label = L"MENU MUSIC", .key = "menu_music", .flag = &FS::menu_music,
-         .kind = TOGGLE, .hint = L"Music in the menus (third_party/menu/music.mp3), at the sound volume"},
+         .kind = TOGGLE, .hint = L"Music in the menus (res/menu/music.mp3, or your own in third_party/menu/), at the sound volume"},
         {.id = OPT_SPEAKERS, .tab = AUDIO_TAB, .label = L"SPEAKERS", .key = "speakers", .number = &FS::speakers,
          .words = {"stereo", "surround", "headphones"}, .kind = CHOICE,
          .shown = {L"STEREO", L"SURROUND 4.0", L"HEADPHONES"},

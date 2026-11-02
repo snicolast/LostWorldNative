@@ -16,7 +16,7 @@ bool mci(const std::wstring& command) { return mciSendStringW(command.c_str(), n
 }  // namespace
 
 bool MenuMusic::open() {
-    for (const wchar_t* path : {L"third_party/menu/music.mp3", L"third_party/menu/music.wav"}) {
+    for (const wchar_t* path : {L"third_party/menu/music.mp3", L"third_party/menu/music.wav", L"res/menu/music.mp3"}) {
         if (GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) continue;
         // mpegvideo plays MP3 and WAV alike and can loop ("repeat")
         if (mci(L"open \"" + std::wstring(path) + L"\" type mpegvideo alias lw_menu_music")) {
