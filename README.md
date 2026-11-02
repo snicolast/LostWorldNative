@@ -110,7 +110,8 @@ Entirely optional: it supports the work on this project, not the game, which bel
 ## License
 
 The code in this repository is under the [MIT License](LICENSE). The libraries and fonts in
-`third_party/` keep their own licenses. The game itself (ROM, code and data) is not included
+`third_party/` keep their own licenses. The menu music (`res/menu/music.mp3`) was made
+with Suno for this port. The game itself (ROM, code and data) is not included
 and stays the property of its owners: you need your own copy of `lostwsga.zip`.
 
 <sub>A fan project for personal use, not affiliated with or endorsed by Sega.
