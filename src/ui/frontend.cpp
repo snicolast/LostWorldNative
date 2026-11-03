@@ -15,6 +15,7 @@
 #include <thread>
 
 #include <shellapi.h>
+#include "../common/clock.h"
 #include "../video/image_io.h"
 
 namespace {
@@ -317,6 +318,8 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         // and the guns picked in GUN TEST
         {.id = NO_ROW, .key = "gun_p1", .path = &FS::gun_p1},
         {.id = NO_ROW, .key = "gun_p2", .path = &FS::gun_p2},
+        // and the logos at launch (splash_screens = 0: straight to the menu)
+        {.id = NO_ROW, .key = "splash_screens", .flag = &FS::splash},
     };
     return table;
 }
@@ -367,6 +370,15 @@ bool Frontend::init(const std::string& font_dir) {
             break;
         }
     load_image(L"third_party/menu/sega.png", sega_.px, sega_.w, sega_.h);
+    // the splash screens, in order: your own in third_party/menu/ first, else the ones in res/menu/
+    for (const wchar_t* name : {L"splash_snicolast.png"})
+        for (const wchar_t* dir : {L"third_party/menu/", L"res/menu/"}) {
+            Picture p;
+            if (!load_image(std::wstring(dir) + name, p.px, p.w, p.h)) continue;
+            printf("[menu] splash %ls%ls (%dx%d)\n", dir, name, p.w, p.h);
+            splash_.push_back(std::move(p));
+            break;
+        }
     // logo and background: your own in third_party/menu/ first, else the ones in res/menu/
     for (const wchar_t* p : {L"third_party/menu/logo.png", L"res/menu/logo.png"})
         if (load_image(p, logo_.px, logo_.w, logo_.h)) {
@@ -627,7 +639,20 @@ std::vector<Frontend::Item> Frontend::items() const {
     }
 }
 
+void Frontend::open_splash() {
+    if (splash_.empty() || !settings.splash) {
+        open(Screen::Main);
+        return;
+    }
+    open(Screen::Splash);
+    splash_on_ = 0;
+    splash_from_ = now_seconds();
+    skip_from_ = -1;
+    skip_next_ = false;
+}
+
 void Frontend::open(Screen s) {
+    if (screen_ == Screen::Splash && s != Screen::Splash) splash_px_ = {}, splash_px_on_ = -1;   // not needed again
     locked_notice_ = false;
     screen_ = s;
     selected_ = 0;
@@ -774,6 +799,10 @@ void Frontend::back() {
 
 bool Frontend::key(int vk) {
     if (!active()) return false;
+    if (screen_ == Screen::Splash) {   // these hurry it on, the rest do nothing
+        if (vk == VK_RETURN || vk == VK_SPACE || vk == VK_ESCAPE || vk == VK_BACK) skip_splash();
+        return true;
+    }
     if (locked_notice_) {   // any of these closes it
         if (vk != VK_RETURN && vk != VK_SPACE && vk != VK_ESCAPE && vk != VK_BACK) return true;
         locked_notice_ = false;
@@ -855,6 +884,7 @@ void Frontend::open_coffee() {   // in the default browser
 }
 
 void Frontend::mouse_move(int x, int y) {
+    if (screen_ == Screen::Splash) return;
     mouse_x_ = x;
     mouse_y_ = y;
     int hit = -1;
@@ -875,6 +905,10 @@ void Frontend::mouse_move(int x, int y) {
 
 void Frontend::click(int x, int y) {
     POINT p{x, y};
+    if (screen_ == Screen::Splash) {
+        skip_splash();
+        return;
+    }
     if (locked_notice_) {
         locked_notice_ = false;
         dirty_ = true;
@@ -925,7 +959,7 @@ void Frontend::click(int x, int y) {
 }
 
 void Frontend::wheel(int x, int y, int delta) {
-    if (screen_ == Screen::GunTest) return;
+    if (screen_ == Screen::GunTest || screen_ == Screen::Splash) return;
     mouse_move(x, y);
     if (screen_ == Screen::Records) {
         scroll_records(delta > 0 ? -1 : 1);
@@ -1961,6 +1995,13 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
         bg_stone_.clear();
     }
     partial_ = false;
+    if (screen_ == Screen::Splash) {
+        if (draw_splash(out)) {
+            dirty_ = true;   // it fades: drawn again every refresh
+            return true;
+        }
+        open(Screen::Main);   // the last one ended
+    }
     if (screen_ != Screen::GunTest) gun_page_.clear();
     else if (gun_page_.size() == size_t(w) * h && out.size() == gun_page_.size() && gun_page_key_ == gun_key()) {
         // Only the marks moved: put the page back where they were, draw them where they are
@@ -2003,6 +2044,76 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
     else draw_menu(over_game, list);
     if (locked_notice_ && screen_ == Screen::Survival) draw_locked_notice();
     dirty_ = false;
+    return true;
+}
+
+// ---- Splash screens ----
+
+namespace {
+constexpr double SPLASH_GAP = 0.25;    // black before each one
+constexpr double SPLASH_IN = 0.7;      // fading in
+constexpr double SPLASH_HOLD = 1.8;    // on screen
+constexpr double SPLASH_OUT = 0.7;     // fading out
+constexpr double SPLASH_SKIP = 0.25;   // fading out when hurried
+}  // namespace
+
+void Frontend::skip_splash() {
+    if (skip_from_ >= 0) {   // already going: the next one goes too
+        skip_next_ = true;
+        return;
+    }
+    double t = now_seconds() - splash_from_;
+    if (t >= SPLASH_GAP + SPLASH_IN + SPLASH_HOLD) return;   // fading out anyway
+    skip_level_ = float(std::clamp((t - SPLASH_GAP) / SPLASH_IN, 0.0, 1.0));
+    skip_from_ = now_seconds();
+}
+
+bool Frontend::draw_splash(std::vector<uint32_t>& out) {
+    double now = now_seconds();
+    float level = 0;   // brightness: 0 black .. 1 the picture
+    for (;;) {
+        double t = now - splash_from_;
+        bool ended;
+        if (skip_from_ >= 0) {
+            double k = (now - skip_from_) / SPLASH_SKIP;
+            level = skip_level_ * float(1 - std::min(k, 1.0));
+            ended = k >= 1;
+        } else {
+            double out_at = SPLASH_GAP + SPLASH_IN + SPLASH_HOLD;
+            level = float(std::clamp(std::min((t - SPLASH_GAP) / SPLASH_IN, 1 - (t - out_at) / SPLASH_OUT), 0.0, 1.0));
+            ended = t >= out_at + SPLASH_OUT;
+        }
+        if (!ended) break;
+        if (++splash_on_ >= int(splash_.size())) return false;
+        splash_from_ = now;
+        skip_from_ = -1;
+        if (skip_next_) {   // pressed twice: this one is gone before it shows
+            skip_next_ = false;
+            skip_from_ = now - SPLASH_SKIP;
+            skip_level_ = 0;
+        }
+    }
+    // The picture as big as fits the window, white around it (a wider or
+    // taller window than the picture), scaled once per size
+    const Picture& p = splash_[splash_on_];
+    if (splash_px_on_ != splash_on_ || splash_px_w_ != w_ || splash_px_h_ != h_) {
+        splash_px_.assign(size_t(w_) * h_, 0xFFFFFFFFu);
+        float sc = std::min(float(w_) / p.w, float(h_) / p.h);
+        int pw = std::max(1, int(p.w * sc + 0.5f)), ph = std::max(1, int(p.h * sc + 0.5f));
+        int x0 = (w_ - pw) / 2, y0 = (h_ - ph) / 2;
+        px_ = splash_px_.data();
+        picture(p, x0, y0, x0 + pw, y0 + ph);   // the box has its shape: nothing cropped
+        splash_px_on_ = splash_on_, splash_px_w_ = w_, splash_px_h_ = h_;
+    }
+    out.resize(splash_px_.size());
+    uint32_t k = uint32_t(level * 256 + 0.5f);
+    if (k >= 256) out = splash_px_;
+    else
+        for (size_t i = 0; i < out.size(); i++) {   // towards black, opaque
+            uint32_t c = splash_px_[i];
+            out[i] = 0xFF000000u | ((((c & 0xFF00FFu) * k) >> 8) & 0xFF00FFu) | ((((c & 0x00FF00u) * k) >> 8) & 0x00FF00u);
+        }
+    px_ = out.data();
     return true;
 }
 

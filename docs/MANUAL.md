@@ -20,6 +20,12 @@ options take priority. `--no-menu` goes straight to the
 arcade game as before (Esc quits), and the tests (--replay, --auto, --shot,
 --aim, --frames, --headless) never show the menu.
 
+Before the main menu a splash screen fades in and out: snicolast's logo
+(`splash_snicolast.png`, from `third_party/menu/` if it is there, else
+`res/menu/`). Enter, Space, Esc, a click or a pad's START skips it to the
+menu. A window wider or taller than the picture is filled with white around it.
+`splash_screens = 0` in save/settings.ini goes straight to the menu.
+
 Two players can play, as in the arcade: player 2 joins at any
 time with 6 (coin) and 2 (start), and has their own crosshair (blue; player
 1's is yellow). With a second mouse (or a light gun that Windows

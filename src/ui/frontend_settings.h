@@ -50,6 +50,7 @@ struct FrontendSettings {
     int vibration = 2;      // gamepad vibration: 0 off, 1 low, 2 medium, 3 high
     int aim_assist = 2;     // gamepad aim assist: 0 off, 1 low, 2 medium, 3 high
     bool menu_music = true; // ui/menu_music.h, when there is a music file
+    bool splash = true;     // the snicolast logo before the main menu (only in the file: splash_screens)
     int run_weather = 0;    // RANDOM SPAWNS and survival: the WEATHER last picked before a run (frontend.cpp)
     std::string gun_p1, gun_p2; // the guns picked in GUN TEST: device paths ("" = the first and second to fire)
 
