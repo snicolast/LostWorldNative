@@ -371,7 +371,7 @@ bool Frontend::init(const std::string& font_dir) {
         }
     load_image(L"third_party/menu/sega.png", sega_.px, sega_.w, sega_.h);
     // the splash screens, in order: your own in third_party/menu/ first, else the ones in res/menu/
-    for (const wchar_t* name : {L"splash_sega.png", L"splash_snicolast.png"})
+    for (const wchar_t* name : {L"splash_snicolast.png"})
         for (const wchar_t* dir : {L"third_party/menu/", L"res/menu/"}) {
             Picture p;
             if (!load_image(std::wstring(dir) + name, p.px, p.w, p.h)) continue;

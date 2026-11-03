@@ -20,12 +20,10 @@ options take priority. `--no-menu` goes straight to the
 arcade game as before (Esc quits), and the tests (--replay, --auto, --shot,
 --aim, --frames, --headless) never show the menu.
 
-Before the main menu two splash screens fade in and out: the SEGA logo and
-snicolast's (`splash_sega.png` and `splash_snicolast.png`, from
-`third_party/menu/` if they are there, else `res/menu/`; a missing one is
-skipped). Enter, Space, Esc, a click or a pad's START hurries the one on
-screen out: once on SEGA goes to the next, again goes to the menu. A window
-wider or taller than the picture is filled with white around it.
+Before the main menu a splash screen fades in and out: snicolast's logo
+(`splash_snicolast.png`, from `third_party/menu/` if it is there, else
+`res/menu/`). Enter, Space, Esc, a click or a pad's START skips it to the
+menu. A window wider or taller than the picture is filled with white around it.
 `splash_screens = 0` in save/settings.ini goes straight to the menu.
 
 Two players can play, as in the arcade: player 2 joins at any

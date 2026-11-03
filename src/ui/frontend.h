@@ -34,10 +34,9 @@ public:
     void shutdown();
 
     void open(Screen s);
-    // At launch: the logos (third_party/menu/ or res/menu/ splash_sega.png,
-    // splash_snicolast.png) faded in and out one after the other, then the
-    // main menu. Enter / Space / Esc / a click (a pad's START or A) hurries
-    // the one on screen out. Straight to the menu when there are none
+    // At launch: the logo (third_party/menu/ or res/menu/ splash_snicolast.png)
+    // faded in and out, then the main menu. Enter / Space / Esc / a click (a
+    // pad's START or A) hurries it out. Straight to the menu without one
     void open_splash();
     bool splash() const { return screen_ == Screen::Splash; }
     Screen screen() const { return screen_; }
