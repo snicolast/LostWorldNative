@@ -1276,7 +1276,9 @@ bool App::init(int argc, char** argv, bool first_start) {
         frontend.rt_available = renderer.ray_tracing_available();
         if (s.fullscreen && !presenter.fullscreen()) presenter.toggle_fullscreen();
         if (!survival_cli) {   // survival mode goes straight into the game
-            frontend.open(Frontend::Screen::Main);
+            // the logos first (not when a debugging aid drives the menu)
+            if (getenv("LW_MENU_KEYS") || getenv("LW_MENU_SHOT")) frontend.open(Frontend::Screen::Main);
+            else frontend.open_splash();
             g_menu_open = true;
         }
         presenter.input_hook = [this](UINT msg, WPARAM wp, LPARAM lp) -> bool {
@@ -1749,12 +1751,12 @@ void App::update_menus() {
     menu_was = frontend.screen();
     {
         double t = now_seconds();
-        music.update(frontend.active() && !frontend.over_game() && frontend.settings.menu_music,
+        music.update(frontend.active() && !frontend.over_game() && !frontend.splash() && frontend.settings.menu_music,
                      frontend.settings.volume, t - music_time);
         music_time = t;
     }
     if (!frontend.active()) pad_in_menu = false;   // a menu opened later starts with the mouse
-    presenter.set_cursor_visible(frontend.active() && !pad_in_menu && !frontend.gun_test_open());
+    presenter.set_cursor_visible(frontend.active() && !pad_in_menu && !frontend.gun_test_open() && !frontend.splash());
     static const bool menu_pad = getenv("LW_MENU_PAD") != nullptr;   // debugging aid: the gamepad's key help
     if (frontend.pad_prompts != (pad_in_menu || menu_pad)) {   // the key help shows the gamepad's buttons or the keys
         frontend.pad_prompts = pad_in_menu || menu_pad;

@@ -25,7 +25,7 @@
 
 class Frontend : UiCanvas {
 public:
-    enum class Screen { None, Main, Play, Options, Pause, Boss, Records, Survival, Classic, GunTest, Weather };
+    enum class Screen { None, Splash, Main, Play, Options, Pause, Boss, Records, Survival, Classic, GunTest, Weather };
     enum class Action { None, StartArcade, Resume, Quit, ToggleFullscreen, SettingsChanged,
                         StartBoss, PrepareBosses, LeaveBossMode, StartSurvival, QuitToMenu,
                         CrosshairChanged };   // a new crosshair picture (crosshair_pick)
@@ -34,6 +34,12 @@ public:
     void shutdown();
 
     void open(Screen s);
+    // At launch: the logos (third_party/menu/ or res/menu/ splash_sega.png,
+    // splash_snicolast.png) faded in and out one after the other, then the
+    // main menu. Enter / Space / Esc / a click (a pad's START or A) hurries
+    // the one on screen out. Straight to the menu when there are none
+    void open_splash();
+    bool splash() const { return screen_ == Screen::Splash; }
     Screen screen() const { return screen_; }
     bool active() const { return screen_ != Screen::None; }
     // A menu over the paused game (the pause menu, its settings, the boss list from it)
@@ -267,6 +273,18 @@ private:
     // the options
     Picture backdrop_;
     Picture sega_;   // optional third_party/menu/sega.png: the credit at the bottom left of the menus
+    // The splash screens: their pictures, which one is on and since when,
+    // and the one on scaled to the window (white around it)
+    std::vector<Picture> splash_;
+    int splash_on_ = 0;
+    double splash_from_ = 0;
+    double skip_from_ = -1;     // hurried out at this time (-1: not)
+    float skip_level_ = 1;      // from this brightness
+    bool skip_next_ = false;    // pressed again while hurrying: the next one goes too
+    std::vector<uint32_t> splash_px_;
+    int splash_px_on_ = -1, splash_px_w_ = 0, splash_px_h_ = 0;
+    void skip_splash();
+    bool draw_splash(std::vector<uint32_t>& out);   // false: the last one ended
     Picture logo_;   // third_party/menu/logo.png, else res/menu/logo.png: the title over the backdrop, its own transparency kept
     bool has_logo() const { return logo_.w > 0 && has_backdrop(); }
     bool has_backdrop() const { return backdrop_.w > 0; }
