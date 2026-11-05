@@ -33,10 +33,13 @@ options take priority. `--no-menu` goes straight to the
 arcade game as before (Esc quits), and the tests (--replay, --auto, --shot,
 --aim, --frames, --headless) never show the menu.
 
-Before the main menu a splash screen fades in and out: snicolast's logo
-(`splash_snicolast.png`, from `third_party/menu/` if it is there, else
-`res/menu/`). Enter, Space, Esc, a click or a pad's START skips it to the
-menu. A window wider or taller than the picture is filled with white around it.
+Before the main menu snicolast's logo plays as a short video with its
+sound (`splash_snicolast.mp4`, from `third_party/menu/` if it is there, else
+`res/menu/`), played by Windows itself (Media Foundation), at the sound
+volume. Where Windows cannot play it, the still logo (`splash_snicolast.png`)
+fades in and out instead. Enter, Space, Esc, a click or a pad's START skips
+it to the menu. A window wider or taller than the video is filled with its
+background colour around it.
 `splash_screens = 0` in save/settings.ini goes straight to the menu.
 
 Two players can play, as in the arcade: player 2 joins at any
