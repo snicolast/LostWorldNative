@@ -390,6 +390,11 @@ bool Frontend::init(const std::string& font_dir) {
             printf("[menu] logo %ls (%dx%d)\n", p, logo_.w, logo_.h);
             break;
         }
+    for (const wchar_t* p : {L"third_party/menu/snicolast.png", L"res/menu/snicolast.png"})
+        if (load_image(p, credit_.px, credit_.w, credit_.h)) {
+            printf("[menu] credit %ls (%dx%d)\n", p, credit_.w, credit_.h);
+            break;
+        }
     for (const wchar_t* p : {L"third_party/menu/background.png", L"third_party/menu/background.jpg", L"res/menu/background.png"})
         if (load_image(p, backdrop_.px, backdrop_.w, backdrop_.h)) {
             printf("[menu] background %ls (%dx%d)\n", p, backdrop_.w, backdrop_.h);
@@ -1799,6 +1804,11 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
         } else {
             text(ITEM, U(22), L"ORIGINAL ARCADE GAME \u00A9 1997 SEGA", U(80), py + U(6), 0, {0xB8B09A, 0xA09884});
         }
+    }
+    if (!over_game && screen_ == Screen::Main && credit_.w > 0) {   // the remaster's credit, small at the bottom centre
+        int lw = U(270), lh = lw * credit_.h / credit_.w, ly = h - U(36) - lh;
+        sprite(credit_, (w - lw) / 2, ly, lw, lh);
+        text(ITEM, U(18), L"PC REMASTER BY", w / 2, ly - U(28), 1, {FOOT, FOOT});
     }
     prompt(x, py, L"A", L"ENTER", L"SELECT");
     if (back_what) back_rect_ = prompt(x, py, L"B", L"ESC", back_what);
