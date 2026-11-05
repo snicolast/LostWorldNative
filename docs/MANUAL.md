@@ -21,7 +21,8 @@ its commit: a repository file whose hash no longer matches was changed by the
 user and is copied to out/update_backup/<date>/ before being replaced, and a
 file the new version no longer has is removed (backed up too if it had been
 changed). The first update, with no manifest, backs up every file it
-replaces. In a git clone it runs `git pull --ff-only` and build.bat instead.
+replaces, and cannot know which files older versions had that the new one
+dropped: those stay (harmless). In a git clone it runs `git pull --ff-only` and build.bat instead.
 
 `LostWorld.exe` opens a Vulkan window and runs the game at its real speed
 (57.5 Hz). It starts in a PC-style main menu (Play, Options, Quit; with
