@@ -6,6 +6,7 @@
 #include <mmsystem.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <string>
 
@@ -48,8 +49,10 @@ void MenuMusic::update(bool want, int volume, double dt) {
         playing_ = false;
         return;
     }
-    // 0..1000; the game's volume 5 (the default) plays it at half
-    int v = int(std::clamp(level_ * float(volume) / 10.0f, 0.0f, 1.0f) * 1000.0f + 0.5f);
+    // 0..1000; a square-root curve so it sits a little louder in the middle:
+    // the game's volume 5 (the default) plays it at 0.71 (it was 0.5), 10 is still full
+    float g = std::sqrt(std::clamp(float(volume) / 10.0f, 0.0f, 1.0f));
+    int v = int(std::clamp(level_ * g, 0.0f, 1.0f) * 1000.0f + 0.5f);
     if (v != sent_) {
         mci(L"setaudio lw_menu_music volume to " + std::to_wstring(v));
         sent_ = v;

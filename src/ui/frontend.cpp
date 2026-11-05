@@ -653,7 +653,7 @@ void Frontend::open_splash() {
         skip_from_ = -1;
         video_end_ = -1;
         video_level_ = 0;
-        video_.set_volume(float(settings.volume) / 10.0f);   // as the menu music: half at the default 5
+        video_.set_volume(float(settings.volume) / 10.0f);   // half at the default 5 (the menu music now sits a little higher)
         video_.play();
         return;
     }
