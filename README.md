@@ -71,6 +71,17 @@ and one *Windows 11 SDK* (it works on Windows 10 too).
 3. Run `build.bat` once. It takes a few minutes and downloads SDL3 and NVIDIA DLSS on the first run.
 4. Play with `LostWorld.exe`.
 
+### Update
+
+Run `update.bat`. It downloads the latest version from GitHub (no git needed), replaces only the
+files that changed and rebuilds `LostWorld.exe`. Your ROM, settings, records, crosshairs and any
+textures of your own are kept; a repository file you edited yourself is copied to
+`out\update_backup\` before it is replaced. `update.bat -Check` only says whether there is
+something new. In a folder cloned with git it runs `git pull` instead.
+
+Got the game before the updater existed? Download the repository once more as a ZIP and copy
+`update.bat` and `tools\update.ps1` into your folder.
+
 ## Controls
 
 | | Mouse | Gamepad |

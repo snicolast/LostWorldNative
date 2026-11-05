@@ -11,6 +11,18 @@ build.bat
 LostWorld.exe
 ```
 
+`update.bat` (tools/update.ps1) updates a copy of the game without git: it
+asks GitHub for the latest commit on master, downloads that commit's source
+as a zip, copies the files that differ and runs build.bat (`-NoBuild` skips
+that, `-Check` only reports, `-Force` reinstalls and rebuilds). Files that
+are not in the repository are never touched. save/update/manifest.txt keeps
+the SHA-256 of every file the last update installed and save/update/version.txt
+its commit: a repository file whose hash no longer matches was changed by the
+user and is copied to out/update_backup/<date>/ before being replaced, and a
+file the new version no longer has is removed (backed up too if it had been
+changed). The first update, with no manifest, backs up every file it
+replaces. In a git clone it runs `git pull --ff-only` and build.bat instead.
+
 `LostWorld.exe` opens a Vulkan window and runs the game at its real speed
 (57.5 Hz). It starts in a PC-style main menu (Play, Options, Quit; with
 keyboard or mouse): Play > Classic Arcade launches the arcade game (5 = coin,
