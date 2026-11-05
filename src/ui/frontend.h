@@ -273,6 +273,7 @@ private:
     // the menus go to the right, the poster's logo above them; blurred behind
     // the options
     Picture backdrop_;
+    Picture credit_;   // third_party/menu/snicolast.png, else res/menu/snicolast.png: the remaster's credit on the main menu
     Picture sega_;   // optional third_party/menu/sega.png: the credit at the bottom left of the menus
     // The splash screens: their pictures, which one is on and since when,
     // and the one on scaled to the window (white around it)
