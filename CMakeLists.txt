@@ -125,6 +125,7 @@ add_executable(LostWorld
     src/video/ui_overlay.cpp
     src/ui/crosshair_file.cpp
     src/ui/menu_music.cpp
+    src/ui/splash_video.cpp
     src/ui/frontend.cpp
     src/ui/frontend_settings.cpp
     src/video/r3d_state.cpp
@@ -163,7 +164,7 @@ target_include_directories(LostWorld PRIVATE
 )
 # volk loads vulkan-1.dll at runtime: the SDK is not needed
 target_compile_definitions(LostWorld PRIVATE VK_NO_PROTOTYPES VK_USE_PLATFORM_WIN32_KHR)
-target_link_libraries(LostWorld PRIVATE SDL3::SDL3-static winmm ole32 windowscodecs gdi32 dwmapi comdlg32 shell32 hid
+target_link_libraries(LostWorld PRIVATE SDL3::SDL3-static winmm ole32 oleaut32 windowscodecs mfplat mfuuid gdi32 dwmapi comdlg32 shell32 hid
     ${CMAKE_SOURCE_DIR}/third_party/ngx/lib/nvsdk_ngx_d.lib)
 
 if(MSVC)

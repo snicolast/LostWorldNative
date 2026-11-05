@@ -370,7 +370,12 @@ bool Frontend::init(const std::string& font_dir) {
             break;
         }
     load_image(L"third_party/menu/sega.png", sega_.px, sega_.w, sega_.h);
-    // the splash screens, in order: your own in third_party/menu/ first, else the ones in res/menu/
+    // the splash video, else the splash screens in order: your own in third_party/menu/ first, else the ones in res/menu/
+    for (const wchar_t* p : {L"third_party/menu/splash_snicolast.mp4", L"res/menu/splash_snicolast.mp4"})
+        if (video_.open(p)) {
+            printf("[menu] splash video %ls\n", p);
+            break;
+        }
     for (const wchar_t* name : {L"splash_snicolast.png"})
         for (const wchar_t* dir : {L"third_party/menu/", L"res/menu/"}) {
             Picture p;
@@ -408,6 +413,7 @@ bool load_image(const std::wstring& path, std::vector<uint32_t>& px, int& w, int
 bool Frontend::load_poster(const std::wstring& path) { return load_image(path, poster_, poster_w_, poster_h_); }
 
 void Frontend::shutdown() {
+    video_.close();
     if (gdi_) gdi_->release();
     gdi_ = nullptr;
 }
@@ -640,6 +646,18 @@ std::vector<Frontend::Item> Frontend::items() const {
 }
 
 void Frontend::open_splash() {
+    if (video_.is_open() && settings.splash) {
+        open(Screen::Splash);
+        video_on_ = true;
+        splash_from_ = now_seconds();
+        skip_from_ = -1;
+        video_end_ = -1;
+        video_level_ = 0;
+        video_.set_volume(float(settings.volume) / 10.0f);   // as the menu music: half at the default 5
+        video_.play();
+        return;
+    }
+    video_.close();
     if (splash_.empty() || !settings.splash) {
         open(Screen::Main);
         return;
@@ -652,7 +670,12 @@ void Frontend::open_splash() {
 }
 
 void Frontend::open(Screen s) {
-    if (screen_ == Screen::Splash && s != Screen::Splash) splash_px_ = {}, splash_px_on_ = -1;   // not needed again
+    if (screen_ == Screen::Splash && s != Screen::Splash) {   // not needed again
+        splash_px_ = {}, splash_px_on_ = -1;
+        video_.close();
+        video_on_ = false;
+        video_px_ = {};
+    }
     locked_notice_ = false;
     screen_ = s;
     selected_ = 0;
@@ -2058,6 +2081,10 @@ constexpr double SPLASH_SKIP = 0.25;   // fading out when hurried
 }  // namespace
 
 void Frontend::skip_splash() {
+    if (video_on_) {   // faded out with its sound, unless it is going anyway
+        if (skip_from_ < 0 && video_end_ < 0) skip_level_ = video_level_, skip_from_ = now_seconds();
+        return;
+    }
     if (skip_from_ >= 0) {   // already going: the next one goes too
         skip_next_ = true;
         return;
@@ -2069,6 +2096,7 @@ void Frontend::skip_splash() {
 }
 
 bool Frontend::draw_splash(std::vector<uint32_t>& out) {
+    if (video_on_) return draw_splash_video(out);
     double now = now_seconds();
     float level = 0;   // brightness: 0 black .. 1 the picture
     for (;;) {
@@ -2114,6 +2142,56 @@ bool Frontend::draw_splash(std::vector<uint32_t>& out) {
             out[i] = 0xFF000000u | ((((c & 0xFF00FFu) * k) >> 8) & 0xFF00FFu) | ((((c & 0x00FF00u) * k) >> 8) & 0x00FF00u);
         }
     px_ = out.data();
+    return true;
+}
+
+// The video: in from black as it starts, played to the end (Windows plays the
+// sound), its last picture faded out. Hurried: picture and sound fade out
+// together. As big as fits the window, its own background colour around it
+bool Frontend::draw_splash_video(std::vector<uint32_t>& out) {
+    double now = now_seconds(), t = now - splash_from_;
+    if (video_.failed() || (t > 5 && video_.position() <= 0)) return false;   // it will not play: to the menu
+    if (video_end_ < 0 && video_.ended()) video_end_ = now;
+    float level = float(std::clamp(t / SPLASH_IN, 0.0, 1.0));
+    if (skip_from_ >= 0) {
+        double k = std::min((now - skip_from_) / SPLASH_SKIP, 1.0);
+        if (k >= 1) return false;
+        level = skip_level_ * float(1 - k);
+        video_.set_volume(float(settings.volume) / 10.0f * float(1 - k));
+    } else if (video_end_ >= 0) {
+        double k = (now - video_end_) / SPLASH_OUT;
+        if (k >= 1) return false;
+        level = std::min(level, float(1 - k));
+    }
+    video_level_ = level;
+
+    out.assign(size_t(w_) * h_, 0xFF000000u);
+    px_ = out.data();
+    int vw = 0, vh = 0;
+    if (!video_.size(vw, vh)) return true;   // still loading: black
+    float sc = std::min(float(w_) / vw, float(h_) / vh);
+    int pw = std::max(1, int(vw * sc + 0.5f)), ph = std::max(1, int(vh * sc + 0.5f));
+    bool resized = pw != video_pw_ || ph != video_ph_;
+    if (video_.frame(pw, ph, video_px_, resized)) video_pw_ = pw, video_ph_ = ph;
+    if (video_px_.size() != size_t(video_pw_) * video_ph_ || video_pw_ <= 0 || video_pw_ > w_ || video_ph_ > h_) return true;
+    uint32_t k = uint32_t(level * 256 + 0.5f);
+    auto dim = [k](uint32_t c) {   // towards black, opaque
+        if (k >= 256) return c | 0xFF000000u;
+        return 0xFF000000u | ((((c & 0xFF00FFu) * k) >> 8) & 0xFF00FFu) | ((((c & 0x00FF00u) * k) >> 8) & 0x00FF00u);
+    };
+    uint32_t around = dim(video_px_[video_pw_ / 2]);   // the middle of its top edge: its background
+    int x0 = (w_ - video_pw_) / 2, y0 = (h_ - video_ph_) / 2;
+    for (int y = 0; y < h_; y++) {
+        uint32_t* row = &out[size_t(y) * w_];
+        if (y < y0 || y >= y0 + video_ph_) {
+            std::fill(row, row + w_, around);
+            continue;
+        }
+        const uint32_t* src = &video_px_[size_t(y - y0) * video_pw_];
+        std::fill(row, row + x0, around);
+        for (int x = 0; x < video_pw_; x++) row[x0 + x] = dim(src[x]);
+        std::fill(row + x0 + video_pw_, row + w_, around);
+    }
     return true;
 }
 

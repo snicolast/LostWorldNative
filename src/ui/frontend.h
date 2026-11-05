@@ -21,6 +21,7 @@
 
 #include "../runtime/stats.h"
 #include "frontend_settings.h"
+#include "splash_video.h"
 #include "ui_canvas.h"
 
 class Frontend : UiCanvas {
@@ -34,8 +35,9 @@ public:
     void shutdown();
 
     void open(Screen s);
-    // At launch: the logo (third_party/menu/ or res/menu/ splash_snicolast.png)
-    // faded in and out, then the main menu. Enter / Space / Esc / a click (a
+    // At launch: the logo video with its sound (third_party/menu/ or res/menu/
+    // splash_snicolast.mp4; if Windows cannot play it, splash_snicolast.png
+    // faded in and out), then the main menu. Enter / Space / Esc / a click (a
     // pad's START or A) hurries it out. Straight to the menu without one
     void open_splash();
     bool splash() const { return screen_ == Screen::Splash; }
@@ -284,6 +286,16 @@ private:
     int splash_px_on_ = -1, splash_px_w_ = 0, splash_px_h_ = 0;
     void skip_splash();
     bool draw_splash(std::vector<uint32_t>& out);   // false: the last one ended
+    // The splash video, when there is one Windows can open: it replaces the
+    // pictures. Its picture now (fitted to the window), when it ended (-1:
+    // not yet) and how bright it was last drawn
+    SplashVideo video_;
+    bool video_on_ = false;
+    std::vector<uint32_t> video_px_;
+    int video_pw_ = 0, video_ph_ = 0;
+    double video_end_ = -1;
+    float video_level_ = 0;
+    bool draw_splash_video(std::vector<uint32_t>& out);
     Picture logo_;   // third_party/menu/logo.png, else res/menu/logo.png: the title over the backdrop, its own transparency kept
     bool has_logo() const { return logo_.w > 0 && has_backdrop(); }
     bool has_backdrop() const { return backdrop_.w > 0; }
