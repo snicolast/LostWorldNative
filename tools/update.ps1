@@ -30,7 +30,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
-Set-Location $Root
+Set-Location -LiteralPath $Root
 $StateDir = Join-Path $Root "save\update"
 $ManifestPath = Join-Path $StateDir "manifest.txt"
 $VersionPath = Join-Path $StateDir "version.txt"
@@ -50,7 +50,7 @@ function Get-Sha256([string]$path) {
 function Read-Manifest {
     $map = @{}
     if (Test-Path -LiteralPath $ManifestPath) {
-        foreach ($line in Get-Content -LiteralPath $ManifestPath) {
+        foreach ($line in Get-Content -LiteralPath $ManifestPath -Encoding UTF8) {
             $i = $line.IndexOf(' ')
             if ($i -gt 0) { $map[$line.Substring($i + 1)] = $line.Substring(0, $i) }
         }
@@ -118,13 +118,20 @@ Say "Checking GitHub for the latest version ($Repo, $Branch)..." "Cyan"
 try {
     $commit = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/commits/$Branch" -UserAgent $UserAgent -Headers @{ Accept = "application/vnd.github+json" }
 } catch {
-    Say "Could not reach GitHub: $($_.Exception.Message)" "Red"
+    $status = $null
+    if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
+    if ($status -eq 403 -or $status -eq 429) {
+        Say "GitHub refused the request ($status): too many checks from this connection in the last hour. Try again later." "Red"
+    } else {
+        Say "Could not reach GitHub: $($_.Exception.Message)" "Red"
+    }
     exit 1
 }
 $sha = $commit.sha
 $date = ([datetime]$commit.commit.committer.date).ToString("yyyy-MM-dd")
 $current = $null
-if (Test-Path -LiteralPath $VersionPath) { $current = (Get-Content -LiteralPath $VersionPath -TotalCount 1).Trim() }
+if (Test-Path -LiteralPath $VersionPath) { $current = "$(Get-Content -LiteralPath $VersionPath -TotalCount 1)".Trim() }
+if (-not $current) { $current = $null }
 
 if ($current -eq $sha -and -not $Force) {
     Say "Up to date (version $($sha.Substring(0, 7)), $date)." "Green"
@@ -200,6 +207,12 @@ try {
         if ((Get-Sha256 $path) -ne $old[$rel]) { Save-Backup $rel }
         Remove-Item -LiteralPath $path -Force
         $removed++
+        # and the folders it leaves empty
+        $dir = Split-Path -Parent $path
+        while ($dir.Length -gt $Root.Length -and -not (Get-ChildItem -LiteralPath $dir -Force | Select-Object -First 1)) {
+            Remove-Item -LiteralPath $dir -Force
+            $dir = Split-Path -Parent $dir
+        }
     }
 
     New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
