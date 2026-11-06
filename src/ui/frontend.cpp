@@ -1582,7 +1582,10 @@ void Frontend::backdrop_background() {
         picture(sw_backdrop_, 0, 0, w_, h_);
         shade_backdrop();
         RECT r = sw_logo_rect();
-        if (sw_logo_.w > 0 && r.right > r.left) sprite(sw_logo_, r.left, r.top, r.right - r.left, r.bottom - r.top);
+        if (sw_logo_.w > 0 && r.right > r.left) {
+            logo_shadow(sw_logo_, r);   // the explosion behind it is as bright as the logo
+            sprite(sw_logo_, r.left, r.top, r.right - r.left, r.bottom - r.top);
+        }
     }
     px_ = keep;
 }
@@ -1625,6 +1628,56 @@ void Frontend::shade_backdrop() {
                 blend(x, y, uint32_t(rgb[0] * 255) << 16 | uint32_t(rgb[1] * 255) << 8 | uint32_t(rgb[2] * 255), a);
             }
     }
+}
+
+// Under a logo on a bright picture: the picture darker round it, and a soft
+// black shadow of its own shape (wider than it, so its letters' holes fill)
+void Frontend::logo_shadow(const Picture& p, RECT r) {
+    int lw = r.right - r.left, lh = r.bottom - r.top;
+    float cx = r.left + lw * 0.5f, cy = r.top + lh * 0.5f;
+    float rx = lw * 0.75f, ry = lh * 0.85f;
+    for (int y = std::max(0, int(cy - ry)); y < std::min(h_, int(cy + ry) + 1); y++)
+        for (int x = std::max(0, int(cx - rx)); x < std::min(w_, int(cx + rx) + 1); x++) {
+            float dx = (x - cx) / rx, dy = (y - cy) / ry;
+            float t = std::clamp(1 - std::sqrt(dx * dx + dy * dy), 0.0f, 1.0f);
+            if (t > 0) blend(x, y, 0x000000, 0.5f * t * t * (3 - 2 * t));
+        }
+    // The logo's alpha at its size on screen, with a margin for the blur
+    int pad = std::max(4, lw / 30), sw = lw + 2 * pad, sh = lh + 2 * pad;
+    std::vector<float> m(size_t(sw) * sh, 0.0f), t(m.size());
+    for (int y = 0; y < lh; y++)
+        for (int x = 0; x < lw; x++)
+            m[size_t(y + pad) * sw + x + pad] = chan(p.px[size_t(y * p.h / lh) * p.w + size_t(x * p.w / lw)], 24);
+    int rad = std::max(1, pad / 2);
+    for (int pass = 0; pass < 3; pass++) {   // a box blur across, then down, three times: close to a gaussian
+        for (int y = 0; y < sh; y++) {
+            float acc = 0;
+            for (int x = -rad; x <= rad; x++) acc += x >= 0 && x < sw ? m[size_t(y) * sw + x] : 0;
+            for (int x = 0; x < sw; x++) {
+                t[size_t(y) * sw + x] = acc / (2 * rad + 1);
+                int in = x + rad + 1, out = x - rad;
+                if (in < sw) acc += m[size_t(y) * sw + in];
+                if (out >= 0) acc -= m[size_t(y) * sw + out];
+            }
+        }
+        for (int x = 0; x < sw; x++) {
+            float acc = 0;
+            for (int y = -rad; y <= rad; y++) acc += y >= 0 && y < sh ? t[size_t(y) * sw + x] : 0;
+            for (int y = 0; y < sh; y++) {
+                m[size_t(y) * sw + x] = acc / (2 * rad + 1);
+                int in = y + rad + 1, out = y - rad;
+                if (in < sh) acc += t[size_t(in) * sw + x];
+                if (out >= 0) acc -= t[size_t(out) * sw + x];
+            }
+        }
+    }
+    for (int y = 0; y < sh; y++)
+        for (int x = 0; x < sw; x++) {
+            int px = r.left - pad + x, py = r.top - pad + y;
+            if (px < 0 || py < 0 || px >= w_ || py >= h_) continue;
+            float a = std::min(1.0f, m[size_t(y) * sw + x] * 1.6f) * 0.9f;
+            if (a > 0) blend(px, py, 0x000000, a);
+        }
 }
 
 // Centred in the room left of the menu's column, at most 560 (1080p) wide;

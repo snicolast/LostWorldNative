@@ -310,6 +310,7 @@ private:
     void open_star_wars_page();
     void play_star_wars();
     RECT sw_logo_rect() const;        // where its logo goes on the backdrop
+    void logo_shadow(const Picture& p, RECT r);   // darker round and under a logo about to be drawn there
     void shade_backdrop();            // darker at the right and the bottom, the logo: on px_
     int index_of(Id id) const;        // where an entry is in the list on screen (0 if not there)
     bool has_logo() const { return logo_.w > 0 && has_backdrop(); }
