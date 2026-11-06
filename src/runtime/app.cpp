@@ -1290,7 +1290,10 @@ bool App::init(int argc, char** argv, bool first_start) {
         if (!survival_cli) {   // survival mode goes straight into the game
             // the logos first (not when a debugging aid drives the menu)
             if (getenv("LW_MENU_KEYS") || getenv("LW_MENU_SHOT")) frontend.open(Frontend::Screen::Main);
-            else frontend.open_splash();
+            else {
+                frontend.open_splash();
+                frontend.check_for_news();   // news.txt on GitHub while the logo plays
+            }
             g_menu_open = true;
         }
         presenter.input_hook = [this](UINT msg, WPARAM wp, LPARAM lp) -> bool {

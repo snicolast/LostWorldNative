@@ -1,0 +1,19 @@
+# The Lost World Native: what is new, for the players.
+#
+# The game reads this file from GitHub (master branch) at launch. When it has an
+# entry with a higher number than the news.txt in the player's folder, the main
+# menu shows those entries in an UPDATE AVAILABLE window with UPDATE NOW
+# (update.bat) and LATER. Commits that do not add an entry show nothing, so
+# several fixes can go out together: add the entry when they are all in.
+#
+# Format:
+#   [N] title      starts entry N (a number one higher than the last; the
+#                  title is usually the date)
+#   - text         a line of the entry (lines starting "- " get a bullet)
+#   # ...          a comment, never shown
+# Newest entry at the top. Keep each one short: about ten lines fit.
+
+[1] 2026-11-06
+- The main menu tells you when there is a new version, with what is new in it
+- UPDATE NOW closes the game, updates it, builds it again and starts it
+- OPTIONS > GAME > CHECK FOR UPDATES turns the check off
