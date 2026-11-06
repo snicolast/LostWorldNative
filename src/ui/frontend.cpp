@@ -1075,7 +1075,7 @@ void Frontend::check_for_news() {
     if (!settings.check_updates || news_download_) return;
     auto d = std::make_shared<NewsDownload>();
     news_download_ = d;
-    if (const char* file = getenv("SWT_NEWS_FILE")) {   // testing aid: this file in place of GitHub's news.txt
+    if (const char* file = getenv("LW_NEWS_FILE")) {   // testing aid: this file in place of GitHub's news.txt
         d->text = read_text(file);
         d->state = d->text.empty() ? 2 : 1;
         return;
