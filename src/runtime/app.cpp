@@ -631,6 +631,18 @@ static bool load_game_rom(std::vector<uint8_t>& sound_program, std::vector<uint8
                 load_rom("vrom.bin", g_vrom, false);
                 load_rom("sound_program.bin", sound_program, false);
                 load_rom("sound_samples.bin", sound_samples, false);
+                if (g_banked.empty() || g_vrom.empty() || sound_program.empty() || sound_samples.empty()) {
+                    // An older romtool.py stopped at the first missing chip and
+                    // left crom.bin without the rest: say so, not a black screen
+                    std::string msg =
+                        "The ROM in " + full_path(d) + " is incomplete: it has crom.bin but not\n"
+                        "banked_crom.bin, vrom.bin, sound_program.bin and sound_samples.bin.\n\n"
+                        "Your lostwsga.zip probably lacks some chips. Get a complete lostwsga.zip,\n"
+                        "put it next to build.bat and run build.bat again.";
+                    fprintf(stderr, "%s\n", msg.c_str());
+                    if (!g_opt.headless) MessageBoxA(nullptr, msg.c_str(), "Lost World Native", MB_OK | MB_ICONERROR);
+                    return false;
+                }
                 printf("ROM: %s\n", d.c_str());
                 return true;
             }

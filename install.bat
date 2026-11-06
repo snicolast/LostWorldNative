@@ -17,7 +17,7 @@ rem 1. The ROM, asked for first so nothing is installed for nothing
 set "ZIP=%~1"
 if "%ZIP%"=="" set "ZIP=%LW_ROM_ZIP%"
 if "%ZIP%"=="" set "ZIP=%~dp0lostwsga.zip"
-if exist data\crom.bin goto rom_ok
+if exist data\crom.bin if exist data\sound_samples.bin goto rom_ok
 :wait_rom
 if exist "%ZIP%" goto rom_ok
 echo The arcade ROM is not here ^("%ZIP%"^).
@@ -73,7 +73,8 @@ echo.
 
 rem 4. Build (LW_NO_PAUSE: build.bat must not pause, this window does)
 set LW_NO_PAUSE=1
-if exist data\crom.bin (call build.bat) else (call build.bat "%ZIP%")
+rem build.bat only extracts the ROM when data\ is not complete
+call build.bat "%ZIP%"
 if errorlevel 1 goto fail
 echo.
 echo Installed. Play with LostWorld.exe; update later with update.bat.

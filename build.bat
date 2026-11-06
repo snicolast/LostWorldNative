@@ -14,7 +14,10 @@ set ZIP=%~1
 if "%ZIP%"=="" set ZIP=%LW_ROM_ZIP%
 if "%ZIP%"=="" set ZIP=%~dp0lostwsga.zip
 
-if exist data\crom.bin goto rom_ok
+python -c "" >nul 2>&1 || goto no_python
+rem sound_samples.bin too: an older romtool.py stopped at the first missing chip
+rem and left crom.bin without the rest, which was then taken as extracted
+if exist data\crom.bin if exist data\sound_samples.bin goto rom_ok
 if not exist "%ZIP%" goto no_rom
 echo [1/5] Extracting the ROM
 python tools\romtool.py "%ZIP%" data || goto fail
@@ -73,7 +76,12 @@ echo ROM not found ^("%ZIP%"^): pass the path to lostwsga.zip as an argument ^(b
 echo in the LW_ROM_ZIP environment variable, or put it next to build.bat. Only needed the first time: it is extracted into data\.
 goto fail
 
+:no_python
+echo Python 3 not found. Run install.bat instead: it installs Python and the C++ tools, then builds.
+goto fail
+
 :no_vs
 echo Visual Studio 2022 with the x64 C++ tools and CMake not found ^(looked in "%VSDIR%"^).
-echo Install Build Tools for Visual Studio 2022 with the "Desktop development with C++" workload.
+echo Run install.bat instead: it installs them, then builds. Or install Build Tools for
+echo Visual Studio 2022 with the "Desktop development with C++" workload yourself.
 goto fail
