@@ -53,6 +53,7 @@ struct FrontendSettings {
     bool splash = true;     // the snicolast logo before the main menu (only in the file: splash_screens)
     int run_weather = 0;    // RANDOM SPAWNS and survival: the WEATHER last picked before a run (frontend.cpp)
     std::string gun_p1, gun_p2; // the guns picked in GUN TEST: device paths ("" = the first and second to fire)
+    std::string star_wars_path; // MORE RECOMPS: where Star Wars Trilogy is (its folder or StarWarsTrilogy.exe; "" = look for it)
 
     // save/settings.ini; missing keys keep their current value
     void load(const char* path);

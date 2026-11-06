@@ -115,6 +115,8 @@ is in pixels of a 1080p screen (it scales with the window).
 
 - [Full manual](docs/MANUAL.md): every option, the modes, texture packs, debugging.
 - [How it works](docs/ARCHITECTURE.md): the PowerPC to C++ recompiler and the hardware.
+- [Other recompiled arcade games](https://github.com/snicolast/StarWarsTrilogyNative): Star Wars Trilogy
+  Arcade, also in the main menu under **More recomps**.
 
 ## Support
 

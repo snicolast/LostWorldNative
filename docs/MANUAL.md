@@ -33,6 +33,15 @@ options take priority. `--no-menu` goes straight to the
 arcade game as before (Esc quits), and the tests (--replay, --auto, --shot,
 --aim, --frames, --headless) never show the menu.
 
+MORE RECOMPS in the main menu shows snicolast's other ports (for now Star
+Wars Trilogy Arcade, with its art from `res/menu/more/`). When
+`StarWarsTrilogy.exe` is on this PC, Enter closes this game and starts it
+(G, or a pad's Y, opens its GitHub page); otherwise Enter opens the page,
+where it can be downloaded. It is looked for in a folder next to this one
+(`..\StarWarsTrilogyNative`, `..\StarWarsTrilogy` or `..\Star Wars
+Trilogy`); anywhere else, put `star_wars_path = <its folder or exe>` in
+save/settings.ini.
+
 Before the main menu snicolast's logo plays as a short video with its
 sound (`splash_snicolast.mp4`, from `third_party/menu/` if it is there, else
 `res/menu/`), played by Windows itself (Media Foundation), at the sound
