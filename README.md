@@ -45,17 +45,24 @@ versions of the game will not work.
 
 ## Install
 
-You need Windows 10/11 (64-bit), a GPU with a Vulkan 1.3 driver, or a 1.2 one
+You need Windows 10/11 (64-bit) and a GPU with a Vulkan 1.3 driver, or a 1.2 one
 that offers `VK_KHR_dynamic_rendering` (most cards and integrated graphics from 2016 on,
-with current drivers; the console's first `[vulkan]` line says what yours offers), [Python 3](https://www.python.org/downloads/)
-and [Build Tools for Visual Studio 2022](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)
-with the *Desktop development with C++* workload.
+with current drivers; the console's first `[vulkan]` line says what yours offers).
+
+1. Download this repository (green **Code** button > **Download ZIP**) and unzip it.
+2. Put `lostwsga.zip` in the folder.
+3. Double-click `install.bat`. It installs what the build needs with winget, Python 3 and the C++
+   tools of Build Tools for Visual Studio 2022 (a few GB, accept the Windows prompt), then builds
+   the game. It takes a while the first time; you can also drop `lostwsga.zip` on `install.bat`.
+4. Play with `LostWorld.exe`.
 
 <details>
-<summary>Smaller install of the Build Tools (only what the build uses)</summary>
+<summary>Manual install</summary>
 
-The full workload is over 6 GB. The build only needs the MSVC compiler, CMake and a
-Windows SDK. In a command prompt:
+Install [Python 3](https://www.python.org/downloads/) and
+[Build Tools for Visual Studio 2022](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)
+with the *Desktop development with C++* workload. The full workload is over 6 GB; the build only
+needs the MSVC compiler, CMake and a Windows SDK. In a command prompt:
 
 ```
 winget install Microsoft.VisualStudio.2022.BuildTools --override "--passive --wait --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
@@ -64,12 +71,10 @@ winget install Microsoft.VisualStudio.2022.BuildTools --override "--passive --wa
 Or in the Visual Studio Installer, choose *Individual components* instead of the workload and
 tick *MSVC v143 - VS 2022 C++ x64/x86 build tools (Latest)*, *C++ CMake tools for Windows*
 and one *Windows 11 SDK* (it works on Windows 10 too).
-</details>
 
-1. Download or clone this repository.
-2. Put `lostwsga.zip` next to `build.bat`.
-3. Run `build.bat` once. It takes a few minutes and downloads SDL3 and NVIDIA DLSS on the first run.
-4. Play with `LostWorld.exe`.
+Then run `build.bat` with `lostwsga.zip` next to it. It downloads SDL3 and NVIDIA DLSS on the
+first run.
+</details>
 
 ### Update
 
