@@ -572,9 +572,9 @@ std::vector<Frontend::Item> Frontend::items() const {
                 {QUIT, L"QUIT", L"", L"Close the game"}};
     case Screen::More:
         return {{STAR_WARS, L"STAR WARS TRILOGY", sw_exe_.empty() ? L"FREE DOWNLOAD" : L"INSTALLED",
-                 std::wstring(SW_ABOUT) + (sw_exe_.empty()
-                     ? L"Not found on this PC: ENTER opens its page, where you can download it"
-                     : L"Found on this PC: ENTER closes this game and starts it")},
+                 std::wstring(SW_ABOUT) + (sw_exe_.empty() ? L"Not found on this PC: " : L"Found on this PC: ") +
+                     (pad_prompts ? L"A" : L"ENTER") +
+                     (sw_exe_.empty() ? L" opens its page, where you can download it" : L" closes this game and starts it")},
                 {BACK, L"BACK", L"", L"Return to the main menu"}};
     case Screen::Play:
         return {{CLASSIC, L"CLASSIC ARCADE", L"", L"The arcade game: as it was, or with the dinosaurs shuffled"},
