@@ -71,14 +71,35 @@ def build_region(zf, by_crc, spec):
     return bytes(out)
 
 
+def check_set(zf, by_crc):
+    """Every chip of every region, before anything is written: a set with a
+    chip missing must not leave a half data folder that build.bat then takes
+    as extracted."""
+    missing = [name for spec in REGIONS.values() for name, crc, _ in spec["files"] if crc not in by_crc]
+    if not missing:
+        return
+    lines = [f"{zf.filename} is not a complete The Lost World ROM (lostwsga).",
+             "Missing (looked up by CRC, so the file names in the zip do not matter):"]
+    total = sum(len(spec["files"]) for spec in REGIONS.values())
+    if len(missing) > 8:
+        lines[1] = f"{len(missing)} of its {total} chips are missing: this is another game or another version."
+        missing = []
+    lines += [f"  {name}" for name in missing]
+    lines.append("Get a complete lostwsga.zip and run build.bat again.")
+    raise SystemExit("\n".join(lines))
+
+
 def main():
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
     outdir = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "..", "data")
-    os.makedirs(outdir, exist_ok=True)
     with zipfile.ZipFile(sys.argv[1]) as zf:
         by_crc = load_by_crc(zf)
-        for region, spec in REGIONS.items():
+        check_set(zf, by_crc)
+        os.makedirs(outdir, exist_ok=True)
+        # crom.bin last: build.bat takes data\crom.bin as "already extracted"
+        for region in sorted(REGIONS, key=lambda r: r == "crom"):
+            spec = REGIONS[region]
             data = build_region(zf, by_crc, spec)
             with open(os.path.join(outdir, region + ".bin"), "wb") as f:
                 f.write(data)
