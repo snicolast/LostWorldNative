@@ -14,13 +14,17 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <atomic>
 #include <cstdint>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
 #include "../runtime/stats.h"
 #include "frontend_settings.h"
+#include "news.h"
 #include "splash_video.h"
 #include "ui_canvas.h"
 
@@ -96,6 +100,12 @@ public:
     bool picking_guns() const { return screen_ == Screen::GunTest && gun_step_ > 0; }
     void gun_fired(int index);   // a left button press from guns[index]
 
+    // At launch: news.txt from GitHub in the background (when the settings
+    // allow it). An entry newer than the news.txt here and than the last one
+    // closed with LATER opens a window over the main menu listing every entry
+    // this version lacks (see news.h)
+    void check_for_news();
+
     // RECORDS screen (runtime/stats.h): the window keeps this copy up to date while it is open
     StatsView records;
 
@@ -119,7 +129,7 @@ private:
         OPT_SAT, OPT_GAMMA, OPT_MOTION, OPT_PAD_SPEED, OPT_GYRO, OPT_GYRO_SPEED, OPT_VIBRATION, OPT_ASSIST, OPT_TORCH, OPT_RT, OPT_CROSS_HIDE, OPT_FREE_PLAY,
         OPT_QUALITY, OPT_SCALE, OPT_HALF_RATE, OPT_VSYNC,
         OPT_CROSS_STYLE, OPT_CROSS_P1, OPT_CROSS_P2, OPT_MUSIC, OPT_ASPECT, OPT_GUN_TEST, OPT_WEATHER_SOUND,
-        OPT_MSAA, OPT_ANISO, OPT_FILTER_2D,
+        OPT_MSAA, OPT_ANISO, OPT_FILTER_2D, OPT_UPDATES,
         NO_ROW,   // a setting only kept in the file
     };
     // How an option row shows its value: a switch, a choice with a dot per
@@ -196,6 +206,28 @@ private:
     RECT prompt(int& x, int y, const wchar_t* pad_button, const wchar_t* key, const wchar_t* what);
     int prompt_width(const wchar_t* pad_button, const wchar_t* key, const wchar_t* what);   // how far it moves x
     RECT back_rect_{}, reset_rect_{};   // the BACK and RESET prompts, clickable
+    // UPDATE AVAILABLE: the window over the main menu with the entries of
+    // news.txt this version lacks. UPDATE NOW starts update.bat (it waits for
+    // the game to close, updates, rebuilds and starts it again) and closes the
+    // game; LATER (Esc) keeps it closed until a newer entry
+    struct NewsDownload {                  // shared with the thread that downloads it (left to finish on its own)
+        std::mutex mutex;
+        std::string text;                  // news.txt from GitHub
+        std::atomic<int> state{0};         // 0 downloading, 1 there, 2 failed, 3 taken (take_news)
+    };
+    std::shared_ptr<NewsDownload> news_download_;
+    std::vector<NewsEntry> news_;          // the entries shown
+    int news_latest_ = 0;                  // the newest one on GitHub
+    bool news_open_ = false;
+    int news_button_ = 0;                  // 0 UPDATE NOW, 1 LATER
+    int news_hot_ = -1;                    // the button under the pointer
+    RECT news_buttons_[2]{};
+    void take_news();                      // the download, once it is there
+    void draw_news();
+    bool news_key(int vk);
+    void news_choose(int button);
+    void start_update();
+
     RECT coffee_rect_{};   // the donation link on the main menu, clickable
     bool coffee_hot_ = false;   // the pointer is over it
     bool coffee_focus_ = false;   // chosen with the keys or a pad (Up from the first entry)
