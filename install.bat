@@ -48,10 +48,10 @@ echo Python: OK
 rem 3. MSVC, CMake and a Windows SDK (the same check as build.bat)
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set "VS_ADD=--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
-call :find_vs && goto vs_ok
+call tools\find_vs.bat && goto vs_ok
 rem Visual Studio is there without the C++ tools: add them to it
 set "VSDIR="
-if exist "%VSWHERE%" for /f "usebackq delims=" %%i in (`"%VSWHERE%" -latest -products * -property installationPath`) do set "VSDIR=%%i"
+if exist "%VSWHERE%" for /f "usebackq delims=" %%i in (`"%VSWHERE%" -all -latest -products * -property installationPath`) do set "VSDIR=%%i"
 if "%VSDIR%"=="" goto vs_new
 echo Adding the C++ tools to "%VSDIR%". Accept the Windows prompt; it takes a while.
 "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\setup.exe" modify --installPath "%VSDIR%" %VS_ADD% --passive --norestart
@@ -62,10 +62,11 @@ echo Installing the C++ tools of Build Tools for Visual Studio 2022 ^(a few GB^)
 echo Accept the Windows prompt; it takes a while.
 winget install -e --id Microsoft.VisualStudio.2022.BuildTools --accept-package-agreements --accept-source-agreements --override "--passive --wait --norestart %VS_ADD%"
 :vs_check
-call :find_vs && goto vs_ok
+call tools\find_vs.bat && goto vs_ok
 echo Could not install the C++ tools. Install Build Tools for Visual Studio 2022 from
 echo https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022
-echo with the "Desktop development with C++" workload, and run install.bat again.
+echo with the "Desktop development with C++" workload ^(MSVC x64/x86 build tools and
+echo C++ CMake tools for Windows ticked^), restart Windows and run install.bat again.
 goto fail
 :vs_ok
 echo C++ tools: OK
@@ -92,12 +93,6 @@ exit /b 1
 :find_python
 python -c "import sys; sys.exit(sys.version_info < (3, 8))" >nul 2>&1
 exit /b %errorlevel%
-
-:find_vs
-set "VSDIR="
-if exist "%VSWHERE%" for /f "usebackq delims=" %%i in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.CMake.Project -property installationPath`) do set "VSDIR=%%i"
-if "%VSDIR%"=="" exit /b 1
-exit /b 0
 
 :need_winget
 where winget >nul 2>&1 && exit /b 0

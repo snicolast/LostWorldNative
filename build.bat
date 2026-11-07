@@ -31,12 +31,9 @@ if not exist third_party\ngx\bin\nvngx_dlss.dll (
     call tools\get_dlss.bat || goto fail
 )
 
-rem Visual Studio 2022 (Build Tools or any edition) with the C++ tools and its
-rem CMake, found with vswhere; the Build Tools default path if vswhere is missing
-set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
-set "VSDIR="
-if exist "%VSWHERE%" for /f "usebackq delims=" %%i in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.CMake.Project -property installationPath`) do set "VSDIR=%%i"
-if "%VSDIR%"=="" set "VSDIR=%ProgramFiles(x86)%\Microsoft Visual Studio\2022\BuildTools"
+rem Visual Studio 2022 or later (Build Tools or any edition) with the C++ tools and
+rem its CMake
+call tools\find_vs.bat
 if not exist "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" goto no_vs
 echo [4/5] Setting up Visual Studio ^("%VSDIR%"^)
 rem Its output is hidden unless it fails (a missing Windows SDK, for example)
@@ -81,7 +78,7 @@ echo Python 3 not found. Run install.bat instead: it installs Python and the C++
 goto fail
 
 :no_vs
-echo Visual Studio 2022 with the x64 C++ tools and CMake not found ^(looked in "%VSDIR%"^).
+echo Visual Studio 2022 with the x64 C++ tools and CMake not found.
 echo Run install.bat instead: it installs them, then builds. Or install Build Tools for
 echo Visual Studio 2022 with the "Desktop development with C++" workload yourself.
 goto fail
