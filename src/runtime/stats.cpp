@@ -37,7 +37,7 @@ namespace {
 constexpr uint32_t STAGE = 0x1A623C;          // byte: current stage (0 = stage 1)
 constexpr uint32_t COURSE = 0x1C2AE0;         // 0 Beginner, 1 Expert, 2 Shuffle
 constexpr uint32_t PLAYER_STATE = 0x1A3784 + 0xD;   // player 1 slot: 1 / 2 playing, 0 continue, 3 out
-constexpr uint32_t ROUTE_SELECT = 0x1C2AD8;   // 1-2 choosing, 0xC playing
+constexpr uint32_t ROUTE_SELECT = 0x1C2AD8;   // 1-2 choosing, 9-0xB the stage intro, 0xC playing
 constexpr uint32_t PLAYER_LIFE = 0x1A3723;    // low byte of player 1's lives (0: down)
 constexpr uint32_t SCORE = 0x1A857C;          // player 1 score; +0x10 + 4 * stage: score of that stage
 constexpr uint32_t COUNTERS = 0x1A6208;       // player 1 results counters (+4 hits, +6 technical, +0xC shots)
@@ -286,12 +286,13 @@ struct Tracker {
     void frame_tick() {
         frame++;
         int st = rd8(PLAYER_STATE);
-        // START already makes the player "playing" on the route selection,
-        // and PLAY presses it by itself (runtime.cpp, arcade_entry_frame): a
-        // game only counts once its first stage starts, not when it is left
-        // there (QUIT TO MAIN MENU)
+        // START already makes the player "playing" before the route selection
+        // opens, and PLAY presses it by itself (runtime.cpp,
+        // arcade_entry_frame): a game only counts once its first stage
+        // starts (0xC; 9-0xB are its intro), not when it is left before that
+        // (QUIT TO MAIN MENU), and the start is not a continue
         uint32_t route = rd32(ROUTE_SELECT);
-        if ((st == 1 || st == 2) && (route == 1 || route == 2)) st = 4;
+        if ((st == 1 || st == 2) && route != 0xC) st = 4;
         Counters now = Counters::read();
         int lv = rd8(PLAYER_LIFE), al = int(rd32(VM_ALIVE)), sg = rd8(STAGE);
         std::lock_guard<std::mutex> lock(mutex);
