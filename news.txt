@@ -13,6 +13,11 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[2] 2026-11-07
+- PLAY > CLASSIC goes straight to the route selection: no attract, no coin to insert
+- When a game ends you are back at the main menu, after GAME OVER and the name entry
+- Continues and player 2 still use 5 / 6 for a coin and 1 / 2 for start
+
 [1] 2026-11-06
 - The main menu tells you when there is a new version, with what is new in it
 - UPDATE NOW closes the game, updates it, builds it again and starts it
