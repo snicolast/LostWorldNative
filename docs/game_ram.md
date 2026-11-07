@@ -15,7 +15,7 @@ a real game with `--trace-survival`, not just in the disassembly.
 | fn_000812DC | function | New game: list = 0,1,2,3,4 and index = -1. Expert calls fn_00081364 several times to skip stages |
 | 0x1C2AE0 | int | Chosen route (0 Beginner, 1 Expert, 2 Shuffle) |
 | 0x1C2AD8 | int | Route selection: 0 before the first game, 1-2 choosing, 0xC playing (it stays 0xC in the attract after a game) |
-| 0x1A6164 | int | Game mode: 0xB from the route selection to the end of a game (CONTINUE, TOTAL SCORE, name entry, rankings, GAME OVER), 0 logo screens, 1 title, demo and rankings, 0xA a frame or two around a coin or START. Leaves 0xB on the frame the attract starts (the menu replaces the attract there, runtime.cpp attract_guard_frame) |
+| 0x1A6164 | int | Game mode: 0xB from the route selection to the end of a game (CONTINUE, TOTAL SCORE, name entry, rankings, GAME OVER), 0 logo screens, 1 title, demo and rankings, 0xA a frame or two around a coin or START and as a stage starts. Leaves 0xB on the frame the attract starts (the menu replaces the attract there, runtime.cpp attract_guard_frame) |
 | 0x1C130C | int | Logo screen: 0 parental warning, 1 FBI, 2 SEGA (stays 2 through a game) |
 | fn_00002808 | function | GAME OVER screen starts (fn_000028D4 runs each of its frames); fn_0001C0E4 starts the logo screens (boot and each attract loop) |
 | 0x1A3984 | int | Current zone of the stage (low nibble) |

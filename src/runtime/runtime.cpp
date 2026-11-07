@@ -1268,7 +1268,8 @@ static bool arcade_entry_frame() {
 // count, TOTAL SCORE, the name entry and rankings and GAME OVER; it leaves
 // 0xB on the frame the attract's first screen (the parental warning, then
 // FBI and SEGA logos, title, demo) starts (0 logo screens, 1 title, demo and
-// rankings; 0xA a frame or two around a coin or START). The route selection
+// rankings; 0xA a frame or two around a coin or START, and as a stage
+// starts). The route selection
 // (0x1C2AD8) stays at 0xC through the attract, so it cannot tell. On that
 // frame, before its picture is taken, the game stands still, the main menu
 // opens (g_game_over_menu, app.cpp) and the home state (the game at its SEGA
@@ -1291,8 +1292,8 @@ static void attract_guard_frame() {
         game_on = false;
         return;
     }
-    if (mode == 0xB) {
-        if (select == 0xC) game_on = true;   // past the route selection: a game played
+    if (mode == 0xB || mode == 0xA) {   // (0xA also a frame or two as a stage starts)
+        if (mode == 0xB && select == 0xC) game_on = true;   // past the route selection: a game played
         return;
     }
     if (!game_on) return;
