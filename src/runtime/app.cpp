@@ -167,8 +167,8 @@ static void shot_outside_reloads(int player) {
 
 static void poll_keyboard_mouse(HWND hwnd) {
     // Scripted input (--auto) takes over the controls
-    if (GetForegroundWindow() != hwnd || !g_auto.events.empty() || survival_owns_inputs()) {
-        if (g_auto.events.empty() && !survival_owns_inputs())   // in the background: no gun stays held
+    if (GetForegroundWindow() != hwnd || !g_auto.events.empty() || survival_owns_inputs() || g_arcade_entry) {
+        if (g_auto.events.empty() && !survival_owns_inputs() && !g_arcade_entry)   // in the background: no gun stays held
             for (PlayerInputs& pl : g_inputs.p) pl.trigger = pl.offscreen = false;
         raw_mice::update(hwnd, false, false);
         return;
@@ -306,7 +306,7 @@ static bool poll_gamepads(HWND hwnd) {
     for (int i = 0; i < Gamepads::MAX; i++)
         if (connected >> i & 1 && pad_player(i, connected) == 1) g_p2_pad = true;
     if (g_menu_open) std::fill(std::begin(blocked), std::end(blocked), true);   // the button that closes it does not fire
-    if (!focused || g_menu_open || !g_auto.events.empty() || survival_owns_inputs()) return false;
+    if (!focused || g_menu_open || !g_auto.events.empty() || survival_owns_inputs() || g_arcade_entry) return false;
     bool pause = false;
     for (int i = 0; i < Gamepads::MAX; i++) {
         const PadState& pad = g_pads.pad(i);
@@ -807,6 +807,9 @@ struct App {
     // A run starts from the arcade game at its attract (the home state: kept
     // the first time, put back the next ones), fast-forwarded and muted
     // behind the loading screen; Esc on the results goes back to the menu
+    // PLAY > CLASSIC: the menu stays up while the game runs on to its route
+    // selection unseen (g_arcade_entry, runtime.cpp), then closes on it
+    bool play_waits = false;
     bool survival_cli_pending = false;   // waits for the boot screens
     bool survival_wait_home = false;
     uint64_t survival_audio_at = 0;   // audio frames out when the loading began (it stays silent)
@@ -882,6 +885,9 @@ struct App {
     void update_survival();
     void update_toast();
     void handle_menu_actions();
+    void start_arcade();
+    void cancel_arcade_entry();
+    void update_arcade_entry();
     // The video options the menu changes, to the renderer and the presenter:
     // at the start (was = nullptr; the 3D resolution, MSAA, anisotropic
     // filtering and vsync were given to init) and after a change in the menu
@@ -1376,6 +1382,7 @@ void App::run() {
         update_survival();
         update_toast();
         if (g_opt.menu) {
+            update_arcade_entry();
             handle_menu_actions();
             update_boss_mode();
             update_menus();
@@ -1534,6 +1541,39 @@ void App::apply_video_options(const Options* was) {
     }
 }
 
+// No attract (runtime.cpp, arcade_entry_frame): PLAY > CLASSIC runs the game
+// on to its route selection behind the menu, which closes once it is there
+// (at once when a game over left it there already)
+void App::start_arcade() {
+    g_arcade_entry = 1;
+    g_boot_skip = g_fast_idle = true;
+    g_sound.set_dsp_enabled(false);
+    g_sound.set_muted(true);
+    play_waits = true;
+}
+
+// Another mode picked while the game was on its way to the route selection
+void App::cancel_arcade_entry() {
+    play_waits = false;
+    g_arcade_entry = 0;
+}
+
+void App::update_arcade_entry() {
+    // Only the arcade game ends in the attract: the boss fights have their own end
+    g_skip_attract = g_auto.events.empty() && boss_fight < 0 && !boss_loading && boss_pending < 0;
+    // A game over: the main menu, while the game goes on to the route
+    // selection behind it instead of into the attract (attract_guard_frame)
+    if (g_game_over_menu.exchange(false)) {
+        play_waits = false;
+        frontend.open(Frontend::Screen::Main);
+        g_menu_open = g_hold = true;
+    }
+    if (play_waits && !g_arcade_entry && !g_boot_skip) {
+        play_waits = false;
+        close_menu();
+    }
+}
+
 void App::handle_menu_actions() {
     for (Frontend::Action a : frontend.take_actions()) {
         FrontendSettings& s = frontend.settings;
@@ -1542,7 +1582,9 @@ void App::handle_menu_actions() {
             if (!g_boot_skip) game_state_keep_home();
             random_spawns_set(frontend.random_spawns);   // CLASSIC > ARCADE or RANDOM SPAWNS
             if (frontend.random_spawns) weather_choose(frontend.run_weather());
-            [[fallthrough]];
+            boss_pending = -1;
+            start_arcade();
+            break;
         case Frontend::Action::Resume:
             boss_pending = -1;
             close_menu();
@@ -1550,6 +1592,7 @@ void App::handle_menu_actions() {
         case Frontend::Action::StartSurvival: {
             const SurvivalZone& z = SURVIVAL_ZONES[frontend.survival_choice];
             boss_pending = -1;
+            cancel_arcade_entry();
             random_spawns_set(false);
             weather_choose(frontend.run_weather());
             if (boss_fight >= 0 || frontend.boss_mode) {   // from boss mode: back to the arcade first
@@ -1560,6 +1603,7 @@ void App::handle_menu_actions() {
             break;
         }
         case Frontend::Action::StartBoss:
+            cancel_arcade_entry();
             random_spawns_set(false);
             if (frontend.boss_status[frontend.boss_choice] == Frontend::BOSS_READY) boss_pending = frontend.boss_choice;
             break;
@@ -1576,6 +1620,7 @@ void App::handle_menu_actions() {
             break;
         case Frontend::Action::QuitToMenu:   // from the pause menu of any mode
             boss_pending = -1;
+            cancel_arcade_entry();
             if (survival_view().mode != SurvivalMode::Off) {
                 survival_to_menu();
                 break;
