@@ -63,10 +63,15 @@ echo Accept the Windows prompt; it takes a while.
 winget install -e --id Microsoft.VisualStudio.2022.BuildTools --accept-package-agreements --accept-source-agreements --override "--passive --wait --norestart %VS_ADD%"
 :vs_check
 call tools\find_vs.bat && goto vs_ok
+if defined VSDIR echo Visual Studio is in "%VSDIR%" but there is no Windows SDK.
 echo Could not install the C++ tools. Install Build Tools for Visual Studio 2022 from
 echo https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022
-echo with the "Desktop development with C++" workload ^(MSVC x64/x86 build tools and
-echo C++ CMake tools for Windows ticked^), restart Windows and run install.bat again.
+echo and in Individual components tick these three:
+echo     MSVC v143 - VS 2022 C++ x64/x86 build tools ^(Latest^)
+echo     C++ CMake tools for Windows
+echo     Windows 11 SDK ^(any version, it works on Windows 10 too^)
+echo ^(the "Desktop development with C++" workload includes them^). Then restart Windows
+echo and run install.bat again.
 goto fail
 :vs_ok
 echo C++ tools: OK
