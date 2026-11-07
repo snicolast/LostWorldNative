@@ -110,6 +110,10 @@ std::atomic<bool> g_boot_skip{false};
 // Menus: the game stands still (and so does its sound) while set. The boot
 // screens still run through first, so Play starts at the SEGA logo.
 std::atomic<bool> g_hold{false};
+// The menu stands in for the attract (see attract_guard_frame and
+// arcade_entry_frame)
+std::atomic<bool> g_skip_attract{false}, g_game_over_menu{false};
+std::atomic<int> g_arcade_entry{0};
 // Shutdown: the window thread sets g_quit; the game thread parks itself at
 // its next frame event (its native stack cannot be unwound) and reports it
 // in g_parked, so the audio can be stopped with nobody pushing samples.
@@ -1076,6 +1080,11 @@ bool game_state_has_home() {
     std::lock_guard<std::mutex> lock(g_state_mutex);
     return g_home != nullptr;
 }
+static bool game_state_pending() {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+    return g_state_op != 0;
+}
+static bool g_attract_watch_reset = false;   // a state was put back: no game ended there
 int game_state_result() { return g_state_result; }
 bool game_state_valid(const std::string& path) {   // a state file this build can read
     FILE* f = fopen(path.c_str(), "rb");
@@ -1107,6 +1116,7 @@ void rt_state_point(Ctx& c) {
             if (g_state_keep_home && !g_home) g_home = capture_state(c);
             apply_state(c, *g_state);
             stats_state_loaded();
+            g_attract_watch_reset = true;
             g_state_result = 1;
         } else if (g_boot_skip || g_frame - g_state_since < 600) {
             return;
@@ -1201,6 +1211,101 @@ static void boss_maker_frame() {
     auto_sweep_fire(g_inputs.p[0], f);
 }
 
+// ---- No attract with the menu on ----
+// The arcade game's attract (title, rankings, the demo that plays by itself)
+// never shows: the main menu stands in for it, as on a game made for the PC.
+//
+// PLAY > CLASSIC (g_arcade_entry, set by app.cpp): the game, at its SEGA logo
+// (the home state) or wherever the menu left it, runs on unseen and muted,
+// with a credit and START every second, until the route selection opens
+// (0x1C2AD8 1-2); then the menu closes on it. The credit is only put in
+// once the home state is kept, so it is not in there (QUIT TO MAIN MENU
+// would put it back as CREDIT 1), and only every 5 s: the route selection
+// can take a few seconds to open after START, and a coin every second left
+// CREDIT 1 on it
+static bool arcade_entry_frame() {
+    static uint64_t from = 0, select_at = 0;
+    PlayerInputs& p = g_inputs.p[0];
+    auto finish = [&](const char* why) {
+        p.coin = p.start = false;
+        printf("[play] %s after %llu frames\n", why, (unsigned long long)(g_frame - from));
+        g_arcade_entry = 0;
+        from = select_at = 0;
+        return true;
+    };
+    if (g_arcade_entry == 1) {
+        g_arcade_entry = 2;
+        from = g_frame, select_at = 0;
+        p.trigger = p.offscreen = false;
+    }
+    uint32_t select = rd32(0x1C2AD8);   // 0 attract, 1-2 choosing, 0xC playing
+    if (!g_logo_up || game_state_pending()) {   // the boot screens, or a state still being put back
+        p.coin = p.start = false;
+        if (g_frame - from > 20000) return finish("given up (no SEGA logo)");
+        return false;
+    }
+    if (!game_state_has_home()) {   // the home state first (the game at its SEGA logo)
+        game_state_keep_home();
+        p.coin = p.start = false;
+        return false;
+    }
+    if (select == 0xC) return finish("in a game already");
+    if (select == 0) {
+        if (g_frame - from > 9000) return finish("route selection not reached, given up");
+        uint64_t k = (g_frame - from) % 300;
+        p.coin = k < 6;
+        p.start = k % 60 >= 30 && k % 60 < 36;
+        return false;
+    }
+    p.coin = p.start = false;
+    if (!select_at) select_at = g_frame;
+    if (g_frame - select_at < 20) return false;   // its first frames drawn
+    return finish("route selection");
+}
+
+// A game that ends goes on to the attract. The game's mode word (0x1A6164)
+// is 0xB from the route selection to the end of a game: through the CONTINUE
+// count, TOTAL SCORE, the name entry and rankings and GAME OVER; it leaves
+// 0xB on the frame the attract's first screen (the parental warning, then
+// FBI and SEGA logos, title, demo) starts (0 logo screens, 1 title, demo and
+// rankings; 0xA a frame or two around a coin or START, and as a stage
+// starts). The route selection
+// (0x1C2AD8) stays at 0xC through the attract, so it cannot tell. On that
+// frame, before its picture is taken, the game stands still, the main menu
+// opens (g_game_over_menu, app.cpp) and the home state (the game at its SEGA
+// logo) is put back, ready for PLAY. Not in survival, boss mode or
+// --make-boss-state, which have their own ends, and only with the menu on
+// (g_skip_attract)
+static void attract_guard_frame() {
+    static bool game_on = false;
+    static uint32_t mode_was = 0;
+    uint32_t mode = rd32(0x1A6164), select = rd32(0x1C2AD8);
+    if (mode != mode_was && (mode == 0xB || mode_was == 0xB))
+        printf("[play] game mode %X -> %X (route selection %X, frame %llu)\n", unsigned(mode_was), unsigned(mode),
+               unsigned(select), (unsigned long long)g_frame);
+    mode_was = mode;
+    if (g_attract_watch_reset) {   // a state put back (QUIT TO MAIN MENU, survival, boss mode)
+        g_attract_watch_reset = false;
+        game_on = false;
+    }
+    if (survival_enabled() || g_boss_maker >= 0) {
+        game_on = false;
+        return;
+    }
+    if (mode == 0xB || mode == 0xA) {   // (0xA also a frame or two as a stage starts)
+        if (mode == 0xB && select == 0xC) game_on = true;   // past the route selection: a game played
+        return;
+    }
+    if (!game_on) return;
+    game_on = false;
+    if (!g_skip_attract || g_arcade_entry || g_boot_skip) return;
+    printf("[play] the game is over: back to the main menu instead of the attract (frame %llu)\n",
+           (unsigned long long)g_frame);
+    g_hold = true;   // it stands still, behind the menu, until PLAY
+    game_state_load_home();
+    g_game_over_menu = true;
+}
+
 static void enemy_marks_frame();
 
 void rt_event(Ctx& c) {
@@ -1246,6 +1351,7 @@ void rt_event(Ctx& c) {
                 fflush(stdout);
             }
             g_auto.apply(g_frame);
+            attract_guard_frame();   // before the frame's picture is taken
             if (survival_frame(c)) g_hold = true;   // survival start and results screens
             stats_frame();
             random_spawns_frame();
@@ -1254,6 +1360,7 @@ void rt_event(Ctx& c) {
             if (!g_logo_up && ((g_frame % 4 == 0 && boot_logo_up()) || g_frame > 3000)) g_logo_up = true;
             // Survival mode: on to the chosen stage at full speed, behind its loading screen
             bool boot_done = survival_enabled() ? !survival_owns_inputs() || g_frame > 200000   // (survival gives up first)
+                             : g_arcade_entry   ? arcade_entry_frame()
                                                 : (g_frame % 4 == 0 && boot_logo_up()) || g_frame > 3000;
             if (g_boot_skip && boot_done) {
                 g_boot_skip = g_fast_idle = false;
@@ -1271,7 +1378,7 @@ void rt_event(Ctx& c) {
             }
             if (g_hold && !g_boot_skip) {
                 double hold_from = now_seconds();
-                while (g_hold && !g_quit) Sleep(4);
+                while (g_hold && !g_quit && !g_boot_skip) Sleep(4);   // (PLAY runs it on unseen behind the menu)
                 g_wait_seconds += now_seconds() - hold_from;
                 LARGE_INTEGER now;   // carry on at real speed from here, without catching up
                 QueryPerformanceCounter(&now);
