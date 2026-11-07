@@ -32,8 +32,9 @@ if not exist third_party\ngx\bin\nvngx_dlss.dll (
 )
 
 rem Visual Studio 2022 or later (Build Tools or any edition) with the C++ tools and
-rem its CMake
+rem its CMake, and a Windows SDK
 call tools\find_vs.bat
+if errorlevel 2 goto no_sdk
 if not exist "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" goto no_vs
 echo [4/5] Setting up Visual Studio ^("%VSDIR%"^)
 rem Its output is hidden unless it fails (a missing Windows SDK, for example)
@@ -81,4 +82,8 @@ goto fail
 echo Visual Studio 2022 with the x64 C++ tools and CMake not found.
 echo Run install.bat instead: it installs them, then builds. Or install Build Tools for
 echo Visual Studio 2022 with the "Desktop development with C++" workload yourself.
+goto fail
+:no_sdk
+echo Visual Studio is in "%VSDIR%" but there is no Windows SDK. Run install.bat: it adds
+echo it. Or add "Windows 11 SDK" in the Visual Studio Installer ^(Individual components^).
 goto fail
