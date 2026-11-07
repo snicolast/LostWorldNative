@@ -50,9 +50,9 @@ extern std::atomic<bool> g_boot_skip;   // the power-on screens run through with
 extern std::atomic<bool> g_hold;        // menus: the game stands still while set
 // The menu stands in for the arcade's attract (runtime.cpp): with
 // g_skip_attract set (app.cpp: the menu on, classic arcade), a game that ends
-// opens the main menu (g_game_over_menu) instead of the attract, and
-// g_arcade_entry (1 to start it) runs the game on to its route selection
-// unseen, with a credit and START, as PLAY does
+// opens the main menu (g_game_over_menu) instead of the attract, with the
+// home state put back, and g_arcade_entry (1 to start it, PLAY) runs the game
+// on to its route selection unseen, with a credit and START
 extern std::atomic<bool> g_skip_attract, g_game_over_menu;
 extern std::atomic<int> g_arcade_entry;
 extern std::atomic<bool> g_quit, g_parked;   // shutdown handshake: ask, then wait for the park

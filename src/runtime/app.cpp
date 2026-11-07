@@ -1543,7 +1543,6 @@ void App::apply_video_options(const Options* was) {
 
 // No attract (runtime.cpp, arcade_entry_frame): PLAY > CLASSIC runs the game
 // on to its route selection behind the menu, which closes once it is there
-// (at once when a game over left it there already)
 void App::start_arcade() {
     g_arcade_entry = 1;
     g_boot_skip = g_fast_idle = true;
@@ -1561,8 +1560,8 @@ void App::cancel_arcade_entry() {
 void App::update_arcade_entry() {
     // Only the arcade game ends in the attract: the boss fights have their own end
     g_skip_attract = g_auto.events.empty() && boss_fight < 0 && !boss_loading && boss_pending < 0;
-    // A game over: the main menu, while the game goes on to the route
-    // selection behind it instead of into the attract (attract_guard_frame)
+    // A game over: the main menu instead of the attract, the game back at its
+    // home state behind it (attract_guard_frame)
     if (g_game_over_menu.exchange(false)) {
         play_waits = false;
         frontend.open(Frontend::Screen::Main);

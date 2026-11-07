@@ -1263,23 +1263,27 @@ static bool arcade_entry_frame() {
     return finish("route selection");
 }
 
-// A game that ends (no credit at the CONTINUE count, the game over, the
-// ending and its name entry) goes back to the attract: the route selection
-// back at 0 after a game was played in it. On that frame, before its picture
-// is taken, the main menu opens (g_game_over_menu, app.cpp) and the game runs
-// on to the route selection behind it, unseen and muted, where it waits for
-// PLAY. Not in survival, boss mode or --make-boss-state, which have their own
-// ends, and only with the menu on (g_skip_attract)
+// A game that ends goes on to the attract. The game's mode word (0x1A6164)
+// is 0xB from the route selection to the end of a game: through the CONTINUE
+// count, TOTAL SCORE, the name entry and rankings and GAME OVER; it leaves
+// 0xB on the frame the attract's first screen (the parental warning, then
+// FBI and SEGA logos, title, demo) starts (0 logo screens, 1 title, demo and
+// rankings; 0xA a frame or two around a coin or START). The route selection
+// (0x1C2AD8) stays at 0xC through the attract, so it cannot tell. On that
+// frame, before its picture is taken, the game stands still, the main menu
+// opens (g_game_over_menu, app.cpp) and the home state (the game at its SEGA
+// logo) is put back, ready for PLAY. Not in survival, boss mode or
+// --make-boss-state, which have their own ends, and only with the menu on
+// (g_skip_attract)
 static void attract_guard_frame() {
     static bool game_on = false;
-    static uint32_t select_was = 0;
-    uint32_t select = rd32(0x1C2AD8);
-    uint8_t p1 = rd8(0x1A3791), p2 = rd8(0x1A37A1);   // 1/2 playing, 0 CONTINUE, 3 out (also the attract's demo)
-    if (select != select_was)
-        printf("[play] route selection %u -> %u (players %u %u, frame %llu)\n", unsigned(select_was), unsigned(select),
-               unsigned(p1), unsigned(p2), (unsigned long long)g_frame);
-    select_was = select;
-    if (g_attract_watch_reset) {
+    static uint32_t mode_was = 0;
+    uint32_t mode = rd32(0x1A6164), select = rd32(0x1C2AD8);
+    if (mode != mode_was && (mode == 0xB || mode_was == 0xB))
+        printf("[play] game mode %X -> %X (route selection %X, frame %llu)\n", unsigned(mode_was), unsigned(mode),
+               unsigned(select), (unsigned long long)g_frame);
+    mode_was = mode;
+    if (g_attract_watch_reset) {   // a state put back (QUIT TO MAIN MENU, survival, boss mode)
         g_attract_watch_reset = false;
         game_on = false;
     }
@@ -1287,17 +1291,17 @@ static void attract_guard_frame() {
         game_on = false;
         return;
     }
-    if (select == 0xC && (p1 == 1 || p1 == 2 || p2 == 1 || p2 == 2)) game_on = true;
-    if (select != 0 || !game_on) return;
+    if (mode == 0xB) {
+        if (select == 0xC) game_on = true;   // past the route selection: a game played
+        return;
+    }
+    if (!game_on) return;
     game_on = false;
     if (!g_skip_attract || g_arcade_entry || g_boot_skip) return;
-    printf("[play] the game is over: back to the menu, on to the route selection unseen (frame %llu)\n",
+    printf("[play] the game is over: back to the main menu instead of the attract (frame %llu)\n",
            (unsigned long long)g_frame);
-    g_hold = true;   // it stands still there, behind the menu
-    g_boot_skip = g_fast_idle = true;
-    g_sound.set_dsp_enabled(false);
-    g_sound.set_muted(true);
-    g_arcade_entry = 1;
+    g_hold = true;   // it stands still, behind the menu, until PLAY
+    game_state_load_home();
     g_game_over_menu = true;
 }
 
