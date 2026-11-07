@@ -1220,7 +1220,9 @@ static void boss_maker_frame() {
 // with a credit and START every second, until the route selection opens
 // (0x1C2AD8 1-2); then the menu closes on it. The credit is only put in
 // once the home state is kept, so it is not in there (QUIT TO MAIN MENU
-// would put it back as CREDIT 1)
+// would put it back as CREDIT 1), and only every 5 s: the route selection
+// can take a few seconds to open after START, and a coin every second left
+// CREDIT 1 on it
 static bool arcade_entry_frame() {
     static uint64_t from = 0, select_at = 0;
     PlayerInputs& p = g_inputs.p[0];
@@ -1250,9 +1252,9 @@ static bool arcade_entry_frame() {
     if (select == 0xC) return finish("in a game already");
     if (select == 0) {
         if (g_frame - from > 9000) return finish("route selection not reached, given up");
-        uint64_t k = (g_frame - from) % 60;
+        uint64_t k = (g_frame - from) % 300;
         p.coin = k < 6;
-        p.start = k >= 30 && k < 36;
+        p.start = k % 60 >= 30 && k % 60 < 36;
         return false;
     }
     p.coin = p.start = false;
@@ -1371,7 +1373,7 @@ void rt_event(Ctx& c) {
             }
             if (g_hold && !g_boot_skip) {
                 double hold_from = now_seconds();
-                while (g_hold && !g_quit) Sleep(4);
+                while (g_hold && !g_quit && !g_boot_skip) Sleep(4);   // (PLAY runs it on unseen behind the menu)
                 g_wait_seconds += now_seconds() - hold_from;
                 LARGE_INTEGER now;   // carry on at real speed from here, without catching up
                 QueryPerformanceCounter(&now);
