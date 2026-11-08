@@ -4,7 +4,7 @@
 #
 # What it never touches: anything that is not part of the repository, so the
 # ROM (lostwsga.zip, data\), save\ (settings, records), build\, out\,
-# LostWorld.exe, third_party\ngx\, third_party\menu\, the Jurassic Park font,
+# LostWorld.exe, third_party\ngx\, third_party\downloads\, third_party\menu\, the Jurassic Park font,
 # crosshair*.png and your own textures in textures\ with names of their own.
 #
 # A repository file you changed yourself (a texture you redrew with the same

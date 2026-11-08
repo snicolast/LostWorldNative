@@ -1,0 +1,6 @@
+# Libraries downloaded at build time (not kept in the repository).
+# Read by CMakeLists.txt and tools\get_deps.bat: name, file, URL, SHA256.
+# Download fails? Save the file from the URL in third_party\downloads\ with
+# the same name and run build.bat again.
+SDL3  SDL3-3.4.18.tar.gz  https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz  9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
+miniz miniz-3.0.2.zip     https://github.com/richgel999/miniz/releases/download/3.0.2/miniz-3.0.2.zip            ada38db0b703a56d3dd6d57bf84a9c5d664921d870d8fea4db153979fb5332c5
