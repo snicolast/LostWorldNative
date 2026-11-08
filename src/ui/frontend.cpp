@@ -6,6 +6,7 @@
 #include "crosshair_file.h"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -755,7 +756,7 @@ void Frontend::open_splash() {
     }
     video_.close();
     if (splash_.empty() || !settings.splash) {
-        open(Screen::Main);
+        open(after_splash);
         return;
     }
     open(Screen::Splash);
@@ -1537,6 +1538,26 @@ void Frontend::sprite(const Picture& p, int x0, int y0, int w, int h) {
 int Frontend::measure(Family f, int px, const std::wstring& s) {
     if (f == JURASSIC) px = int(px * 1.34f + 0.5f);   // as text() draws it
     return mask(f, px, s, 0).text_w;
+}
+
+// The rows the letters of s cover (their ink, not the font's box), counted
+// from the y that text() is given: to centre a word in a box with any font
+void Frontend::ink_rows(Family f, int px, const std::wstring& s, int& top, int& bottom) {
+    int shift = 0;
+    if (f == JURASSIC) {   // as text() draws it
+        shift = int(px * 0.42f + 0.5f);
+        px = int(px * 1.34f + 0.5f);
+    }
+    const Mask& m = mask(f, px, s, 0);
+    top = m.h, bottom = 0;
+    for (int j = 0; j < m.h; j++)
+        for (int i = 0; i < m.w; i++)
+            if (m.a[size_t(j) * m.w + i]) {
+                top = std::min(top, j), bottom = std::max(bottom, j + 1);
+                break;
+            }
+    if (top >= bottom) top = m.pad, bottom = m.pad + m.text_h;   // nothing drawn
+    top += shift - m.pad, bottom += shift - m.pad;
 }
 
 int Frontend::extent(Family f, int px, const std::wstring& s) { return gdi_->extent(GdiText::Face(f), px, s); }
@@ -2403,7 +2424,8 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
             dirty_ = true;   // it fades: drawn again every refresh
             return true;
         }
-        open(Screen::Main);   // the last one ended
+        open(after_splash);   // the last one ended
+        if (!active()) return false;
     }
     if (screen_ != Screen::GunTest) gun_page_.clear();
     else if (gun_page_.size() == size_t(w) * h && out.size() == gun_page_.size() && gun_page_key_ == gun_key()) {
@@ -2660,6 +2682,13 @@ void Frontend::draw_news() {
     // The buttons side by side, the chosen one lit
     static const wchar_t* const LABELS[2] = {L"UPDATE NOW", L"LATER"};
     int bw = std::min(U(340), half - U(40)), gap = U(40), by = y + U(34);
+    int ink0 = INT_MAX, ink1 = INT_MIN;   // both labels' letters, centred in the boxes whatever the font
+    for (const wchar_t* l : LABELS) {
+        int t, b;
+        ink_rows(display(), U(40), l, t, b);
+        ink0 = std::min(ink0, t), ink1 = std::max(ink1, b);
+    }
+    int label_y = by + bh / 2 - (ink0 + ink1) / 2;
     for (int b = 0; b < 2; b++) {
         int x0 = b == 0 ? cx - gap / 2 - bw : cx + gap / 2;
         news_buttons_[b] = {x0, by, x0 + bw, by + bh};
@@ -2667,8 +2696,7 @@ void Frontend::draw_news() {
         fill(x0, by, x0 + bw, by + bh, sel ? AMBER : 0x000000, sel ? 0.28f : 0.45f);
         frame(x0, by, x0 + bw, by + bh, std::max(1, U(sel ? 3.0f : 1.5f)), sel ? WHITE_TOP : AMBER, sel ? 1.0f : 0.55f);
         const Style st = sel ? Style{GOLD_TOP, GOLD_BOTTOM, EDGE, U(2), 1, U(2)} : Style{PALE_TOP, PALE_BOTTOM, INK, U(2), 0.95f};
-        // (centred on the capitals: at U(40) they are about U(28) tall, U(18) below the box top)
-        text(display(), U(40), LABELS[b], x0 + bw / 2, by + bh / 2 - U(32), 1, st);
+        text(display(), U(40), LABELS[b], x0 + bw / 2, label_y, 1, st);
     }
     const wchar_t* about = news_button_ == 0
                                ? L"Closes the game, downloads the new version, builds it again (update.bat) and starts it"

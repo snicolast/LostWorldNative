@@ -44,6 +44,7 @@ public:
     // faded in and out), then the main menu. Enter / Space / Esc / a click (a
     // pad's START or A) hurries it out. Straight to the menu without one
     void open_splash();
+    Screen after_splash = Screen::Main;   // None: the game (--no-menu)
     bool splash() const { return screen_ == Screen::Splash; }
     Screen screen() const { return screen_; }
     bool active() const { return screen_ != Screen::None; }
@@ -177,6 +178,7 @@ private:
     }
     int text(Family f, int px, const std::wstring& s, int x, int y, int align, const Style& st);
     int measure(Family f, int px, const std::wstring& s);
+    void ink_rows(Family f, int px, const std::wstring& s, int& top, int& bottom);   // from the y given to text()
     int extent(Family f, int px, const std::wstring& s);   // width without making a mask (body text)
     std::vector<std::wstring> wrap(Family f, int px, const std::wstring& s, int max_w);
     void band(int cx, int y0, int y1, int half_w, uint32_t rgb, float alpha);
