@@ -13,6 +13,11 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[3] 2026-11-08
+- The build retries if it can't download SDL3 or miniz, and if it still fails it lists the links to download them by hand
+- If the Windows SDK is missing, the build says so before starting, and install.bat adds it
+- UPDATE NOW and LATER are now centred in the update window
+
 [2] 2026-11-07
 - PLAY > CLASSIC goes straight to the route selection: no attract, no coin to insert
 - When a game ends you are back at the main menu, after GAME OVER and the name entry
