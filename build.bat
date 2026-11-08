@@ -30,6 +30,8 @@ if not exist third_party\ngx\bin\nvngx_dlss.dll (
     echo [3/5] Downloading the NVIDIA DLSS SDK ^(needed to build on any GPU; DLAA is optional^)
     call tools\get_dlss.bat || goto fail
 )
+rem SDL3 and miniz: downloaded once into third_party\downloads, CMake builds from there
+call tools\get_deps.bat || goto fail
 
 rem Visual Studio 2022 or later (Build Tools or any edition) with the C++ tools and
 rem its CMake, and a Windows SDK

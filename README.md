@@ -72,9 +72,13 @@ Or in the Visual Studio Installer, choose *Individual components* instead of the
 tick *MSVC v143 - VS 2022 C++ x64/x86 build tools (Latest)*, *C++ CMake tools for Windows*
 and one *Windows 11 SDK* (it works on Windows 10 too).
 
-Then run `build.bat` with `lostwsga.zip` next to it. It downloads SDL3 and NVIDIA DLSS on the
-first run.
+Then run `build.bat` with `lostwsga.zip` next to it. It downloads SDL3, miniz and NVIDIA DLSS on
+the first run.
 </details>
+
+If the build can't download SDL3 or miniz (a proxy, an antivirus, a flaky connection), it lists
+the links: download them with your browser, put them in `third_party\downloads\` keeping the file
+name and run `build.bat` again.
 
 ### Update
 
