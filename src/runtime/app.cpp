@@ -726,6 +726,7 @@ struct NewPictures {
 struct App {
     FrontendSettings ini;   // save/settings.ini (main)
     bool survival_cli = false;   // --survival STAGE:ZONE
+    bool intro = false;          // --no-menu (not a test run): the splash, then the game
     int cli_stage = 0, cli_zone = 0;
 
     VkPresenter presenter;
@@ -894,6 +895,7 @@ struct App {
     void apply_video_options(const Options* was);
     void update_boss_mode();
     void update_menus();
+    void update_intro();
     void read_inputs();
     bool present_frame(double loop_from);
     void update_title();
@@ -1225,7 +1227,9 @@ bool App::init(int argc, char** argv, bool first_start) {
             !getenv("LW_SURV_LIFE"))
             stats_init();
         g_audio.start();
-        g_hold = g_opt.menu && !survival_cli;   // the main menu comes first
+        intro = intro && !survival_cli && g_opt.replay.empty() && !g_opt.shot_frame && ini.splash &&
+                !getenv("LW_MENU_KEYS") && !getenv("LW_MENU_SHOT");
+        g_hold = (g_opt.menu || intro) && !survival_cli;   // the main menu (or the splash) comes first
         g_boot_skip = g_fast_idle = !g_opt.show_boot;
         g_sound.set_dsp_enabled(!g_boot_skip);
         g_sound.set_muted(g_boot_skip);
@@ -1284,6 +1288,22 @@ bool App::init(int argc, char** argv, bool first_start) {
     if (g_opt.menu) {
         if (!frontend.init("third_party/fonts")) printf("[menu] fonts missing: using the Windows ones\n");
         if (!ui.init(presenter)) g_opt.menu = false;
+    }
+    if (intro) {   // the frontend only for the splash, which then hands over to the game
+        frontend.init("third_party/fonts");
+        frontend.settings = ini;
+        settings_from_options(g_opt, frontend.settings);
+        frontend.after_splash = Frontend::Screen::None;
+        if (ui.init(presenter)) frontend.open_splash();
+        intro = frontend.splash();
+        if (intro)
+            presenter.input_hook = [this](UINT msg, WPARAM wp, LPARAM lp) -> bool {
+                if (!intro) return false;
+                if (msg == WM_KEYDOWN) frontend.key(int(wp));
+                else if (msg == WM_LBUTTONDOWN) frontend.click(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+                return true;
+            };
+        else g_hold = false;
     }
     presenter.save_pipeline_cache();   // what start-up compiled, kept even if the run ends without shutdown()
     if (g_opt.menu) {
@@ -1387,6 +1407,7 @@ void App::run() {
             update_boss_mode();
             update_menus();
         }
+        if (intro) update_intro();
         read_inputs();
         if (!present_frame(loop_from)) break;   // --shot taken, or the end of a --replay film
     }
@@ -1837,6 +1858,19 @@ void App::update_menus() {
     }
 }
 
+// --no-menu: the splash over the held game, then the game
+void App::update_intro() {
+    presenter.set_cursor_visible(false);
+    RECT rc;
+    GetClientRect(presenter.hwnd(), &rc);
+    if (frontend.draw(rc.right, rc.bottom, ui_pixels)) ui.set_image(ui_pixels.data(), rc.right, rc.bottom);
+    if (frontend.splash()) return;
+    frontend.open(Frontend::Screen::None);
+    ui.hide();
+    intro = g_hold = false;
+    g_block_buttons = true;   // the press that hurried it on does not shoot
+}
+
 // The guns, the keyboard, the gamepads, F12 / F9 and the crosshairs
 void App::read_inputs() {
     update_aim_reach(presenter.hwnd());
@@ -2277,6 +2311,7 @@ int main(int argc, char** argv) {
     // The menus (and the settings they save) are left out of test runs, so
     // those always start from the same defaults
     g_opt.menu = !options_disable_menu(argc, argv);
+    const bool menu_wanted = g_opt.menu;   // not a test run (--no-menu may still turn the menu off)
     FrontendSettings ini;
     // The first start (no settings saved yet) picks the QUALITY for the graphics card
     bool first_start = g_opt.menu && !file_exists("save/settings.ini");
@@ -2379,6 +2414,7 @@ int main(int argc, char** argv) {
     App app;
     app.ini = ini;
     app.survival_cli = survival_cli;
+    app.intro = menu_wanted && !g_opt.menu;
     app.cli_stage = cli_stage, app.cli_zone = cli_zone;
     if (!app.init(argc, argv, first_start)) return 1;
     app.run();
