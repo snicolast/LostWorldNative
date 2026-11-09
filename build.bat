@@ -14,16 +14,17 @@ set ZIP=%~1
 if "%ZIP%"=="" set ZIP=%LW_ROM_ZIP%
 if "%ZIP%"=="" set ZIP=%~dp0lostwsga.zip
 
-python -c "" >nul 2>&1 || goto no_python
+rem Python 3.10 or later, checked: "python" in PATH can be an older one (Star Wars Trilogy issue #51)
+call tools\find_python.bat || goto no_python
 rem sound_samples.bin too: an older romtool.py stopped at the first missing chip
 rem and left crom.bin without the rest, which was then taken as extracted
 if exist data\crom.bin if exist data\sound_samples.bin goto rom_ok
 if not exist "%ZIP%" goto no_rom
 echo [1/5] Extracting the ROM
-python tools\romtool.py "%ZIP%" data || goto fail
+%BUILD_PY% tools\romtool.py "%ZIP%" data || goto fail
 :rom_ok
 echo [2/5] Recompiling the PowerPC code
-python tools\recomp.py data\crom.bin build\gen || goto fail
+%BUILD_PY% tools\recomp.py data\crom.bin build\gen || goto fail
 rem NVIDIA DLSS SDK (not in the repository): fetched from NVIDIA's GitHub the first
 rem time. Needed to build on any GPU; DLAA itself only runs on NVIDIA RTX
 if not exist third_party\ngx\bin\nvngx_dlss.dll (
@@ -77,7 +78,8 @@ echo in the LW_ROM_ZIP environment variable, or put it next to build.bat. Only n
 goto fail
 
 :no_python
-echo Python 3 not found. Run install.bat instead: it installs Python and the C++ tools, then builds.
+echo Python 3.10 or later not found ^(an older Python or the Microsoft Store alias does not count^).
+echo Run install.bat instead: it installs Python and the C++ tools, then builds.
 goto fail
 
 :no_vs
