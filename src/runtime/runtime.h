@@ -54,6 +54,9 @@ extern std::atomic<bool> g_hold;        // menus: the game stands still while se
 // home state put back, and g_arcade_entry (1 to start it, PLAY) runs the game
 // on to its route selection unseen, with a credit and START
 extern std::atomic<bool> g_skip_attract, g_game_over_menu;
+// The game is in its attract (logos, title, demo, rankings, INSERT COIN):
+// app.cpp shows the author's credit over it
+extern std::atomic<bool> g_in_attract;
 extern std::atomic<int> g_arcade_entry;
 extern std::atomic<bool> g_quit, g_parked;   // shutdown handshake: ask, then wait for the park
 extern std::atomic<uint64_t> g_game_busy_us, g_game_frames;   // CPU time of the game thread, read once a second

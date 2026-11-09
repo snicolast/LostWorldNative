@@ -22,6 +22,11 @@ public:
     void push(const std::wstring& name, const std::wstring& text);
     // Another kind of notice: its own label, and it rises from the bottom middle
     void push_rising(const std::wstring& label, const std::wstring& name, const std::wstring& text);
+    // The author's credit, two small lines in the bottom right corner, faded
+    // in while `shown` (the attract and its INSERT COIN, with the menu off)
+    void set_credit(const std::wstring& line1, const std::wstring& line2, bool shown) {
+        credit_[0] = line1, credit_[1] = line2, credit_on_ = shown;
+    }
     void set_volume(float v) { volume_ = v; }   // the game's gain, 0..10 (5 default); 0 = no chime
     // Redraws into `out` when the picture changes; true if it did. `now` in seconds
     bool draw(int w, int h, double now, std::vector<uint32_t>& out);
@@ -33,6 +38,7 @@ private:
              float alpha);
     void shine(int x0, int y0, int x1, int y1, float pos);
     void chime();
+    RECT draw_credit(float alpha);
 
     struct Notice {
         std::wstring name, text;
@@ -45,6 +51,11 @@ private:
     RECT dirty_{};           // where it was
     float volume_ = 5;
     std::vector<uint8_t> wav_;   // the chime, played from memory
+    std::wstring credit_[2];
+    bool credit_on_ = false;
+    float credit_alpha_ = 0;     // fades towards credit_on_
+    double credit_at_ = -1;      // the last draw's time, for the fade
+    RECT credit_dirty_{};        // where the credit was drawn
 
     GdiText* gdi_ = nullptr;
     bool jurassic_ = false;
