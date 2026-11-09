@@ -135,10 +135,15 @@ Entirely optional: it supports the work on this project, not the game, which bel
 
 ## License
 
-The code in this repository is under the [MIT License](LICENSE). The libraries and fonts in
+The code in this repository is under the [MIT License, with additional terms](LICENSE). The libraries and fonts in
 `third_party/` keep their own licenses. The menu music (`res/menu/music.mp3`) was made
 with Suno for this port. The game itself (ROM, code and data) is not included
 and stays the property of its owners: you need your own copy of `lostwsga.zip`.
+
+**No prebuilt downloads.** The license does not allow anyone to share a compiled build of this
+port, a ROM, or anything made from one. I have never published any of them: everyone builds the
+game themselves from their own `lostwsga.zip`. Any ready-to-play download you find elsewhere is
+not from me, breaks the license, and is at your own risk.
 
 <sub>A fan project for personal use, not affiliated with or endorsed by Sega.
 The Lost World and Jurassic Park are trademarks of their respective owners.</sub>
