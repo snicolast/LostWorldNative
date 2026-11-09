@@ -1265,11 +1265,12 @@ static bool arcade_entry_frame() {
 
 // A game that ends goes on to the attract. The game's mode word (0x1A6164)
 // is 0xB from the route selection to the end of a game: through the CONTINUE
-// count, TOTAL SCORE, the name entry and rankings and GAME OVER; it leaves
-// 0xB on the frame the attract's first screen (the parental warning, then
+// count, TOTAL SCORE, the name entry and rankings and GAME OVER; it goes to
+// 0 on the frame the attract's first screen (the parental warning, then
 // FBI and SEGA logos, title, demo) starts (0 logo screens, 1 title, demo and
 // rankings; 0xA a frame or two around a coin or START, and as a stage
-// starts). The route selection
+// starts; 0x14 as a stage is cleared, on to the next one: only 0 and 1 end
+// a game, not any value other than 0xB). The route selection
 // (0x1C2AD8) stays at 0xC through the attract, so it cannot tell. On that
 // frame, before its picture is taken, the game stands still, the main menu
 // opens (g_game_over_menu, app.cpp) and the home state (the game at its SEGA
@@ -1292,10 +1293,8 @@ static void attract_guard_frame() {
         game_on = false;
         return;
     }
-    if (mode == 0xB || mode == 0xA) {   // (0xA also a frame or two as a stage starts)
-        if (mode == 0xB && select == 0xC) game_on = true;   // past the route selection: a game played
-        return;
-    }
+    if (mode == 0xB && select == 0xC) game_on = true;   // past the route selection: a game played
+    if (mode != 0 && mode != 1) return;   // still a game (0xA, 0x14 between stages)
     if (!game_on) return;
     game_on = false;
     if (!g_skip_attract || g_arcade_entry || g_boot_skip) return;
