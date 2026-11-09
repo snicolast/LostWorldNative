@@ -29,17 +29,15 @@ set "ZIP=%~dp0lostwsga.zip"
 goto wait_rom
 :rom_ok
 
-rem 2. Python 3.8 or later (the build scripts use only its standard library)
-call :find_python && goto python_ok
+rem 2. Python 3.10 or later (the build scripts use only its standard library)
+call tools\find_python.bat && goto python_ok
 call :need_winget || goto fail
 echo Installing Python 3 for this user...
 winget install -e --id Python.Python.3.12 --scope user --accept-package-agreements --accept-source-agreements --override "/passive InstallAllUsers=0 PrependPath=1 Include_test=0"
 call :refresh_path
-call :find_python && goto python_ok
-rem Installed but not on PATH (an installer that ignored PrependPath): use it from where it went
-for /d %%d in ("%LOCALAPPDATA%\Programs\Python\Python3*") do if exist "%%d\python.exe" set "PATH=%%d;%%d\Scripts;%PATH%"
-call :find_python && goto python_ok
-echo Could not install Python 3. Install it from https://www.python.org/downloads/
+rem find_python.bat also looks where the installer puts it, for one that ignored PrependPath
+call tools\find_python.bat && goto python_ok
+echo Could not install Python 3.10 or later. Install it from https://www.python.org/downloads/
 echo ^(tick "Add python.exe to PATH"^) and run install.bat again.
 goto fail
 :python_ok
@@ -94,10 +92,6 @@ echo.
 echo Install failed: see the messages above.
 if defined PAUSE_AT_END pause
 exit /b 1
-
-:find_python
-python -c "import sys; sys.exit(sys.version_info < (3, 8))" >nul 2>&1
-exit /b %errorlevel%
 
 :need_winget
 where winget >nul 2>&1 && exit /b 0
