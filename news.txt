@@ -13,6 +13,9 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[4] 2026-11-09
+- Fixed: clearing a stage in CLASSIC no longer sends you back to the main menu
+
 [3] 2026-11-08
 - The build retries if it can't download SDL3 or miniz, and if it still fails it lists the links to download them by hand
 - If the Windows SDK is missing, the build says so before starting, and install.bat adds it
