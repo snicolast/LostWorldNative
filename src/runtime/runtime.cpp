@@ -1269,7 +1269,7 @@ static bool arcade_entry_frame() {
 // 0 on the frame the attract's first screen (the parental warning, then
 // FBI and SEGA logos, title, demo) starts (0 logo screens, 1 title, demo and
 // rankings; 0xA a frame or two around a coin or START, and as a stage
-// starts; 0x14 as a stage is cleared, on to the next one: only 0 and 1 end
+// starts; 0x14 then 0x15 as a stage is cleared, on to the next one: only 0 and 1 end
 // a game, not any value other than 0xB). The route selection
 // (0x1C2AD8) stays at 0xC through the attract, so it cannot tell. On that
 // frame, before its picture is taken, the game stands still, the main menu
@@ -1294,7 +1294,7 @@ static void attract_guard_frame() {
         return;
     }
     if (mode == 0xB && select == 0xC) game_on = true;   // past the route selection: a game played
-    if (mode != 0 && mode != 1) return;   // still a game (0xA, 0x14 between stages)
+    if (mode != 0 && mode != 1) return;   // still a game (0xA, 0x14 and 0x15 between stages)
     if (!game_on) return;
     game_on = false;
     if (!g_skip_attract || g_arcade_entry || g_boot_skip) return;
