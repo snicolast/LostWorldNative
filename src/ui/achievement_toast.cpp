@@ -121,34 +121,60 @@ void AchievementToast::shine(int x0, int y0, int x1, int y1, float pos) {
     }
 }
 
+// The credit: right aligned in the bottom right corner, over the game's own
+// picture, small and a little see-through. Returns where it drew
+RECT AchievementToast::draw_credit(float alpha) {
+    float u = std::min(h_ / 1080.0f, w_ / 1440.0f);
+    auto U = [&](float v) { return std::max(1, int(v * u + 0.5f)); };
+    int px1 = U(26), px2 = U(22);
+    int x = w_ - U(28);
+    int y2 = h_ - U(22) - px2 - U(4), y1 = y2 - px1 - U(4);
+    int w1 = text(TEXT, px1, credit_[0], x, y1, 2, PALE_TOP, PALE_BOTTOM, 0.85f * alpha);
+    int w2 = credit_[1].empty() ? 0 : text(TEXT, px2, credit_[1], x, y2, 2, AMBER, AMBER, 0.75f * alpha);
+    int m = U(10);
+    return {std::clamp(x - std::max(w1, w2) - m, 0, w_), std::clamp(y1 - m, 0, h_), std::clamp(x + m, 0, w_),
+            std::clamp(y2 + px2 * 2 + m, 0, h_)};
+}
+
 bool AchievementToast::draw(int w, int h, double now, std::vector<uint32_t>& out) {
     while (!queue_.empty() && shown_at_ >= 0 && now - shown_at_ > SHOW_SECONDS) {   // the next one
         queue_.pop_front();
         shown_at_ = -1;
     }
+    // The credit fades in and out over 0.4 s
+    double dt = credit_at_ < 0 ? 0 : std::clamp(now - credit_at_, 0.0, 0.1);
+    credit_at_ = now;
+    float target = credit_on_ && !credit_[0].empty() ? 1.0f : 0.0f, was = credit_alpha_;
+    float step = float(dt / 0.4);
+    credit_alpha_ = target > was ? std::min(target, was + step) : std::max(target, was - step);
+    bool credit_changed = credit_alpha_ != was;
+
     bool resized = w != w_ || h != h_ || out.size() != size_t(w) * h;
-    if (queue_.empty()) {
-        if (!drawn_ && !resized) return false;
-        w_ = w, h_ = h;
-        out.assign(size_t(w) * h, 0);
-        drawn_ = false;
-        return true;
+    double t = 0;
+    bool toast_redraw = drawn_;   // an empty queue: wipe the last panel
+    if (!queue_.empty()) {
+        if (shown_at_ < 0) {
+            shown_at_ = now;
+            chime();
+        }
+        t = now - shown_at_;
+        bool moving = t < SHINE_AT + SHINE_TIME || t > SHOW_SECONDS - SLIDE_OUT;
+        toast_redraw = moving || !drawn_;   // resting in its corner: nothing to do
     }
-    if (shown_at_ < 0) {
-        shown_at_ = now;
-        chime();
-    }
-    double t = now - shown_at_;
-    bool moving = t < SHINE_AT + SHINE_TIME || t > SHOW_SECONDS - SLIDE_OUT;
-    if (!moving && drawn_ && !resized) return false;   // resting in its corner
+    if (!resized && !credit_changed && !toast_redraw) return false;
     if (resized) {
         w_ = w, h_ = h;
         out.assign(size_t(w) * h, 0);
-    } else if (drawn_) {   // wipe only where the panel was
-        for (LONG y = dirty_.top; y < dirty_.bottom; y++)
-            std::fill(out.begin() + y * w_ + dirty_.left, out.begin() + y * w_ + dirty_.right, 0u);
+    } else {   // wipe only where the panel and the credit were
+        for (const RECT& r : {dirty_, credit_dirty_})
+            for (LONG y = r.top; y < r.bottom; y++)
+                std::fill(out.begin() + y * w_ + r.left, out.begin() + y * w_ + r.right, 0u);
     }
     px_ = out.data();
+    dirty_ = credit_dirty_ = {};
+    drawn_ = false;
+    if (credit_alpha_ > 0) credit_dirty_ = draw_credit(credit_alpha_);
+    if (queue_.empty()) return true;
     float u = std::min(h / 1080.0f, w / 1440.0f);
     auto U = [&](float v) { return int(v * u + 0.5f); };
     const auto& n = queue_.front();

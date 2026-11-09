@@ -1187,7 +1187,7 @@ void App::stop_threads() {
 
 bool App::init(int argc, char** argv, bool first_start) {
     presenter.set_vsync(g_opt.vsync);
-    if (!presenter.init("Lost World Native", int(SCREEN_H * 2 * std::max(g_opt.max_aspect, 4.0f / 3.0f)), SCREEN_H * 2,
+    if (!presenter.init("Lost World Native by snicolast", int(SCREEN_H * 2 * std::max(g_opt.max_aspect, 4.0f / 3.0f)), SCREEN_H * 2,
                         g_opt.dlaa)) {
         fprintf(stderr, "Could not start Vulkan; try --headless\n");
         return false;
@@ -1520,6 +1520,9 @@ void App::update_toast() {
     for (int i : survival_take_unlocked())
         toast.push_rising(L"ARENA UNLOCKED  \u00B7  SURVIVAL!", SURVIVAL_ZONES[i].name,
                           L"Play it from PLAY > SURVIVAL");
+    // The author's credit over the attract (seen with the menu off, --no-menu)
+    toast.set_credit(L"PC port by snicolast", L"github.com/snicolast/LostWorldNative",
+                     g_in_attract && !g_menu_open && !g_boot_skip && !g_arcade_entry);
     RECT rc;
     GetClientRect(presenter.hwnd(), &rc);
     if (toast.draw(rc.right, rc.bottom, now_seconds(), toast_pixels))
@@ -2264,7 +2267,7 @@ void App::update_title() {
         unsigned long long hz = (unsigned long long)(double(presents) / (now - last_title) + 0.5);
         char title[256];
         snprintf(title, sizeof(title),
-                 "Lost World Native - %llu Hz display - frame %llu - %zu polygons | ms/frame: game %.1f, "
+                 "Lost World Native by snicolast - %llu Hz display - frame %llu - %zu polygons | ms/frame: game %.1f, "
                  "prep %.1f, scene %.1f, render %.1f, GPU %.1f",
                  hz, (unsigned long long)shown,
                  scene->polygons, game_ms, prep_ms, scene_ms, t.record * per, (t.gpu_wait + t.present) * per);

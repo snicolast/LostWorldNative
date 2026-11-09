@@ -112,7 +112,7 @@ std::atomic<bool> g_boot_skip{false};
 std::atomic<bool> g_hold{false};
 // The menu stands in for the attract (see attract_guard_frame and
 // arcade_entry_frame)
-std::atomic<bool> g_skip_attract{false}, g_game_over_menu{false};
+std::atomic<bool> g_skip_attract{false}, g_game_over_menu{false}, g_in_attract{false};
 std::atomic<int> g_arcade_entry{0};
 // Shutdown: the window thread sets g_quit; the game thread parks itself at
 // its next frame event (its native stack cannot be unwound) and reports it
@@ -1351,6 +1351,10 @@ void rt_event(Ctx& c) {
             }
             g_auto.apply(g_frame);
             attract_guard_frame();   // before the frame's picture is taken
+            {   // the attract: game mode 0 or 1 (attract_guard_frame), not survival or boss mode
+                uint32_t mode = rd32(0x1A6164);
+                g_in_attract = (mode == 0 || mode == 1) && !survival_enabled() && g_boss_maker < 0;
+            }
             if (survival_frame(c)) g_hold = true;   // survival start and results screens
             stats_frame();
             random_spawns_frame();
