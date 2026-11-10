@@ -283,7 +283,7 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
          .hint = L"Brightness of the mid-tones (1.00 = original)"},
         {.id = OPT_SHARPEN, .tab = DISPLAY_TAB, .label = L"SHARPEN", .key = "sharpen", .flag = &FS::sharpen, .kind = TOGGLE,
          .hint = L"Brings back texture detail after the edge smoothing, without halos"},
-        // LIGHTING
+        // GRAPHICS: the lighting
         {.id = OPT_SUN, .tab = LIGHTING_TAB, .label = L"SUN", .key = "sun", .flag = &FS::sun, .kind = TOGGLE,
          .hint = L"A sun in the sky and stronger, warmer sunlight outdoors"},
         {.id = OPT_SHADOWS, .tab = LIGHTING_TAB, .label = L"SUN SHADOWS", .key = "shadows", .flag = &FS::shadows,
@@ -310,18 +310,18 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         {.id = OPT_TORCH, .tab = LIGHTING_TAB, .label = L"FLASHLIGHT", .key = "flashlight", .flag = &FS::torch,
          .words = {"original", "modern"}, .other = 1, .kind = CHOICE, .shown = {L"ORIGINAL", L"MODERN"},
          .hint = L"At night: a soft beam with real shading and a glow in the air, or the original spot"},
-        // ATMOSPHERE
-        {.id = OPT_SKY, .tab = ATMOSPHERE_TAB, .label = L"SKY", .key = "sky", .flag = &FS::sky,
+        // GRAPHICS (after the lighting): the atmosphere
+        {.id = OPT_SKY, .tab = LIGHTING_TAB, .label = L"SKY", .key = "sky", .flag = &FS::sky,
          .words = {"original", "procedural"}, .kind = CHOICE, .shown = {L"ORIGINAL", L"PROCEDURAL"},
          .hint = L"Smooth drifting clouds drawn at full resolution, or the original picture"},
-        {.id = OPT_HAZE, .tab = ATMOSPHERE_TAB, .label = L"DISTANCE HAZE", .key = "haze", .flag = &FS::haze, .kind = TOGGLE,
+        {.id = OPT_HAZE, .tab = LIGHTING_TAB, .label = L"DISTANCE HAZE", .key = "haze", .flag = &FS::haze, .kind = TOGGLE,
          .hint = L"Far scenery fades into the sky instead of appearing suddenly"},
-        {.id = OPT_LIGHTNING, .tab = ATMOSPHERE_TAB, .label = L"LIGHTNING", .key = "lightning", .flag = &FS::lightning,
+        {.id = OPT_LIGHTNING, .tab = LIGHTING_TAB, .label = L"LIGHTNING", .key = "lightning", .flag = &FS::lightning,
          .kind = TOGGLE, .hint = L"Flashes of lightning in stormy fog, with the trees standing out against it"},
-        {.id = OPT_RAIN, .tab = ATMOSPHERE_TAB, .label = L"RAIN", .key = "rain", .number = &FS::rain,
+        {.id = OPT_RAIN, .tab = LIGHTING_TAB, .label = L"RAIN", .key = "rain", .number = &FS::rain,
          .words = {"off", "light", "heavy"}, .also = ON_IS_2, .kind = CHOICE, .shown = {L"OFF", L"LIGHT", L"HEAVY"},
          .levels = true, .hint = L"Where it rains in the game: a dense fall of drops, wet ground, puddles and ripples"},
-        {.id = OPT_SOFT, .tab = ATMOSPHERE_TAB, .label = L"SOFT PARTICLES", .key = "soft_particles", .flag = &FS::soft,
+        {.id = OPT_SOFT, .tab = LIGHTING_TAB, .label = L"SOFT PARTICLES", .key = "soft_particles", .flag = &FS::soft,
          .kind = TOGGLE, .hint = L"Smoke, fire and explosions blend softly where they touch the ground and walls"},
         // AUDIO
         {.id = OPT_VOLUME, .tab = AUDIO_TAB, .label = L"VOLUME", .key = "volume", .number = &FS::volume, .lo = 0, .hi = 10,
@@ -539,8 +539,7 @@ const Frontend::Picture& Frontend::pad_icon(const std::wstring& button) {
 
 // ---- Menu contents and navigation ----
 
-const wchar_t* const Frontend::TAB_NAMES[Frontend::TAB_COUNT] = {L"DISPLAY", L"LIGHTING", L"ATMOSPHERE", L"AUDIO",
-                                                                  L"CONTROLS", L"GAME"};
+const wchar_t* const Frontend::TAB_NAMES[Frontend::TAB_COUNT] = {L"DISPLAY", L"GRAPHICS", L"AUDIO", L"CONTROLS", L"GAME"};
 
 const wchar_t* const Frontend::RECORD_TAB_NAMES[Frontend::RECORD_TAB_COUNT] = {L"ACHIEVEMENTS", L"STATS"};
 
@@ -1948,13 +1947,16 @@ RECT Frontend::prompt(int& x, int y, const wchar_t* pad_button, const wchar_t* k
         x += bw + U(10);
     } else if (key) {
         std::wstring k = key;
-        bool arrows = k == L"<>";
-        int kw = arrows ? U(70) : std::max(h, extent(MONO, U(18), k) + U(22));
+        bool arrows = k == L"<>", updown = k == L"UD";
+        int kw = arrows || updown ? U(70) : std::max(h, extent(MONO, U(18), k) + U(22));
         fill(x, y, x + kw, y + h, 0x000000, 0.45f);
         frame(x, y, x + kw, y + h, std::max(1, U(1.5f)), KEYCAP, 0.75f);
         if (arrows) {
             triangle(x + kw / 2 - U(14), y + h / 2, U(14), -1, 0xE8E0CC, 1);
             triangle(x + kw / 2 + U(14), y + h / 2, U(14), +1, 0xE8E0CC, 1);
+        } else if (updown) {
+            triangle(x + kw / 2 - U(14), y + h / 2, U(14), -2, 0xE8E0CC, 1);
+            triangle(x + kw / 2 + U(14), y + h / 2, U(14), +2, 0xE8E0CC, 1);
         } else {
             text(MONO, U(18), k, x + kw / 2, y + h / 2 - U(9), 1, {0xE8E0CC, 0xE8E0CC});
         }
@@ -1974,73 +1976,33 @@ int Frontend::prompt_width(const wchar_t* pad_button, const wchar_t* key, const 
     const Picture* icon = pad_prompts && pad_button ? &pad_icon(pad_button) : nullptr;
     if (icon && icon->w > 0) wd = h * icon->w / icon->h + U(10);
     else if (icon) wd = std::max(h, extent(ITEM, U(20), pad_button) + U(20)) + U(10);
-    else if (key) wd = (std::wstring(key) == L"<>" ? U(70) : std::max(h, extent(MONO, U(18), key) + U(22))) + U(10);
+    else if (key) wd = (std::wstring(key) == L"<>" || std::wstring(key) == L"UD" ? U(70) : std::max(h, extent(MONO, U(18), key) + U(22))) + U(10);
     if (what && *what) wd += measure(ITEM, U(22), what) + U(44);
     return wd;
 }
 
-// The value side of an option row, between vx0 and vx1
-void Frontend::draw_value(const Item& it, bool sel, int vx0, int vx1, int y, int row_h) {
+// The value of an option row, ending at x1 (VOLUME: ten segments); returns
+// where it starts
+int Frontend::draw_value(const Item& it, bool sel, int x1, int y, int item_px) {
     auto U = [&](float v) { return int(v * u_ + 0.5f); };
-    int cy = y + row_h / 2, vcx = (vx0 + vx1) / 2, vpx = U(27);
+    int cy = y + item_px * 6 / 10;
+    if (it.id == OPT_VOLUME && it.enabled) {
+        int seg_w = U(18), gap = U(5), seg_h = U(22);
+        int x0 = x1 - 10 * seg_w - 9 * gap;
+        int lit_n = int(it.frac * 10 + 0.5f);
+        for (int s = 0; s < 10; s++) {
+            int sx = x0 + s * (seg_w + gap);
+            bool lit = s < lit_n;
+            uint32_t c = lit ? mix(0xFFE2A8, AMBER, float(s) / 9) : 0x34322A;
+            fill(sx - 1, cy - seg_h / 2 - 1, sx + seg_w + 1, cy + seg_h / 2 + 1, 0x000000, 0.8f);
+            fill(sx, cy - seg_h / 2, sx + seg_w, cy + seg_h / 2, c, sel || !lit ? 1.0f : 0.8f);
+        }
+        return x0;
+    }
     const Style vs = !it.enabled ? Style{DIM, DIM, INK, U(2), 0.9f}
-                     : sel       ? Style{WHITE_TOP, WHITE_BOTTOM, INK, U(2)}
+                     : sel       ? Style{GOLD_TOP, GOLD_BOTTOM, EDGE, U(3)}
                                  : Style{0xF4D27A, 0xE0A848, INK, U(2), 0.95f};
-    int text_y = cy - vpx * 55 / 100;   // the capitals centred on the row
-    switch (it.enabled ? it.kind : PLAIN) {
-    case TOGGLE: {
-        int tw = U(72), th = U(34), x0 = vcx - tw / 2, y0 = cy - th / 2;
-        bool on = it.pos != 0;
-        if (on) {
-            pill(x0, y0, x0 + tw, y0 + th, AMBER, sel ? 1.0f : 0.85f);
-        } else {
-            pill(x0, y0, x0 + tw, y0 + th, 0x4A4A40, 1);
-            pill(x0 + U(2), y0 + U(2), x0 + tw - U(2), y0 + th - U(2), 0x22231E, 1);
-        }
-        int r = U(12), kx = on ? x0 + tw - th / 2 : x0 + th / 2;
-        pill(kx - r, cy - r, kx + r, cy + r, on ? WHITE_TOP : 0x8A8A80, 1);
-        text(ITEM, U(20), on ? L"ON" : L"OFF", x0 - U(16), cy - U(11), 2, {on ? HINT : FOOT, on ? HINT : FOOT});
-        break;
-    }
-    case SLIDER: {
-        int x0 = vx0 + U(26), x1 = vx1 - U(90), th = std::max(2, U(6));
-        int kx = x0 + int(std::clamp(it.frac, 0.0f, 1.0f) * float(x1 - x0) + 0.5f);
-        pill(x0, cy - th / 2, x1, cy - th / 2 + th, 0x3D3B33, 1);
-        if (kx - x0 >= th) pill(x0, cy - th / 2, kx, cy - th / 2 + th, AMBER, 1);
-        int r = U(11), ring = std::max(2, U(3));
-        pill(kx - r - ring, cy - r - ring, kx + r + ring, cy + r + ring, AMBER, 1);
-        pill(kx - r, cy - r, kx + r, cy + r, WHITE_TOP, 1);
-        text(ITEM, vpx, it.value, vx1 - U(14), text_y, 2, vs);
-        if (sel) {
-            triangle(x0 - U(18), cy, U(16), -1, GOLD_BOTTOM, 1);
-            triangle(vx1 + U(2), cy, U(16), +1, GOLD_BOTTOM, 1);
-        }
-        break;
-    }
-    case CHOICE: {
-        text(ITEM, vpx, it.value, vcx, text_y - U(8), 1, vs);
-        float a = sel ? 1.0f : 0.7f;
-        triangle(vx0 + U(14), cy - U(4), U(18), -1, GOLD_BOTTOM, a);
-        triangle(vx1 - U(14), cy - U(4), U(18), +1, GOLD_BOTTOM, a);
-        int n = it.levels ? it.count - 1 : it.count;   // levels: a dot per step above OFF
-        int pw = U(22), gap = U(6), ph = std::max(2, U(4));
-        int px0 = vcx - (n * pw + (n - 1) * gap) / 2, py = cy + U(20);
-        for (int k = 0; k < n; k++) {
-            bool lit = it.levels ? k < it.pos : k == it.pos;
-            fill(px0 + k * (pw + gap), py, px0 + k * (pw + gap) + pw, py + ph, lit ? AMBER : 0x4A473D, 1);
-        }
-        break;
-    }
-    case BUTTON: {
-        int bw = std::min(vx1 - vx0, extent(ITEM, U(22), it.value) + U(40)), bh = U(38);
-        int x0 = vcx - bw / 2, y0 = cy - bh / 2;
-        fill(x0, y0, x0 + bw, y0 + bh, sel ? AMBER : 0x2A2B25, sel ? 0.9f : 1.0f);
-        frame(x0, y0, x0 + bw, y0 + bh, std::max(1, U(1.5f)), AMBER, sel ? 1.0f : 0.6f);
-        text(ITEM, U(22), it.value, vcx, cy - U(13), 1, sel ? Style{0x1A1205, 0x1A1205} : Style{HINT, HINT});
-        break;
-    }
-    default: text(ITEM, vpx, it.value, vcx, text_y, 1, vs); break;
-    }
+    return x1 - text(ITEM, item_px, it.value, x1, y, 2, vs);
 }
 
 // Main, Play, Boss and Survival on the backdrop, and Pause (or the boss list)
@@ -2253,157 +2215,171 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
     if (back_what) back_rect_ = prompt(x, py, L"B", L"ESC", back_what);
 }
 
-// Options and Records: the categories down the left, the rows in the middle and
-// a panel at the right about the selected row (its picture, what it does, its default)
+// Options and Records as in Star Wars Trilogy and Sega Rally 2: a card in the
+// middle with the title, the tab row, a row per option (its name at the left,
+// its value at the right) and BACK, the description of the chosen row under
+// them and the key help at the bottom. Beside the card, when there is room, a
+// picture of what the chosen option does (the crosshairs for their rows)
 void Frontend::draw_options(bool over_game, const std::vector<Item>& list) {
     auto U = [&](float v) { return int(v * u_ + 0.5f); };
-    int w = w_, h = h_;
+    int w = w_, h = h_, cx = w / 2;
     bool rec_page = screen_ == Screen::Records;
-    fill(0, 0, w, h, 0x000000, over_game ? 0.72f : 0.35f);
-    bool wide = w / u_ >= 1800;   // 16:9 and wider; 4:3 gets narrower columns
-    int margin = U(wide ? 70.0f : 50.0f);
-    int rail0 = margin, rail1 = rail0 + U(wide ? 300.0f : 260.0f);
-    int side1 = w - margin, side0 = side1 - U(wide ? 600.0f : 420.0f);
-    int list0 = rail1 + U(30), list1 = side0 - U(30);
-    int top = U(170), bottom = h - U(110);
-    text(display(), U(72), rec_page ? L"RECORDS" : over_game ? L"SETTINGS" : L"OPTIONS", margin + U(10), U(36), 0,
-         {GOLD_TOP, GOLD_BOTTOM, EDGE, U(4), 1, U(4)});
+    fill(0, 0, w, h, 0x000000, over_game ? 0.62f : 0.35f);   // the frozen game (or the backdrop) darker
+    int top = U(56), bottom = h - U(56), half = U(560);
+    fill(cx - half, top, cx + half, bottom, PANEL, over_game ? 0.92f : 0.8f);
+    band(cx, top - std::max(1, U(1)), top + std::max(2, U(2)), half, AMBER, 0.9f);   // a bright line at the top and bottom
+    band(cx, bottom - std::max(2, U(2)), bottom + std::max(1, U(1)), half, AMBER, 0.9f);
+    text(display(), U(88), rec_page ? L"RECORDS" : over_game ? L"SETTINGS" : L"OPTIONS", cx, top + U(26), 1,
+         {GOLD_TOP, GOLD_BOTTOM, EDGE, U(5), 1, U(5)});
 
-    // Categories (the TABS entry); Left / Right on it, Q / E or L1 / R1 anywhere change them
-    int cat_h = U(64), cat_y = top + U(20);
-    bool rail_focus = selected_ == 0;
-    tab_rects_.clear();
-    for (int t = 0; t < tab_count(); t++) {
-        int y = cat_y + t * cat_h;
-        bool open_tab = t == tab_;
-        if (open_tab) {
-            hgrad(rail0, y, rail1, y + cat_h, AMBER, rail_focus ? 0.42f : 0.25f, 0.0f);
-            fill(rail0, y, rail0 + std::max(3, U(5)), y + cat_h, AMBER, 1);
-            if (rail_focus) frame(rail0, y, rail1, y + cat_h, std::max(1, U(1.5f)), AMBER, 0.6f);
-        }
-        const Style cs = open_tab ? Style{WHITE_TOP, WHITE_BOTTOM, INK, U(2)} : Style{0xA9A390, 0x8F8978, INK, U(2), 0.95f};
-        text(TITLE, U(30), tab_name(t), rail0 + U(26), y + cat_h / 2 - U(17), 0, cs);
-        tab_rects_.push_back({rail0, y, rail1, y + cat_h});
-    }
-    hit_.push_back({rail0, cat_y, rail1, cat_y + tab_count() * cat_h});
-    values_.push_back({-1, 0});
-    {
-        int x = rail0 + U(14), y = cat_y + tab_count() * cat_h + U(26);
-        prompt(x, y, L"LB", L"Q", L"");
-        prompt(x, y, L"RB", L"E", L"CATEGORY");
-    }
-
+    const Style gold{GOLD_TOP, GOLD_BOTTOM, EDGE, U(3)};
+    const Style pale{PALE_TOP, PALE_BOTTOM, INK, U(2), 0.95f};
+    const Style dim{DIM, DIM, INK, U(2), 0.9f};
+    int spacing = U(48), item_px = U(40), row_px = U(31), half_w = U(470);   // row_px: the options, in the plain font
+    int left = cx - U(410), right = cx + U(410);   // the rows' names and values, symmetric about the middle
+    int tabs_y = top + U(150), rows_y = tabs_y + spacing + U(20);
+    int foot_y = bottom - U(52);   // the key help's middle
+    // As many option rows as leave room for BACK and two lines of description
+    int rows_room = foot_y - U(150) - item_px - rows_y;
     int n_opts = int(list.size()) - 2;
-    if (rec_page) {
-        int row_h = U(78);
-        visible_records_ = std::max(3, (bottom - top - U(30)) / row_h);
-        draw_records(list0 + U(22), list1 - U(22), top + U(30), row_h);
-    } else {
-        int row_h = U(58), y_rows = top + U(20);
-        visible_opts_ = std::max(3, (bottom - y_rows) / row_h);
-        int shown = std::min(n_opts, visible_opts_);
+    visible_opts_ = std::clamp(rows_room / spacing, 3, 14);
+    int shown = rec_page ? 0 : std::min(n_opts, visible_opts_);
+    if (!rec_page) {   // keep the chosen option in view
         scroll_ = std::clamp(scroll_, 0, std::max(0, n_opts - shown));
-        int k = selected_ - 1;   // keep the selected option in view
+        int k = selected_ - 1;
         if (k >= 0 && k < n_opts) {
             if (k < scroll_) scroll_ = k;
             if (k >= scroll_ + shown) scroll_ = k - shown + 1;
         }
-        int vw = U(wide ? 300.0f : 250.0f);
-        for (int i = 1; i <= n_opts; i++) {
-            int slot = i - 1 - scroll_;
-            if (slot < 0 || slot >= shown) {   // scrolled out of view: no hit area
-                hit_.push_back(RECT{});
-                values_.push_back({-1, 0});
-                continue;
-            }
-            const Item& it = list[i];
-            bool sel = i == selected_;
-            int y = y_rows + slot * row_h;
-            if (sel) {
-                hgrad(list0, y, list1, y + row_h, AMBER, it.enabled ? 0.30f : 0.15f, it.enabled ? 0.12f : 0.06f);
-                frame(list0, y, list1, y + row_h, std::max(1, U(1.5f)), AMBER, 0.6f);
-            } else {
-                fill(list0 + U(10), y + row_h - std::max(1, U(1)), list1 - U(10), y + row_h, 0xFFFFFF, 0.06f);
-            }
-            const Style ls = !it.enabled ? Style{DIM, DIM, INK, U(2), 0.9f}
-                             : sel       ? Style{WHITE_TOP, WHITE_BOTTOM, INK, U(2)}
-                                         : Style{PALE_TOP, PALE_BOTTOM, INK, U(2), 0.95f};
-            text(ITEM, U(29), it.label, list0 + U(22), y + row_h / 2 - U(16), 0, ls);
-            int vx1 = list1 - U(22), vx0 = vx1 - vw;
-            draw_value(it, sel, vx0, vx1, y, row_h);
-            hit_.push_back({list0, y, list1, y + row_h});
-            values_.push_back({vx0, (vx0 + vx1) / 2});
+    }
+    int back_y = rows_y + (rec_page ? visible_opts_ : shown) * spacing + U(8);
+    if (rec_page) {   // the records fill the rows of the options
+        int row_h = U(74);
+        visible_records_ = std::max(3, (back_y - rows_y - U(10)) / row_h);
+        draw_records(left, right - U(10), rows_y, row_h);
+    }
+
+    // The tab row: the names side by side, the open one underlined
+    {
+        bool sel = selected_ == 0;
+        int y = tabs_y;
+        if (sel) band(cx, y - U(8), y + item_px + U(14), half_w, AMBER, 0.22f);
+        int gap = U(44), total = 0, tab_px = item_px * 17 / 20;
+        for (int t = 0; t < tab_count(); t++) total += measure(display(), tab_px, tab_name(t)) + gap;
+        if (total - gap > 2 * half_w - U(80)) {   // more than fit: smaller names
+            tab_px = tab_px * (2 * half_w - U(80)) / (total - gap);
+            gap = gap * (2 * half_w - U(80)) / (total - gap);
+            total = 0;
+            for (int t = 0; t < tab_count(); t++) total += measure(display(), tab_px, tab_name(t)) + gap;
         }
-        if (scroll_ > 0) {   // more rows above / below: arrows past the right edge, clickable
-            triangle(list1 + U(15), y_rows + U(12), U(18), -2, GOLD_BOTTOM, 1);
-            more_up_ = {list1, y_rows - U(10), list1 + U(30), y_rows + U(34)};
+        int x = cx - (total - gap) / 2;
+        tab_rects_.clear();
+        for (int t = 0; t < tab_count(); t++) {
+            bool open_tab = t == tab_;
+            const Style ts = open_tab ? gold : Style{0xA9A390, 0x8F8978, INK, U(2), 0.95f};
+            int ty0 = y + (item_px - tab_px) / 2;
+            int tw = text(display(), tab_px, tab_name(t), x, ty0, 0, ts);
+            if (open_tab) fill(x, ty0 + tab_px + U(6), x + tw, ty0 + tab_px + U(6) + std::max(2, U(4)), GOLD_BOTTOM, 1);
+            tab_rects_.push_back({x - gap / 2, y - U(8), x + tw + gap / 2, y + item_px + U(14)});
+            x += tw + gap;
         }
-        if (scroll_ + shown < n_opts) {
-            int yb = y_rows + shown * row_h - U(12);
-            triangle(list1 + U(15), yb, U(18), 2, GOLD_BOTTOM, 1);
-            more_down_ = {list1, yb - U(22), list1 + U(30), yb + U(10)};
+        if (sel) {
+            int ty = y + item_px * 6 / 10;
+            triangle(tab_rects_.front().left - U(10), ty, U(18), -1, GOLD_BOTTOM, 1);
+            triangle(tab_rects_.back().right + U(10), ty, U(18), +1, GOLD_BOTTOM, 1);
+        }
+        hit_.push_back({cx - half_w, y - U(8), cx + half_w, y + item_px + U(14)});
+        values_.push_back({-1, 0});
+    }
+
+    // The options of the open tab
+    for (int i = 1; i <= n_opts; i++) {
+        int slot = i - 1 - scroll_;
+        if (rec_page || slot < 0 || slot >= shown) {   // scrolled out of view: no hit area
+            hit_.push_back(RECT{});
+            values_.push_back({-1, 0});
+            continue;
+        }
+        const Item& it = list[i];
+        bool sel = i == selected_;
+        int y = rows_y + slot * spacing;
+        if (sel) band(cx, y - U(8), y + row_px + U(10), half_w, AMBER, it.enabled ? 0.22f : 0.10f);
+        text(ITEM, row_px, it.label, left, y, 0, !it.enabled ? dim : sel ? gold : pale);
+        int vx0 = draw_value(it, sel, right, y, row_px);
+        int ty = y + row_px * 6 / 10;
+        if (sel && it.enabled && it.kind != BUTTON) {
+            triangle(vx0 - U(24), ty, U(18), -1, GOLD_BOTTOM, 1);
+            triangle(right + U(24), ty, U(18), +1, GOLD_BOTTOM, 1);
+        }
+        hit_.push_back({cx - half_w, y - (spacing - row_px) / 2, cx + half_w, y + row_px + (spacing - row_px) / 2});
+        values_.push_back({it.kind == BUTTON ? -1 : vx0 - U(48), (vx0 + right) / 2});
+        if (slot == 0 && scroll_ > 0) {   // more rows above / below: arrows at the right edge, clickable
+            triangle(cx + half_w + U(16), y - U(4), U(20), -2, GOLD_BOTTOM, 1);
+            more_up_ = {cx + half_w - U(10), y - U(30), cx + half_w + U(44), y + U(16)};
+        }
+        if (slot == shown - 1 && scroll_ + shown < n_opts) {
+            triangle(cx + half_w + U(16), y + row_px + U(8), U(20), 2, GOLD_BOTTOM, 1);
+            more_down_ = {cx + half_w - U(10), y + row_px - U(8), cx + half_w + U(44), y + row_px + U(34)};
         }
     }
-    hit_.push_back(RECT{});   // BACK: its key help at the bottom (below)
-    values_.push_back({-1, 0});
 
-    // The panel about the selected row
-    fill(side0, top, side1, bottom, PANEL, 0.8f);
-    frame(side0, top, side1, bottom, std::max(1, U(1.5f)), AMBER, 0.28f);
-    int px0 = side0 + U(28), px1 = side1 - U(28), y = top + U(24);
+    // BACK, centred under them
+    {
+        const Item& it = list.back();
+        bool sel = selected_ == int(list.size()) - 1;
+        if (sel) band(cx, back_y - U(8), back_y + item_px + U(14), half_w, AMBER, 0.22f);
+        int tw = text(display(), item_px, it.label, cx, back_y, 1, sel ? gold : pale);
+        if (sel) {
+            int ty = back_y + item_px * 6 / 10;
+            triangle(cx - tw / 2 - U(34), ty, U(20), +1, GOLD_BOTTOM, 1);
+            triangle(cx + tw / 2 + U(34), ty, U(20), -1, GOLD_BOTTOM, 1);
+        }
+        hit_.push_back({cx - half_w, back_y - U(8), cx + half_w, back_y + item_px + U(14)});
+        values_.push_back({-1, 0});
+    }
+
+    // The description of the chosen row, centred under BACK (two lines at most)
     const Item* cur = selected_ < int(list.size()) ? &list[selected_] : nullptr;
-    bool option = cur && cur->id >= OPT_DISPLAY;
-    std::wstring title = option ? cur->label : cur && cur->id == BACK ? cur->label : std::wstring(tab_name(tab_));
-    text(TITLE, U(40), title, px0, y, 0, {WHITE_TOP, WHITE_BOTTOM, INK, U(2)});
-    y += U(70);
-    bool crosshair_row = option && (cur->id == OPT_CROSS || cur->id == OPT_CROSS_STYLE || cur->id == OPT_CROSS_P1 ||
-                                    cur->id == OPT_CROSS_P2);
-    if (crosshair_row) {
-        int ph = (px1 - px0) * 9 / 16;
-        crosshair_preview(px0, y, px1, y + ph);
-        frame(px0, y, px1, y + ph, std::max(1, U(1)), 0x3A3A34, 1);
-        y += ph + U(22);
-    } else if (option) {
-        const Picture& pic = preview(cur->id);
-        if (pic.w > 0) {
-            int ph = (px1 - px0) * 9 / 16;
-            picture(pic, px0, y, px1, y + ph);
-            frame(px0, y, px1, y + ph, std::max(1, U(1)), 0x3A3A34, 1);
-            y += ph + U(22);
+    if (cur) {
+        auto lines = wrap(BODY, U(24), cur->hint, U(1040));
+        if (lines.size() > 2) lines.resize(2);
+        int ly = back_y + item_px + U(34);
+        for (const std::wstring& line : lines) {
+            text(BODY, U(24), line, cx, ly, 1, {HINT, HINT});
+            ly += U(32);
         }
-    }
-    if (cur)
-        for (const std::wstring& line : wrap(BODY, U(23), rec_page && cur->id == TABS ? list[0].hint : cur->hint,
-                                             px1 - px0)) {
-            text(BODY, U(23), line, px0, y, 0, {0xD8D1BD, 0xD8D1BD});
-            y += U(34);
-        }
-    if (option && cur->enabled && cur->id != OPT_DISPLAY && cur->kind != BUTTON) {   // its default and when it takes effect
-        y += U(18);
-        const std::wstring& def = default_value(cur->id);
-        auto meta = [&](const wchar_t* label, const std::wstring& value) {
-            text(ITEM, U(21), label, px0, y, 0, {FOOT, FOOT});
-            text(ITEM, U(21), value, px0 + U(130), y, 0, {PALE_TOP, PALE_BOTTOM});
-            y += U(36);
-        };
-        meta(L"DEFAULT", def);
-        meta(L"APPLIES", cur->id == OPT_AA ? L"NEXT START" : L"AT ONCE");
     }
 
-    // Key help
-    vgrad(0, h - U(120), w, h, 0x000000, 0.0f, 0.85f);
-    int x = U(80), py = h - U(64);
-    if (rec_page) {
-        prompt(x, py, L"LB", L"Q", L"");
-        prompt(x, py, L"RB", L"E", L"TAB");
-    } else {
-        prompt(x, py, L"A", L"<>", L"CHANGE");
-        reset_rect_ = prompt(x, py, L"Y", L"R", L"RESET TO DEFAULTS");
+    // Beside the card: what the chosen option does, or the crosshairs
+    bool option = cur && cur->id >= OPT_DISPLAY;
+    int side0 = cx + half + U(28), side1 = std::min(w - U(28), side0 + U(440));
+    if (option && side1 - side0 >= U(240)) {
+        int ph = (side1 - side0) * 9 / 16, py = rows_y;
+        bool crosshair_row = cur->id == OPT_CROSS || cur->id == OPT_CROSS_STYLE || cur->id == OPT_CROSS_P1 ||
+                             cur->id == OPT_CROSS_P2;
+        const Picture& pic = preview(cur->id);
+        if (crosshair_row || pic.w > 0) {
+            fill(side0 - U(6), py - U(6), side1 + U(6), py + ph + U(6), PANEL, 0.85f);
+            if (crosshair_row) crosshair_preview(side0, py, side1, py + ph);
+            else picture(pic, side0, py, side1, py + ph);
+            frame(side0, py, side1, py + ph, std::max(1, U(1.5f)), AMBER, 0.45f);
+        }
     }
-    back_rect_ = prompt(x, py, L"B", L"ESC", L"BACK");
-    hit_.back() = {back_rect_.left - U(8), back_rect_.top - U(8), back_rect_.right + U(8), back_rect_.bottom + U(8)};
-    if (selected_ == int(list.size()) - 1) frame(hit_.back().left, hit_.back().top, hit_.back().right,
-                                                 hit_.back().bottom, std::max(1, U(2)), AMBER, 0.9f);
+
+    // The key help, centred at the bottom of the card
+    struct Key { const wchar_t *pad, *key, *what; };
+    std::vector<Key> keys;
+    if (rec_page) keys = {{L"LS", L"UD", L"SCROLL"}, {L"LB", L"Q", L""}, {L"RB", L"E", L"TAB"}, {L"B", L"ESC", L"BACK"}};
+    else keys = {{L"LS", L"<>", L"CHANGE"}, {L"LB", L"Q", L""}, {L"RB", L"E", L"TAB"}, {L"Y", L"R", L"RESET TO DEFAULTS"},
+                 {L"B", L"ESC", L"BACK"}};
+    int total = 0;
+    for (const Key& k : keys) total += prompt_width(k.pad, k.key, k.what);
+    int x = cx - (total - U(44)) / 2, py = foot_y - U(19);
+    for (const Key& k : keys) {
+        RECT r = prompt(x, py, k.pad, k.key, k.what);
+        if (k.what == std::wstring(L"RESET TO DEFAULTS")) reset_rect_ = r;
+        if (k.what == std::wstring(L"BACK")) back_rect_ = r;
+    }
 }
 
 // Both players' crosshairs at the size the game draws them (pictures at their

@@ -1,8 +1,8 @@
 // PC front end: main menu (Play, Options, Quit) shown at launch instead of
 // the arcade attract loop, and the pause menu Esc opens during the game.
 // Menus are a column of entries at the left (the logo or the screen's title
-// above); the settings and the records have their categories down the left,
-// the rows in the middle and a panel about the selected row at the right.
+// above); the settings and the records are a card in the middle (the tab row,
+// a row per option, the description under them), as in the other ports.
 //
 // Drawn on the CPU into a full-window BGRA picture (premultiplied alpha) with
 // the OFL fonts in third_party/fonts and the game's yellow-to-orange letter
@@ -191,7 +191,7 @@ private:
     // The screens: the column of entries, and the settings / records page
     void draw_menu(bool over_game, const std::vector<Item>& list);
     void draw_options(bool over_game, const std::vector<Item>& list);
-    void draw_value(const Item& it, bool sel, int vx0, int vx1, int y, int row_h);
+    int draw_value(const Item& it, bool sel, int x1, int y, int item_px);   // where the value starts
     void draw_gun_test(bool over_game);
     int gun_step_ = 0;   // GUN TEST: 0 watching, 1 waiting for player 1's gun to fire, 2 for player 2's
     int gun_player(const GunView& g, bool& picked) const;   // whose gun it is, and whether GUN TEST picked it
@@ -257,8 +257,8 @@ private:
     std::vector<Item> defaults_;   // option_items(FrontendSettings{}), made once (again if rt_available changes)
     bool defaults_rt_ = false;
     // Settings tabs (setting_table says where each option goes)
-    enum { DISPLAY_TAB, LIGHTING_TAB, ATMOSPHERE_TAB, AUDIO_TAB, CONTROLS_TAB, GAME_TAB };
-    static constexpr int TAB_COUNT = 6;
+    enum { DISPLAY_TAB, LIGHTING_TAB, AUDIO_TAB, CONTROLS_TAB, GAME_TAB };   // LIGHTING_TAB is shown as GRAPHICS
+    static constexpr int TAB_COUNT = 5;
     static const wchar_t* const TAB_NAMES[TAB_COUNT];
     void set_tab(int t);
     int tab_ = 0;   // open tab of the settings, or of the records
@@ -277,7 +277,7 @@ private:
     int record_scroll_ = 0;
     void scroll_records(int by);
     void draw_records(int x0, int x1, int y0, int row_h);
-    // A settings tab shows as many options as fit the window; the rest scroll
+    // A settings tab shows as many options as fit the card; the rest scroll
     int visible_opts_ = 12;
     int scroll_ = 0;           // first option shown
     RECT more_up_{}, more_down_{};   // clickable "more" arrows of a scrolled tab

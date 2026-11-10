@@ -293,7 +293,7 @@ saved games and are not versioned.
   models the game adds in the distance as you advance fade in from
   the 2D background over half a second instead of popping in. N is the intensity
   (default 1; --no-haze removes it).
-- --rt off|shadows|ao (RAY TRACING in the settings, LIGHTING tab: OFF,
+- --rt off|shadows|ao (RAY TRACING in the settings, GRAPHICS tab: OFF,
   SHADOWS, SHADOWS + AO; --no-rt is --rt off): on a GPU with ray tracing
   (Vulkan ray queries: NVIDIA RTX, AMD RX 6000 or newer) the sun shadows and
   the ambient occlusion are traced by default. The opaque game world (a few
@@ -486,7 +486,7 @@ horizon come from the original image. With ORIGINAL the game's image is used
 (or its replacement from textures/sky).
 
 Where the game has rain (the T-Rex forest: a few dozen white
-streaks), the RAIN setting in ATMOSPHERE (--rain off|light|heavy, HEAVY by
+streaks), the RAIN setting in GRAPHICS (--rain off|light|heavy, HEAVY by
 default) replaces it with dense rain: thin drops anchored to the world in three
 distance layers, slanted by the wind (the direction of the game's
 streaks) and by the camera's motion, occluded by whatever is in front of them and
