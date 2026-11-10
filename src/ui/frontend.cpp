@@ -1987,7 +1987,7 @@ int Frontend::draw_value(const Item& it, bool sel, int x1, int y, int item_px) {
     auto U = [&](float v) { return int(v * u_ + 0.5f); };
     int cy = y + item_px * 6 / 10;
     if (it.id == OPT_VOLUME && it.enabled) {
-        int seg_w = U(20), gap = U(6), seg_h = U(26);
+        int seg_w = U(18), gap = U(5), seg_h = U(22);
         int x0 = x1 - 10 * seg_w - 9 * gap;
         int lit_n = int(it.frac * 10 + 0.5f);
         for (int s = 0; s < 10; s++) {
@@ -2235,7 +2235,7 @@ void Frontend::draw_options(bool over_game, const std::vector<Item>& list) {
     const Style gold{GOLD_TOP, GOLD_BOTTOM, EDGE, U(3)};
     const Style pale{PALE_TOP, PALE_BOTTOM, INK, U(2), 0.95f};
     const Style dim{DIM, DIM, INK, U(2), 0.9f};
-    int spacing = U(54), item_px = U(40), half_w = U(470);
+    int spacing = U(48), item_px = U(40), row_px = U(31), half_w = U(470);   // row_px: the options, in the plain font
     int left = cx - U(410), right = cx + U(410);   // the rows' names and values, symmetric about the middle
     int tabs_y = top + U(150), rows_y = tabs_y + spacing + U(20);
     int foot_y = bottom - U(52);   // the key help's middle
@@ -2252,7 +2252,7 @@ void Frontend::draw_options(bool over_game, const std::vector<Item>& list) {
             if (k >= scroll_ + shown) scroll_ = k - shown + 1;
         }
     }
-    int back_y = rows_y + (rec_page ? visible_opts_ : shown) * spacing;
+    int back_y = rows_y + (rec_page ? visible_opts_ : shown) * spacing + U(8);
     if (rec_page) {   // the records fill the rows of the options
         int row_h = U(74);
         visible_records_ = std::max(3, (back_y - rows_y - U(10)) / row_h);
@@ -2303,25 +2303,23 @@ void Frontend::draw_options(bool over_game, const std::vector<Item>& list) {
         const Item& it = list[i];
         bool sel = i == selected_;
         int y = rows_y + slot * spacing;
-        if (sel) band(cx, y - U(8), y + item_px + U(14), half_w, AMBER, it.enabled ? 0.22f : 0.10f);
-        // The Jurassic Park font has no digits: a name with one (PLAYER 1 PICTURE) in the other titles' font
-        bool digits = it.label.find_first_of(L"0123456789") != std::wstring::npos;
-        text(digits ? TITLE : display(), item_px, it.label, left, y, 0, !it.enabled ? dim : sel ? gold : pale);
-        int vx0 = draw_value(it, sel, right, y, item_px);
-        int ty = y + item_px * 6 / 10;
+        if (sel) band(cx, y - U(8), y + row_px + U(10), half_w, AMBER, it.enabled ? 0.22f : 0.10f);
+        text(ITEM, row_px, it.label, left, y, 0, !it.enabled ? dim : sel ? gold : pale);
+        int vx0 = draw_value(it, sel, right, y, row_px);
+        int ty = y + row_px * 6 / 10;
         if (sel && it.enabled && it.kind != BUTTON) {
             triangle(vx0 - U(24), ty, U(18), -1, GOLD_BOTTOM, 1);
             triangle(right + U(24), ty, U(18), +1, GOLD_BOTTOM, 1);
         }
-        hit_.push_back({cx - half_w, y - (spacing - item_px) / 2, cx + half_w, y + item_px + (spacing - item_px) / 2});
+        hit_.push_back({cx - half_w, y - (spacing - row_px) / 2, cx + half_w, y + row_px + (spacing - row_px) / 2});
         values_.push_back({it.kind == BUTTON ? -1 : vx0 - U(48), (vx0 + right) / 2});
         if (slot == 0 && scroll_ > 0) {   // more rows above / below: arrows at the right edge, clickable
             triangle(cx + half_w + U(16), y - U(4), U(20), -2, GOLD_BOTTOM, 1);
             more_up_ = {cx + half_w - U(10), y - U(30), cx + half_w + U(44), y + U(16)};
         }
         if (slot == shown - 1 && scroll_ + shown < n_opts) {
-            triangle(cx + half_w + U(16), y + item_px + U(8), U(20), 2, GOLD_BOTTOM, 1);
-            more_down_ = {cx + half_w - U(10), y + item_px - U(8), cx + half_w + U(44), y + item_px + U(34)};
+            triangle(cx + half_w + U(16), y + row_px + U(8), U(20), 2, GOLD_BOTTOM, 1);
+            more_down_ = {cx + half_w - U(10), y + row_px - U(8), cx + half_w + U(44), y + row_px + U(34)};
         }
     }
 
