@@ -2134,34 +2134,89 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
                  {0xE8D8B0, 0xC8B080, EDGE, U(2)});
     }
 
-    // The entries share what is left of the height, the description under them
+    // The entries share what is left of the height; the description of the
+    // chosen one opens right under it and the entries below make room
     int n = int(list.size());
-    int spacing = std::clamp((h - U(190) - y0) / std::max(1, n), U(46), U(86));
+    int desc_line = U(30), desc_pad = U(14);
+    int desc_room = 3 * desc_line + desc_pad;   // up to three lines without squeezing the entries
+    int spacing = std::clamp((h - U(190) - y0 - desc_room) / std::max(1, n), U(46), U(86));
     int item_px = std::min(U(60), spacing * 72 / 100);
+    int desc_w = col_w - U(20);
+
+    // Animation: each description eases open or shut, the band glides to the
+    // chosen entry.  A new screen (or a new list) starts settled
+    double now = now_seconds();
+    bool snap = anim_screen_ != screen_ || int(desc_open_.size()) != n || anim_last_ < 0 || now - anim_last_ > 0.25;
+    float dt = snap ? 0.0f : float(now - anim_last_);
+    anim_last_ = now, anim_screen_ = screen_;
+    desc_open_.resize(size_t(n), 0.0f);
+    float ease = 1.0f - std::exp(-dt * 16.0f);
+    for (int i = 0; i < n; i++) {
+        float target = i == selected_ && !coffee_focus_ ? 1.0f : 0.0f;
+        float& o = desc_open_[size_t(i)];
+        o = snap ? target : o + (target - o) * ease;
+        if (std::fabs(target - o) < 0.003f) o = target;
+        else animating_ = true;
+    }
+    std::vector<std::vector<std::wstring>> desc(static_cast<size_t>(n));
+    std::vector<int> row_y(static_cast<size_t>(n));
     int y = y0;
+    for (int i = 0; i < n; i++) {
+        row_y[size_t(i)] = y;
+        y += spacing;
+        if (desc_open_[size_t(i)] > 0.0f && !list[size_t(i)].hint.empty()) {
+            desc[size_t(i)] = wrap(BODY, U(23), list[size_t(i)].hint, desc_w);
+            float o = desc_open_[size_t(i)], k = o * o * (3.0f - 2.0f * o);   // smoothstep
+            y += int(k * float(int(desc[size_t(i)].size()) * desc_line + desc_pad) + 0.5f);
+        }
+    }
+    int y_end = y;
+
+    // The highlight band, gliding from the last entry to the chosen one
+    if (selected_ < n && !coffee_focus_) {
+        float target = float(row_y[size_t(selected_)]);
+        band_y_ = snap || band_y_ < 0 ? target : band_y_ + (target - band_y_) * (1.0f - std::exp(-dt * 20.0f));
+        if (std::fabs(target - band_y_) < 0.5f) band_y_ = target;
+        else animating_ = true;
+        int by = int(band_y_ + 0.5f);
+        bool en = list[size_t(selected_)].enabled;
+        float a = en ? 0.34f : 0.16f;
+        hgrad(band0, by, band1, by + spacing, AMBER, right ? 0.0f : a, right ? a : 0.0f);
+        int edge = std::max(3, U(8));
+        fill(right ? w - edge : 0, by, right ? w : edge, by + spacing, AMBER, en ? 1.0f : 0.5f);
+    } else band_y_ = -1;
+
     for (int i = 0; i < n; i++) {
         const Item& it = list[i];
         bool sel = i == selected_ && !coffee_focus_;
-        if (sel) {
-            float a = it.enabled ? 0.34f : 0.16f;
-            hgrad(band0, y, band1, y + spacing, AMBER, right ? 0.0f : a, right ? a : 0.0f);
-            int edge = std::max(3, U(8));
-            fill(right ? w - edge : 0, y, right ? w : edge, y + spacing, AMBER, it.enabled ? 1.0f : 0.5f);
-        }
+        int ry = row_y[size_t(i)];
         const Style st = !it.enabled ? Style{DIM, DIM, INK, U(2), 0.9f, U(3)}
                          : sel       ? Style{WHITE_TOP, WHITE_BOTTOM, INK, U(2), 1, U(3)}
                                      : Style{PALE_TOP, PALE_BOTTOM, INK, U(2), 0.95f, U(3)};
-        int ty = y + spacing / 2 - item_px * 55 / 100;
+        int ty = ry + spacing / 2 - item_px * 55 / 100;
         text(TITLE, item_px, it.label, tx, ty, talign, st);
         if (!it.value.empty())   // e.g. the stage of a boss, "NOT READY" or a record
             text(ITEM, U(24), it.value, right ? tx - measure(TITLE, item_px, it.label) - U(30) : left + col_w - U(60),
-                 y + spacing / 2 - U(14), 2, {0xF4D27A, 0xE0A848});
-        hit_.push_back({band0, y, band1, y + spacing});
+                 ry + spacing / 2 - U(14), 2, {0xF4D27A, 0xE0A848});
+        hit_.push_back({band0, ry, band1, ry + spacing});
         values_.push_back({-1, 0});
-        y += spacing;
+        // Its description: fading in as it opens, sliding down a little; the
+        // lines that do not fit the opening yet are left out
+        float o = desc_open_[size_t(i)];
+        if (o > 0.02f && !desc[size_t(i)].empty()) {
+            float fade = sel ? o * o : o * o * o;   // a closing one goes quicker
+            int room = (i + 1 < n ? row_y[size_t(i) + 1] : y_end) - (ry + spacing);
+            int dy = ry + spacing + U(2) - int((1.0f - o) * U(10));
+            for (const std::wstring& line : desc[size_t(i)]) {
+                if (dy + desc_line - (ry + spacing) > room + U(6)) break;
+                text(BODY, U(23), line, tx, dy, talign, {0xE8C890, 0xE8C890, 0, 0, fade});
+                dy += desc_line;
+            }
+        }
     }
-    if (selected_ < n)
-        for (const std::wstring& line : wrap(BODY, U(23), coffee_focus_ ? COFFEE_HINT : list[selected_].hint, col_w - U(20))) {
+    y = y_end;
+    if (coffee_focus_)   // the donation link at the top: its description under the entries
+        for (const std::wstring& line : wrap(BODY, U(23), COFFEE_HINT, desc_w)) {
             y += U(32);
             text(BODY, U(23), line, tx, y - U(16), talign, {0xE8C890, 0xE8C890});
         }
@@ -2471,7 +2526,8 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
     else draw_menu(over_game, list);
     if (locked_notice_ && screen_ == Screen::Survival) draw_locked_notice();
     if (news_open_ && screen_ == Screen::Main) draw_news();
-    dirty_ = false;
+    dirty_ = animating_ && !page && screen_ != Screen::GunTest;   // still moving: again next refresh
+    animating_ = false;
     return true;
 }
 

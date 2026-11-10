@@ -241,6 +241,14 @@ private:
     bool boss_over_game_ = false;
     int selected_ = 0, hovered_ = -1;
     bool dirty_ = true;
+    // Menu animation: the description opening under the chosen entry (0..1
+    // for each entry) and the highlight band gliding to it; while either
+    // moves the menu is drawn again every refresh
+    std::vector<float> desc_open_;
+    float band_y_ = -1;
+    double anim_last_ = -1;
+    Screen anim_screen_ = Screen::None;
+    bool animating_ = false;
     std::vector<Action> actions_;
     std::vector<RECT> hit_;   // item rectangles of the last draw
     struct ValueArea { int left, middle; };   // option rows: value column (left < 0: none)
