@@ -13,6 +13,11 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[6] 2026-11-11
+- Menus: each entry's description now opens right under it
+- New OPTIONS screen, same style as the other ports
+- LIGHTING and ATMOSPHERE are now one GRAPHICS tab
+
 [5] 2026-11-10
 - The build now looks for Python 3.10 or later on its own, so an older Python in PATH no longer breaks it
 
