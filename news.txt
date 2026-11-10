@@ -13,6 +13,9 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[5] 2026-11-10
+- The build now looks for Python 3.10 or later on its own, so an older Python in PATH no longer breaks it
+
 [4] 2026-11-09
 - Fixed: clearing a stage in CLASSIC no longer sends you back to the main menu
 
