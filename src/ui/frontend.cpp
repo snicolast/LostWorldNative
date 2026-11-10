@@ -2235,12 +2235,12 @@ void Frontend::draw_options(bool over_game, const std::vector<Item>& list) {
     const Style gold{GOLD_TOP, GOLD_BOTTOM, EDGE, U(3)};
     const Style pale{PALE_TOP, PALE_BOTTOM, INK, U(2), 0.95f};
     const Style dim{DIM, DIM, INK, U(2), 0.9f};
-    int spacing = U(56), item_px = U(40), half_w = U(470);
+    int spacing = U(54), item_px = U(40), half_w = U(470);
     int left = cx - U(410), right = cx + U(410);   // the rows' names and values, symmetric about the middle
     int tabs_y = top + U(150), rows_y = tabs_y + spacing + U(20);
     int foot_y = bottom - U(52);   // the key help's middle
-    // As many option rows as leave room for BACK and three lines of description
-    int rows_room = foot_y - U(190) - item_px - rows_y;
+    // As many option rows as leave room for BACK and two lines of description
+    int rows_room = foot_y - U(150) - item_px - rows_y;
     int n_opts = int(list.size()) - 2;
     visible_opts_ = std::clamp(rows_room / spacing, 3, 14);
     int shown = rec_page ? 0 : std::min(n_opts, visible_opts_);
@@ -2304,7 +2304,9 @@ void Frontend::draw_options(bool over_game, const std::vector<Item>& list) {
         bool sel = i == selected_;
         int y = rows_y + slot * spacing;
         if (sel) band(cx, y - U(8), y + item_px + U(14), half_w, AMBER, it.enabled ? 0.22f : 0.10f);
-        text(display(), item_px, it.label, left, y, 0, !it.enabled ? dim : sel ? gold : pale);
+        // The Jurassic Park font has no digits: a name with one (PLAYER 1 PICTURE) in the other titles' font
+        bool digits = it.label.find_first_of(L"0123456789") != std::wstring::npos;
+        text(digits ? TITLE : display(), item_px, it.label, left, y, 0, !it.enabled ? dim : sel ? gold : pale);
         int vx0 = draw_value(it, sel, right, y, item_px);
         int ty = y + item_px * 6 / 10;
         if (sel && it.enabled && it.kind != BUTTON) {
@@ -2338,11 +2340,11 @@ void Frontend::draw_options(bool over_game, const std::vector<Item>& list) {
         values_.push_back({-1, 0});
     }
 
-    // The description of the chosen row, centred under BACK (three lines at most)
+    // The description of the chosen row, centred under BACK (two lines at most)
     const Item* cur = selected_ < int(list.size()) ? &list[selected_] : nullptr;
     if (cur) {
-        auto lines = wrap(BODY, U(24), cur->hint, U(1000));
-        if (lines.size() > 3) lines.resize(3);
+        auto lines = wrap(BODY, U(24), cur->hint, U(1040));
+        if (lines.size() > 2) lines.resize(2);
         int ly = back_y + item_px + U(34);
         for (const std::wstring& line : lines) {
             text(BODY, U(24), line, cx, ly, 1, {HINT, HINT});
