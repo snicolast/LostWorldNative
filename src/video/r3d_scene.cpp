@@ -7,6 +7,9 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#ifdef _WIN32
+#include <intrin.h>   // __popcnt: MSVC knows it without this, clang for Windows does not
+#endif
 
 namespace {
 

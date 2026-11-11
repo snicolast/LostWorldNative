@@ -6,6 +6,16 @@
 #include "nvsdk_ngx_helpers_vk.h"
 #include "nvsdk_ngx_vk.h"
 
+// Inside dlss_bridge.dll the log goes through the game (dlss_bridge.cpp)
+#ifdef DLSS_BRIDGE_BUILD
+void dlss_bridge_log(bool error, const char* format, ...);
+#define LOG_ERROR(...) dlss_bridge_log(true, __VA_ARGS__)
+#define LOG_INFO(...) dlss_bridge_log(false, __VA_ARGS__)
+#else
+#define LOG_ERROR(...) fprintf(stderr, __VA_ARGS__)
+#define LOG_INFO(...) printf(__VA_ARGS__)
+#endif
+
 namespace dlss {
 namespace {
 
@@ -69,7 +79,7 @@ bool Dlaa::init(VkInstance instance, VkPhysicalDevice gpu, VkDevice device) {
         kProjectId, NVSDK_NGX_ENGINE_TYPE_CUSTOM, kEngineVersion, d.dir.c_str(), instance, gpu, device,
         vkGetInstanceProcAddr, vkGetDeviceProcAddr, &d.common);
     if (NVSDK_NGX_FAILED(r)) {
-        fprintf(stderr, "[dlaa] NGX could not start (0x%08X)\n", unsigned(r));
+        LOG_ERROR("[dlaa] NGX could not start (0x%08X)\n", unsigned(r));
         return false;
     }
     NVSDK_NGX_Parameter* caps = nullptr;
@@ -79,7 +89,7 @@ bool Dlaa::init(VkInstance instance, VkPhysicalDevice gpu, VkDevice device) {
         NVSDK_NGX_VULKAN_DestroyParameters(caps);
     }
     if (!available) {
-        fprintf(stderr, "[dlaa] DLSS not available on this GPU, or nvngx_dlss.dll is missing next to the executable\n");
+        LOG_ERROR("[dlaa] DLSS not available on this GPU, or nvngx_dlss.dll is missing next to the executable\n");
         NVSDK_NGX_VULKAN_Shutdown1(device);
         return false;
     }
@@ -88,7 +98,7 @@ bool Dlaa::init(VkInstance instance, VkPhysicalDevice gpu, VkDevice device) {
         NVSDK_NGX_VULKAN_Shutdown1(device);
         return false;
     }
-    printf("[dlaa] DLSS ready (DLAA at native resolution)\n");
+    LOG_INFO("[dlaa] DLSS ready (DLAA at native resolution)\n");
     return true;
 }
 
@@ -115,7 +125,7 @@ bool Dlaa::ensure_feature(VkCommandBuffer cmd, uint32_t width, uint32_t height, 
         create.InFeatureCreateFlags |= NVSDK_NGX_DLSS_Feature_Flags_IsHDR | NVSDK_NGX_DLSS_Feature_Flags_AutoExposure;
     NVSDK_NGX_Result r = NGX_VULKAN_CREATE_DLSS_EXT1(device_, cmd, 1, 1, &feature, params_, &create);
     if (NVSDK_NGX_FAILED(r) || !feature) {
-        fprintf(stderr, "[dlaa] could not create DLSS %ux%u (0x%08X)\n", width, height, unsigned(r));
+        LOG_ERROR("[dlaa] could not create DLSS %ux%u (0x%08X)\n", width, height, unsigned(r));
         feature = nullptr;
         failed_ = true;
         return false;
@@ -148,7 +158,7 @@ bool Dlaa::evaluate(VkCommandBuffer cmd, const Image& color, const Image& depth,
     eval.InPreExposure = eval.InExposureScale = 1.0f;
     NVSDK_NGX_Result r = NGX_VULKAN_EVALUATE_DLSS_EXT(cmd, feature_[channel], params_, &eval);
     if (NVSDK_NGX_FAILED(r)) {
-        fprintf(stderr, "[dlaa] DLSS evaluation failed (0x%08X); disabling it\n", unsigned(r));
+        LOG_ERROR("[dlaa] DLSS evaluation failed (0x%08X); disabling it\n", unsigned(r));
         failed_ = true;
         return false;
     }
