@@ -8,6 +8,10 @@
 </p>
 
 <p align="center">
+  <a href="https://www.youtube.com/@snicolast"><img src="https://img.shields.io/badge/YouTube-@snicolast-red?logo=youtube&logoColor=white" alt="YouTube: snicolast"></a>
+</p>
+
+<p align="center">
   <img src="docs/img/hero.jpg" alt="Raptors in true widescreen with ray-traced sun shadows" width="100%">
 </p>
 
