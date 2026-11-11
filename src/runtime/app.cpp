@@ -129,6 +129,13 @@ static bool g_menu_open = false;     // a menu has the controls
 static bool g_block_buttons = false; // after a menu closes: buttons ignored until released
 static int g_p1_pad = -1;            // the gamepad aiming for player 1; -1: the mouse (whichever moved last)
 static bool g_p2_pad = false;        // a gamepad is player 2's (poll_gamepads)
+// While player 2 has a gun of its own (a second mouse, raw_mice.h): the
+// gamepad aiming for player 2 instead, -1: the gun. A pad of player 2's takes
+// the sight only when it aims and the gun has been still for a moment, so a
+// pad that is never touched (a Wii remote that SDL also opens as a gamepad)
+// does not hold player 2's sight where it is
+static int g_p2_pad_aims = -1;
+static double g_p2_gun_moved = -100; // now_seconds() when player 2's gun last moved
 
 // Window pixels -> fraction of the 4:3 game screen (accounting for the black
 // bars; beyond 0..1 in the side bands of a wider 3D view)
@@ -209,7 +216,15 @@ static void poll_keyboard_mouse(HWND hwnd) {
             if (p == 1 && g.clicked && !pl.playing && p1.playing) player_join(1);
             pl.trigger = g.trigger;
             pl.offscreen = g.reload;
-            if (p == 1 || g_p1_pad < 0) {
+            if (p == 1) {
+                static POINT last{-100000, -100000};
+                if (g.pos.x != last.x || g.pos.y != last.y) {   // the gun moved: it aims again
+                    g_p2_pad_aims = -1;
+                    g_p2_gun_moved = now_seconds();
+                }
+                last = g.pos;
+            }
+            if (p == 1 ? g_p2_pad_aims < 0 : g_p1_pad < 0) {
                 aim_at(p, hwnd, g.pos);
                 shot_outside_reloads(p);
             }
@@ -302,6 +317,9 @@ static bool poll_gamepads(HWND hwnd) {
     for (int i = 0; i < Gamepads::MAX; i++)
         if (g_pads.pad(i).connected) connected |= 1u << i;
     if (g_p1_pad >= 0 && !(connected >> g_p1_pad & 1)) g_p1_pad = -1;   // unplugged: the mouse aims again
+    if (g_p2_pad_aims >= 0 && !(connected >> g_p2_pad_aims & 1)) g_p2_pad_aims = -1;
+    bool p2_gun = raw_mice::two_mice();
+    if (!p2_gun) g_p2_pad_aims = -1;
     g_p2_pad = false;
     for (int i = 0; i < Gamepads::MAX; i++)
         if (connected >> i & 1 && pad_player(i, connected) == 1) g_p2_pad = true;
@@ -314,9 +332,11 @@ static bool poll_gamepads(HWND hwnd) {
         int p = pad_player(i, connected);
         PlayerInputs& pl = g_inputs.p[p];
         if (pad.aimed && p == 0) g_p1_pad = i;
-        if (p == 1 || g_p1_pad == i) set_player_aim(p, pad.aim_x, pad.aim_y);
-        else {   // the mouse aims: the pad's sight waits where the mouse is
-            PlayerAim a = player_aim(0);
+        if (pad.aimed && p == 1 && p2_gun && now_seconds() - g_p2_gun_moved > 0.5) g_p2_pad_aims = i;
+        bool aims = p == 0 ? g_p1_pad == i : !p2_gun || g_p2_pad_aims == i;
+        if (aims) set_player_aim(p, pad.aim_x, pad.aim_y);
+        else {   // the mouse (or player 2's gun) aims: the pad's sight waits where it is
+            PlayerAim a = player_aim(p);
             g_pads.set_aim(i, a.x, a.y);
         }
         bool fire = pad.fire, reload = pad.reload;
