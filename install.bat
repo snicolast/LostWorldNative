@@ -72,6 +72,14 @@ echo ^(the "Desktop development with C++" workload includes them^). Then restart
 echo and run install.bat again.
 goto fail
 :vs_ok
+rem Visual Studio 2022 before 17.8 comes with CMake older than 3.27 (glslang's
+rem minimum): update it
+set "VSCMAKE=%VSDIR%\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+"%VSCMAKE%" -P tools\cmake_version.cmake >nul 2>&1 && goto vs_current
+echo Updating Visual Studio in "%VSDIR%": its CMake is older than 3.27.
+echo Accept the Windows prompt; it takes a while.
+"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\setup.exe" update --installPath "%VSDIR%" --passive --norestart
+:vs_current
 echo C++ tools: OK
 echo.
 

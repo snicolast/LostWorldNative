@@ -26,8 +26,14 @@ echo [1/5] Extracting the ROM
 echo [2/5] Recompiling the PowerPC code
 %BUILD_PY% tools\recomp.py data\crom.bin build\gen || goto fail
 rem NVIDIA DLSS SDK (not in the repository): fetched from NVIDIA's GitHub the first
-rem time. Needed to build on any GPU; DLAA itself only runs on NVIDIA RTX
-if not exist third_party\ngx\bin\nvngx_dlss.dll (
+rem time. Needed to build on any GPU; DLAA itself only runs on NVIDIA RTX.
+rem Every file is checked, not only the library: a third_party\ngx left incomplete
+rem (an interrupted download, files copied by hand) is fetched again (Star Wars Trilogy issue #32)
+set "NGX_OK=1"
+for %%f in (include\nvsdk_ngx.h include\nvsdk_ngx_defs.h include\nvsdk_ngx_defs_vk.h include\nvsdk_ngx_helpers.h include\nvsdk_ngx_helpers_vk.h include\nvsdk_ngx_loader.h include\nvsdk_ngx_params.h include\nvsdk_ngx_vk.h lib\nvsdk_ngx_d.lib bin\nvngx_dlss.dll) do (
+    if not exist third_party\ngx\%%f set "NGX_OK="
+)
+if not defined NGX_OK (
     echo [3/5] Downloading the NVIDIA DLSS SDK ^(needed to build on any GPU; DLAA is optional^)
     call tools\get_dlss.bat || goto fail
 )
@@ -49,6 +55,17 @@ call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" >"%TEMP%\lw_vcvars.log" 2>&1 || (
 set "CMAKE=%VSDIR%\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 set "CTEST=%VSDIR%\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe"
 if not exist "%CMAKE%" goto no_vs
+rem glslang needs CMake 3.27, and the CMake of Visual Studio 2022 before 17.8 is
+rem older: then use a newer cmake.exe from PATH if there is one
+set "OLD_CMAKE=%CMAKE%"
+set "CMAKE="
+call :try_cmake "%OLD_CMAKE%"
+if defined CMAKE goto cmake_ok
+for /f "delims=" %%i in ('where cmake 2^>nul') do if not defined CMAKE call :try_cmake "%%i"
+if not defined CMAKE goto old_cmake
+for %%i in ("%CMAKE%") do set "CTEST=%%~dpictest.exe"
+echo The CMake of Visual Studio is too old, using "%CMAKE%"
+:cmake_ok
 echo [5/5] Building
 "%CMAKE%" -S . -B build\cmake -G Ninja -DCMAKE_BUILD_TYPE=Release || goto fail
 "%CMAKE%" --build build\cmake --target LostWorld || goto fail
@@ -80,6 +97,20 @@ goto fail
 :no_python
 echo Python 3.10 or later not found ^(an older Python or the Microsoft Store alias does not count^).
 echo Run install.bat instead: it installs Python and the C++ tools, then builds.
+goto fail
+
+:try_cmake
+rem Sets CMAKE to the cmake.exe in %1 if it is at least the version
+rem tools\cmake_version.cmake asks for
+"%~1" -P tools\cmake_version.cmake >nul 2>&1
+if not errorlevel 1 set "CMAKE=%~1"
+exit /b 0
+
+:old_cmake
+"%OLD_CMAKE%" -P tools\cmake_version.cmake
+echo The CMake of Visual Studio ^("%VSDIR%"^) is too old: this needs CMake 3.27 or newer.
+echo Update Visual Studio ^(Visual Studio Installer, Update button^) or run install.bat, which updates it.
+echo A cmake.exe in PATH is ignored unless it is 3.27 or newer.
 goto fail
 
 :no_vs
