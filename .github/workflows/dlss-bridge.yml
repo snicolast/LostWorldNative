@@ -1,0 +1,41 @@
+# Builds dlss_bridge.dll (tools/dlss_bridge) with MSVC and checks that the
+# game's side loads it. Nothing of the game itself is built here: that needs
+# the ROM, which is never in this repository.
+name: DLSS bridge
+
+on:
+  pull_request:
+    paths:
+      - src/video/dlss*
+      - tools/dlss_bridge/**
+      - .github/workflows/dlss-bridge.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Build
+        run: |
+          cmake -S tools/dlss_bridge -B build/dlss_bridge -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/dlss_bridge
+      - name: Test
+        run: ctest --test-dir build/dlss_bridge --output-on-failure
+      - name: What the DLL depends on
+        shell: cmd
+        run: |
+          dumpbin /dependents build\dlss_bridge\dlss_bridge.dll
+          certutil -hashfile build\dlss_bridge\dlss_bridge.dll SHA256
+      - name: Keep the DLL
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: dlss_bridge
+          path: build/dlss_bridge/dlss_bridge.dll

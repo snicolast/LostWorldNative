@@ -1,0 +1,55 @@
+# Checks the build with a free toolchain (llvm-mingw: clang, lld, libc++) on
+# Windows, without Visual Studio: configures the project and builds and runs
+# what does not need the ROM (the shaders through glslang, the Musashi
+# generator, the unit tests). The game itself is never built here: its code
+# is generated from the ROM, which is never in this repository.
+name: clang on Windows
+
+on:
+  pull_request:
+    paths:
+      - CMakeLists.txt
+      - src/**
+      - tests/**
+      - third_party/**
+      - .github/workflows/clang-windows.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LLVM_MINGW: llvm-mingw-20251104-ucrt-x86_64
+  LLVM_MINGW_SHA256: 171b298f46fa4b5653dc7b01cc5e709caca645991be8e1b0724466c4a282a1ac
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: llvm-mingw
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\llvm-mingw.zip"
+          curl.exe -fL --retry 3 -o $zip "https://github.com/mstorsjo/llvm-mingw/releases/download/20251104/$env:LLVM_MINGW.zip"
+          if ($LASTEXITCODE -ne 0) { throw "llvm-mingw could not be downloaded" }
+          if ((Get-FileHash $zip -Algorithm SHA256).Hash -ne $env:LLVM_MINGW_SHA256) { throw "llvm-mingw: wrong SHA256" }
+          tar -xf $zip -C $env:RUNNER_TEMP
+          if ($LASTEXITCODE -ne 0) { throw "llvm-mingw could not be extracted" }
+          "$env:RUNNER_TEMP\$env:LLVM_MINGW\bin" >> $env:GITHUB_PATH
+      - name: Configure
+        shell: pwsh
+        run: |
+          # No generated code: the list of generated files is empty
+          New-Item -ItemType Directory -Force build\gen | Out-Null
+          Set-Content build\gen\files.cmake 'set(GEN_SOURCES "")'
+          cmake -S . -B build\cmake -G Ninja -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER=x86_64-w64-mingw32-clang -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-clang++ `
+            -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres
+      - name: Build what does not need the ROM
+        run: >
+          cmake --build build\cmake --target shaders m68kmake tilegen_test fnv_test options_test sky_motion_test
+          audio_stream_test rom_zip_test encounter_script_test scsp_state_test weather_sound_test sky_procedural_test
+          r3d_state_test worker_test settings_bridge_test pack2d_test r3d_shelter_test news_test
+      - name: Test
+        run: ctest --test-dir build\cmake --output-on-failure

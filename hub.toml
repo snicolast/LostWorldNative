@@ -1,0 +1,70 @@
+# How NicoLauncher (https://github.com/snicolast/NicoLauncher) builds this
+# project, with its own build kit: the compiler (llvm-mingw), CMake, Ninja and
+# Python are downloaded once into the launcher's folder and used only from
+# there. Nothing is installed on the PC and Visual Studio is not needed.
+# build.bat is not affected: it still builds with Visual Studio.
+# Format: https://github.com/snicolast/NicoLauncher/blob/main/docs/manifest.md
+
+schema = 1
+exe = "LostWorld.exe"
+news = "news.txt"
+
+[requires]
+kit = ["llvm-mingw", "cmake", "ninja", "python"]
+python = "3.10"   # "int | None" annotations in the build scripts
+cmake = "3.27"    # glslang asks for it
+
+# The user's own file. The launcher only asks where it is on their disk.
+[input]
+label = "lostwsga.zip"
+done_when = ["data/crom.bin", "data/sound_samples.bin"]
+
+# The same files, URLs and SHA256 as third_party/deps.txt
+[[fetch]]
+name = "SDL3"
+url = "https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz"
+sha256 = "9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3"
+to = "third_party/downloads/SDL3-3.4.18.tar.gz"
+
+[[fetch]]
+name = "miniz"
+url = "https://github.com/richgel999/miniz/releases/download/3.0.2/miniz-3.0.2.zip"
+sha256 = "ada38db0b703a56d3dd6d57bf84a9c5d664921d870d8fea4db153979fb5332c5"
+to = "third_party/downloads/miniz-3.0.2.zip"
+
+[[step]]
+name = "Extracting the ROM"
+run = ["{python}", "tools/romtool.py", "{input}", "data"]
+skip_if_exists = ["data/crom.bin", "data/sound_samples.bin"]
+
+[[step]]
+name = "Recompiling the PowerPC code"
+run = ["{python}", "tools/recomp.py", "data/crom.bin", "build/gen"]
+
+# A build folder of its own, apart from the one build.bat uses with Visual
+# Studio. The compiler and Python are named: CMake is not left to find others.
+# GAME_IN_SOURCE_DIR: LostWorld.exe is linked straight into this folder
+[[step]]
+name = "Configuring"
+run = [
+    "{cmake}", "-S", ".", "-B", "build/kit", "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release",
+    "-DCMAKE_C_COMPILER=x86_64-w64-mingw32-clang", "-DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-clang++",
+    "-DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres", "-DPython3_EXECUTABLE={python}",
+    "-DGAME_IN_SOURCE_DIR=ON",
+]
+
+[[step]]
+name = "Compiling"
+run = ["{cmake}", "--build", "build/kit", "--target", "LostWorld"]
+
+# After the game is in place: a test that does not build or pass is a
+# warning, and does not take LostWorld.exe away
+[[step]]
+name = "Compiling the tests"
+run = ["{cmake}", "--build", "build/kit"]
+optional = true
+
+[[step]]
+name = "Testing"
+run = ["{ctest}", "--test-dir", "build/kit", "--output-on-failure"]
+optional = true

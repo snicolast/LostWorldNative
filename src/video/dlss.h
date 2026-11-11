@@ -30,7 +30,7 @@ public:
     bool init(VkInstance instance, VkPhysicalDevice gpu, VkDevice device);
     void shutdown();
     // false if it never started or stopped working
-    bool ready() const { return params_ != nullptr && !failed_; }
+    bool ready() const { return (params_ != nullptr || bridge_ != nullptr) && !failed_; }
 
     // Records the evaluation. Inputs in SHADER_READ_ONLY layout, output in
     // GENERAL with storage usage. jitter: sub-pixel offset of the projection
@@ -50,6 +50,8 @@ private:
     NVSDK_NGX_Handle* feature_[2] = {};
     uint32_t width_[2] = {}, height_[2] = {};
     bool failed_ = false;
+    // dlss_loader.cpp: the Dlaa inside dlss_bridge.dll that does the work
+    void* bridge_ = nullptr;
 };
 
 }  // namespace dlss
