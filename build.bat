@@ -26,7 +26,8 @@ echo [1/5] Extracting the ROM
 echo [2/5] Recompiling the PowerPC code
 %BUILD_PY% tools\recomp.py data\crom.bin build\gen || goto fail
 rem NVIDIA DLSS SDK (not in the repository): fetched from NVIDIA's GitHub the first
-rem time. Needed to build on any GPU; DLAA itself only runs on NVIDIA RTX.
+rem time. Optional: without it CMakeLists.txt builds a stub and the game uses MSAA
+rem (DLAA itself only runs on NVIDIA RTX anyway).
 rem Every file is checked, not only the library: a third_party\ngx left incomplete
 rem (an interrupted download, files copied by hand) is fetched again (Star Wars Trilogy issue #32)
 set "NGX_OK=1"
@@ -34,8 +35,8 @@ for %%f in (include\nvsdk_ngx.h include\nvsdk_ngx_defs.h include\nvsdk_ngx_defs_
     if not exist third_party\ngx\%%f set "NGX_OK="
 )
 if not defined NGX_OK (
-    echo [3/5] Downloading the NVIDIA DLSS SDK ^(needed to build on any GPU; DLAA is optional^)
-    call tools\get_dlss.bat || goto fail
+    echo [3/5] Downloading the NVIDIA DLSS SDK ^(optional: only for DLAA on NVIDIA RTX^)
+    call tools\get_dlss.bat || echo The DLSS SDK could not be downloaded: building without DLAA ^(MSAA works the same^).
 )
 rem SDL3 and miniz: downloaded once into third_party\downloads, CMake builds from there
 call tools\get_deps.bat || goto fail
@@ -46,6 +47,10 @@ call tools\find_vs.bat
 if errorlevel 2 goto no_sdk
 if not exist "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" goto no_vs
 echo [4/5] Setting up Visual Studio ^("%VSDIR%"^)
+rem A double quote in a PATH entry (C:\Program Files\WSL" and the like, left by
+rem some installers) breaks vcvars64.bat with "\GNU was unexpected at this time"
+rem once a later entry has "(x86)": take the quotes out, for this window only
+set "PATH=%PATH:"=%"
 rem Its output is hidden unless it fails (a missing Windows SDK, for example)
 call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" >"%TEMP%\lw_vcvars.log" 2>&1 || (
     type "%TEMP%\lw_vcvars.log"

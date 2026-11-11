@@ -52,7 +52,9 @@ versions of the game will not work.
 
 You need Windows 10/11 (64-bit) and a GPU with a Vulkan 1.3 driver, or a 1.2 one
 that offers `VK_KHR_dynamic_rendering` (most cards and integrated graphics from 2016 on,
-with current drivers; the console's first `[vulkan]` line says what yours offers).
+with current drivers; started from a command prompt, the game's first `[vulkan]` line says what
+yours offers). DLAA needs an NVIDIA RTX; on other cards it switches itself off, and the game builds
+the same on any GPU.
 
 1. Download this repository (green **Code** button > **Download ZIP**) and unzip it.
 2. Put `lostwsga.zip` in the folder.
@@ -78,7 +80,7 @@ tick *MSVC v143 - VS 2022 C++ x64/x86 build tools (Latest)*, *C++ CMake tools fo
 and one *Windows 11 SDK* (it works on Windows 10 too).
 
 Then run `build.bat` with `lostwsga.zip` next to it. It downloads SDL3, miniz and NVIDIA DLSS on
-the first run.
+the first run. DLSS is optional: if that download fails, the game is built without it and uses MSAA.
 </details>
 
 If the build can't download SDL3 or miniz (a proxy, an antivirus, a flaky connection), it lists

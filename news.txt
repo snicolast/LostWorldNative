@@ -13,6 +13,10 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[9] 2026-11-11
+- No more console window behind the game
+- Building: fixed a Visual Studio setup error on PCs with an unusual PATH, and the NVIDIA DLSS download is now optional
+
 [8] 2026-11-11
 - Fuller sound: the reverb and other effects of the sound chip were playing at about half their level because of an emulation bug. Fixed
 

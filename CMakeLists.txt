@@ -110,7 +110,29 @@ add_custom_command(OUTPUT ${MUSASHI_GEN}/m68kops.c ${MUSASHI_GEN}/m68kops.h
     DEPENDS m68kmake ${MUSASHI_DIR}/m68k_in.c
     COMMENT "Musashi opcode tables")
 
-add_executable(LostWorld
+# NVIDIA DLSS SDK (tools/get_dlss.bat fetches it): optional. Without it the game
+# builds with a stub, and --aa dlaa falls back to MSAA as on a GPU without DLSS
+set(NGX_FILES lib/nvsdk_ngx_d.lib include/nvsdk_ngx.h include/nvsdk_ngx_defs.h include/nvsdk_ngx_defs_vk.h
+    include/nvsdk_ngx_helpers.h include/nvsdk_ngx_helpers_vk.h include/nvsdk_ngx_loader.h include/nvsdk_ngx_params.h include/nvsdk_ngx_vk.h)
+set(NGX_OK TRUE)
+foreach(f ${NGX_FILES})
+    if(NOT EXISTS ${CMAKE_SOURCE_DIR}/third_party/ngx/${f})
+        set(NGX_OK FALSE)
+    endif()
+endforeach()
+if(NGX_OK)
+    set(DLSS_SOURCE src/video/dlss.cpp)
+    set(DLSS_LIB ${CMAKE_SOURCE_DIR}/third_party/ngx/lib/nvsdk_ngx_d.lib)
+else()
+    message(STATUS "NVIDIA DLSS SDK not found in third_party/ngx: building without DLAA")
+    set(DLSS_SOURCE src/video/dlss_stub.cpp)
+    set(DLSS_LIB "")
+endif()
+
+# WIN32: a windowed program, so no console window opens with the game. main()
+# stays the entry point (/ENTRY below); app.cpp attaches to the console of a
+# terminal it was started from, so the log still shows there
+add_executable(LostWorld WIN32
     src/runtime/runtime.cpp
     src/runtime/app.cpp
     src/runtime/eeprom.cpp
@@ -138,7 +160,7 @@ add_executable(LostWorld
     src/video/sky_procedural.cpp
     src/video/text_hd.cpp
     src/video/image_io.cpp
-    src/video/dlss.cpp
+    ${DLSS_SOURCE}
     src/video/vk_presenter.cpp
     src/video/ui_overlay.cpp
     src/ui/crosshair_file.cpp
@@ -184,13 +206,14 @@ target_include_directories(LostWorld PRIVATE
 # volk loads vulkan-1.dll at runtime: the SDK is not needed
 target_compile_definitions(LostWorld PRIVATE VK_NO_PROTOTYPES VK_USE_PLATFORM_WIN32_KHR)
 target_link_libraries(LostWorld PRIVATE SDL3::SDL3-static winmm ole32 oleaut32 windowscodecs mfplat mfuuid gdi32 dwmapi comdlg32 shell32 hid winhttp
-    ${CMAKE_SOURCE_DIR}/third_party/ngx/lib/nvsdk_ngx_d.lib)
+    ${DLSS_LIB})
 
 if(MSVC)
     # /bigobj: the generated files contain many functions. /W4 on our C++ (the
     # C of Musashi and volk keeps the default level)
     target_compile_options(LostWorld PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/bigobj /W4 /wd4146 /wd4102 /fp:strict /utf-8>)
     target_compile_definitions(LostWorld PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_link_options(LostWorld PRIVATE /ENTRY:mainCRTStartup)
     # The generated code calls boot loops that never return, so what follows
     # them is unreachable (C4702) in a handful of functions: harmless
     set_source_files_properties(${GEN_SOURCES} PROPERTIES COMPILE_OPTIONS /wd4702)
