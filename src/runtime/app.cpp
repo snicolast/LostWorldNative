@@ -1210,6 +1210,8 @@ bool App::init(int argc, char** argv, bool first_start) {
     if (!presenter.init("Lost World Native by snicolast", int(SCREEN_H * 2 * std::max(g_opt.max_aspect, 4.0f / 3.0f)), SCREEN_H * 2,
                         g_opt.dlaa)) {
         fprintf(stderr, "Could not start Vulkan; try --headless\n");
+        MessageBoxA(nullptr, "Could not start Vulkan. Update the graphics driver: the game needs Vulkan 1.3.",
+                    "Lost World Native", MB_OK | MB_ICONERROR);
         return false;
     }
     printf("GPU: %s\n", presenter.device_name().c_str());
@@ -1272,6 +1274,8 @@ bool App::init(int argc, char** argv, bool first_start) {
     if (!renderer.init(presenter, g_opt.supersample, g_opt.msaa, g_opt.aniso, g_opt.dlaa)) {
         fprintf(stderr, "Could not start the 3D renderer on %s (see the [vulkan] line above)\n",
                 presenter.device_name().c_str());
+        MessageBoxA(nullptr, "Could not start the 3D renderer. Update the graphics driver.", "Lost World Native",
+                    MB_OK | MB_ICONERROR);
         return false;
     }
     renderer.set_hud_edges(!g_opt.hud_centre);
@@ -2329,7 +2333,23 @@ void App::shutdown() {
     ExitProcess(0);
 }
 
+// The game is a windowed program (no console window of its own). Started from
+// a terminal, its log goes to that terminal; redirected to a file or a pipe
+// (the tests), it goes there as it always did
+static void attach_parent_console() {
+    auto valid = [](DWORD which) {
+        HANDLE h = GetStdHandle(which);
+        return h != nullptr && h != INVALID_HANDLE_VALUE && GetFileType(h) != FILE_TYPE_UNKNOWN;
+    };
+    bool out_ok = valid(STD_OUTPUT_HANDLE), err_ok = valid(STD_ERROR_HANDLE);
+    if (out_ok && err_ok) return;
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) return;   // double click: no console at all
+    if (!out_ok) freopen("CONOUT$", "w", stdout);
+    if (!err_ok) freopen("CONOUT$", "w", stderr);
+}
+
 int main(int argc, char** argv) {
+    attach_parent_console();
     setvbuf(stdout, nullptr, _IONBF, 0);   // keep logs even if the process dies
     // The menus (and the settings they save) are left out of test runs, so
     // those always start from the same defaults
