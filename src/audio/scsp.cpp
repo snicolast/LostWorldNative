@@ -227,7 +227,7 @@ uint16_t Scsp::read16(uint32_t off) {
     }
     if (off >= 0x600 && off < 0x680) return uint16_t(stack_[(off - 0x600) >> 1]);
     if (off >= 0x700 && off < 0x780) return uint16_t(coef_[(off - 0x700) >> 1]);
-    if (off >= 0x780 && off < 0x800) return madrs_[((off - 0x780) >> 1) & 31];
+    if (off >= 0x780 && off < 0x7C0) return madrs_[(off - 0x780) >> 1];
     if (off >= 0x800 && off < 0xC00) return mpro_[(off - 0x800) >> 1];
     auto split = [&](int32_t v) { return uint16_t((off & 2) ? (v & 0xFFFF) : ((v >> 16) & 0xFF)); };
     if (off >= 0xC00 && off < 0xE00) return split(temp_[(off >> 2) & 0x7F]);
@@ -250,7 +250,7 @@ void Scsp::write8(uint32_t off, uint8_t v) {
     if (w < 0x400) cur = slot_regs_[w >> 5][(w & 0x1F) >> 1];
     else if (w < 0x430) cur = common_[(w - 0x400) >> 1];
     else if (w >= 0x700 && w < 0x780) cur = uint16_t(coef_[(w - 0x700) >> 1]);
-    else if (w >= 0x780 && w < 0x800) cur = madrs_[((w - 0x780) >> 1) & 31];
+    else if (w >= 0x780 && w < 0x7C0) cur = madrs_[(w - 0x780) >> 1];
     else if (w >= 0x800 && w < 0xC00) cur = mpro_[(w - 0x800) >> 1];
     else if (w >= 0x600 && w < 0x680) cur = uint16_t(stack_[(w - 0x600) >> 1]);
     else cur = 0;
@@ -281,7 +281,7 @@ void Scsp::write16(uint32_t off, uint16_t v) {
     }
     if (off >= 0x600 && off < 0x680) stack_[(off - 0x600) >> 1] = int16_t(v);
     else if (off >= 0x700 && off < 0x780) coef_[(off - 0x700) >> 1] = int16_t(v);
-    else if (off >= 0x780 && off < 0x800) madrs_[((off - 0x780) >> 1) & 31] = v;
+    else if (off >= 0x780 && off < 0x7C0) madrs_[(off - 0x780) >> 1] = v;   // 32 words; 7C0h-7FFh is not a mirror
     else if (off >= 0x800 && off < 0xC00) {
         mpro_[(off - 0x800) >> 1] = v;
         if (off == 0xBF0) dsp_running_ = true;   // the 68K starts the DSP by writing step 126
