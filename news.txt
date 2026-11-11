@@ -13,6 +13,9 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[10] 2026-11-12
+- Main menu: the Buy me a coffee button is now inside MORE RECOMPS, above BACK
+
 [9] 2026-11-11
 - No more console window behind the game
 - Building: fixed a Visual Studio setup error on PCs with an unusual PATH, and the NVIDIA DLSS download is now optional
