@@ -125,7 +125,7 @@ private:
     enum Id {
         PLAY, OPTIONS, QUIT, ARCADE, BOSS, BACK, RESUME, SETTINGS, QUIT_TO_MENU, TABS,
         BOSS_ENTRY, PREPARE, RETRY, BOSS_LIST, LEAVE_BOSS, RECORDS, SURVIVAL, SURVIVAL_ENTRY, CLASSIC, RANDOM, WEATHER_ENTRY,
-        MORE_GAMES, STAR_WARS, SEGA_RALLY_2,
+        MORE_GAMES, STAR_WARS, SEGA_RALLY_2, COFFEE,
         OPT_DISPLAY, OPT_VOLUME, OPT_SPEAKERS, OPT_REAR, OPT_SAMPLES, OPT_AA, OPT_HAZE, OPT_BLOOM, OPT_AO, OPT_SKY, OPT_SUN, OPT_SHADOWS, OPT_SHAFTS, OPT_SOFT, OPT_HDR, OPT_RIM, OPT_RELIEF, OPT_SHARPEN, OPT_LIGHTNING, OPT_RAIN, OPT_TEXT, OPT_CROSS, OPT_MICE, OPT_SUBS,
         OPT_SAT, OPT_GAMMA, OPT_MOTION, OPT_PAD_SPEED, OPT_GYRO, OPT_GYRO_SPEED, OPT_VIBRATION, OPT_ASSIST, OPT_TORCH, OPT_RT, OPT_CROSS_HIDE, OPT_FREE_PLAY,
         OPT_QUALITY, OPT_SCALE, OPT_HALF_RATE, OPT_VSYNC,
@@ -230,10 +230,7 @@ private:
     void news_choose(int button);
     void start_update();
 
-    RECT coffee_rect_{};   // the donation link on the main menu, clickable
-    bool coffee_hot_ = false;   // the pointer is over it
-    bool coffee_focus_ = false;   // chosen with the keys or a pad (Up from the first entry)
-    void open_coffee();
+    void open_coffee();   // the donation link (an entry of MORE RECOMPS)
 
     Screen screen_ = Screen::None;
     bool options_from_pause_ = false;
