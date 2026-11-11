@@ -33,9 +33,34 @@ constexpr const wchar_t* COFFEE_LABEL = L"BUY ME A COFFEE";
 constexpr uint32_t COFFEE_INK = 0x0D0C22;   // their dark blue-black
 constexpr const wchar_t* COFFEE_HINT = L"Support the port: opens buymeacoffee.com in your browser";
 
-// MORE RECOMPS: snicolast's other ports
-constexpr const wchar_t* SW_URL = L"https://github.com/snicolast/StarWarsTrilogyNative";
-constexpr const wchar_t* SW_ABOUT = L"Star Wars Trilogy Arcade, the 1998 SEGA arcade game, remastered for PC like this one.  ";
+// MORE RECOMPS: snicolast's other ports, in the menu's order (the Ids in
+// Frontend::recomp_of). Each one is looked for where its settings key says,
+// else in one of `folders` next to this port's folder
+struct Recomp {
+    const wchar_t* name;          // the menu entry
+    const wchar_t* about;         // the start of its description
+    const wchar_t* url;           // its GitHub page
+    const wchar_t* exe;           // its .exe
+    const wchar_t* folders[4];    // its usual folder names
+    const wchar_t* backdrop;      // its art
+    const wchar_t* logo;
+    const wchar_t* caption;       // under its logo
+    float logo_top;               // where its logo starts, of the window's height
+    float logo_w;                 // its logo at most this wide (1080p)
+};
+constexpr Recomp RECOMPS[] = {
+    {L"STAR WARS TRILOGY", L"Star Wars Trilogy Arcade, the 1998 SEGA arcade game, remastered for PC like this one.  ",
+     L"https://github.com/snicolast/StarWarsTrilogyNative", L"StarWarsTrilogy.exe",
+     {L"StarWarsTrilogyNative", L"StarWarsTrilogyNative-dev", L"StarWarsTrilogy", L"Star Wars Trilogy"},
+     L"res/menu/more/star_wars_background.jpg", L"res/menu/more/star_wars_logo.png",
+     L"SEGA  \u00B7  1998  \u00B7  ARCADE RAIL SHOOTER", 0.28f, 560},
+    // The car is on the left of its art: the logo goes above it
+    {L"SEGA RALLY 2", L"Sega Rally 2, the 1998 SEGA arcade rally game, remastered for PC like this one.  ",
+     L"https://github.com/snicolast/SegaRally2Native", L"SegaRally2.exe",
+     {L"SegaRally2Native", L"SegaRally2Native-dev", L"SegaRally2", L"Sega Rally 2"},
+     L"res/menu/more/sega_rally_2_background.jpg", L"res/menu/more/sega_rally_2_logo.png",
+     L"SEGA  \u00B7  1998  \u00B7  ARCADE RALLY RACING", 0.05f, 460},
+};
 
 // UPDATE AVAILABLE: news.txt on the public repository's master branch (news.h)
 constexpr const wchar_t* NEWS_HOST = L"raw.githubusercontent.com";
@@ -411,12 +436,13 @@ void FrontendSettings::load(const char* path) {
     if (!f) return;
     char line[512];
     while (fgets(line, sizeof(line), f)) {
-        if (strncmp(line, "star_wars_path", 14) == 0) {   // a folder: may have spaces
+        bool sw = strncmp(line, "star_wars_path", 14) == 0, sr2 = strncmp(line, "sega_rally_2_path", 17) == 0;
+        if (sw || sr2) {   // a folder: may have spaces
             const char* v = strchr(line, '=');
             std::string p = v ? v + 1 : "";
             while (!p.empty() && strchr(" \t\r\n\"", p.front())) p.erase(0, 1);
             while (!p.empty() && strchr(" \t\r\n\"", p.back())) p.pop_back();
-            star_wars_path = p;
+            (sw ? star_wars_path : sega_rally_2_path) = p;
             continue;
         }
         char key[64], value[400];   // device paths are long
@@ -433,6 +459,7 @@ void FrontendSettings::save(const char* path) const {
     for (const Frontend::Setting& d : Frontend::setting_table())
         if (d.key) fprintf(f, "%s = %s\n", d.key, d.write(*this).c_str());
     if (!star_wars_path.empty()) fprintf(f, "star_wars_path = %s\n", star_wars_path.c_str());
+    if (!sega_rally_2_path.empty()) fprintf(f, "sega_rally_2_path = %s\n", sega_rally_2_path.c_str());
     fclose(f);
 }
 
@@ -483,8 +510,10 @@ bool Frontend::init(const std::string& font_dir) {
             printf("[menu] background %ls (%dx%d)\n", p, backdrop_.w, backdrop_.h);
             break;
         }
-    load_image(L"res/menu/more/star_wars_background.jpg", sw_backdrop_.px, sw_backdrop_.w, sw_backdrop_.h);
-    load_image(L"res/menu/more/star_wars_logo.png", sw_logo_.px, sw_logo_.w, sw_logo_.h);
+    for (int r = 0; r < RECOMP_COUNT; r++) {
+        load_image(RECOMPS[r].backdrop, more_backdrop_[r].px, more_backdrop_[r].w, more_backdrop_[r].h);
+        load_image(RECOMPS[r].logo, more_logo_[r].px, more_logo_[r].w, more_logo_[r].h);
+    }
     return ok;
 }
 
@@ -640,11 +669,19 @@ std::vector<Frontend::Item> Frontend::items() const {
                 {MORE_GAMES, L"MORE RECOMPS", L"", L"Other arcade games recompiled for PC by snicolast"},
                 {QUIT, L"QUIT", L"", L"Close the game"}};
     case Screen::More:
-        return {{STAR_WARS, L"STAR WARS TRILOGY", sw_exe_.empty() ? L"FREE DOWNLOAD" : L"INSTALLED",
-                 std::wstring(SW_ABOUT) + (sw_exe_.empty() ? L"Not found on this PC: " : L"Found on this PC: ") +
-                     (pad_prompts ? L"A" : L"ENTER") +
-                     (sw_exe_.empty() ? L" opens its page, where you can download it" : L" closes this game and starts it")},
-                {BACK, L"BACK", L"", L"Return to the main menu"}};
+    {
+        std::vector<Item> list;
+        for (Id id : {STAR_WARS, SEGA_RALLY_2}) {
+            int r = recomp_of(id);
+            bool found = !more_exe_[r].empty();
+            list.push_back({id, RECOMPS[r].name, found ? L"INSTALLED" : L"FREE DOWNLOAD",
+                            std::wstring(RECOMPS[r].about) + (found ? L"Found on this PC: " : L"Not found on this PC: ") +
+                                (pad_prompts ? L"A" : L"ENTER") +
+                                (found ? L" closes this game and starts it" : L" opens its page, where you can download it")});
+        }
+        list.push_back({BACK, L"BACK", L"", L"Return to the main menu"});
+        return list;
+    }
     case Screen::Play:
         return {{CLASSIC, L"CLASSIC ARCADE", L"", L"The arcade game: as it was, or with the dinosaurs shuffled"},
                 {BOSS, L"BOSS FIGHT", L"", L"Pick a boss and go straight to the fight"},
@@ -808,11 +845,16 @@ void Frontend::activate(const Item& it, int dir) {
     case OPTIONS: options_from_pause_ = false; tab_ = 0; open(Screen::Options); selected_ = 1; break;
     case RECORDS: tab_ = 0; record_scroll_ = 0; open(Screen::Records); break;
     case QUIT: push(Action::Quit); break;
-    case MORE_GAMES: find_star_wars(); open(Screen::More); break;
-    case STAR_WARS:
-        if (sw_exe_.empty()) open_star_wars_page();
-        else play_star_wars();
+    case MORE_GAMES:
+        for (int r = 0; r < RECOMP_COUNT; r++) find_recomp(r);
+        open(Screen::More);
         break;
+    case STAR_WARS: case SEGA_RALLY_2: {
+        int r = recomp_of(it.id);
+        if (more_exe_[r].empty()) open_recomp_page(r);
+        else play_recomp(r);
+        break;
+    }
     case QUIT_TO_MENU: push(Action::QuitToMenu); break;
     case CLASSIC: open(Screen::Classic); selected_ = random_spawns ? 1 : 0; break;
     case ARCADE: random_spawns = false; push(Action::StartArcade); break;
@@ -973,8 +1015,8 @@ bool Frontend::key(int vk) {
         case VK_TAB: set_tab(tab_ + ((GetKeyState(VK_SHIFT) & 0x8000) ? -1 : 1)); return true;
         case 'R': reset_tab(); return true;
         }
-    if (screen_ == Screen::More && (vk == 'G' || vk == 'R')) {   // its page, also when it is installed (R: a pad's Y)
-        open_star_wars_page();
+    if (screen_ == Screen::More && (vk == 'G' || vk == 'R') && selected_recomp() >= 0) {   // its page, also when it is installed (R: a pad's Y)
+        open_recomp_page(selected_recomp());
         return true;
     }
     if (coffee_focus_) switch (vk) {   // the donation link at the top: Enter opens it, Up / Down go back to the list
@@ -1020,52 +1062,63 @@ int Frontend::index_of(Id id) const {
     return 0;
 }
 
-// StarWarsTrilogy.exe: where the settings say, else in a folder next to this
-// port's (from the working folder, then from the exe's)
-void Frontend::find_star_wars() {
-    sw_exe_.clear();
+int Frontend::recomp_of(Id id) { return id == STAR_WARS ? 0 : id == SEGA_RALLY_2 ? 1 : -1; }
+
+int Frontend::selected_recomp() const {
+    if (screen_ != Screen::More) return -1;
+    std::vector<Item> list = items();
+    return selected_ >= 0 && selected_ < int(list.size()) ? recomp_of(list[selected_].id) : -1;
+}
+
+std::string& Frontend::recomp_path(int r) { return r == 0 ? settings.star_wars_path : settings.sega_rally_2_path; }
+
+// Its .exe: where the settings say, else in a folder next to this port's
+// (from the working folder, then from the exe's)
+void Frontend::find_recomp(int r) {
+    const Recomp& rc = RECOMPS[r];
+    more_exe_[r].clear();
     std::vector<std::wstring> tries;
-    if (!settings.star_wars_path.empty()) {
-        const std::string& p = settings.star_wars_path;
+    if (const std::string& p = recomp_path(r); !p.empty()) {
         int n = MultiByteToWideChar(CP_UTF8, 0, p.c_str(), -1, nullptr, 0);
         std::wstring wp(n > 0 ? n - 1 : 0, L'\0');
         if (n > 1) MultiByteToWideChar(CP_UTF8, 0, p.c_str(), -1, wp.data(), n);
         bool exe = wp.size() > 4 && _wcsicmp(wp.c_str() + wp.size() - 4, L".exe") == 0;
-        tries.push_back(exe ? wp : wp + L"\\StarWarsTrilogy.exe");
+        tries.push_back(exe ? wp : wp + L"\\" + rc.exe);
     }
     wchar_t module[MAX_PATH] = {};
     GetModuleFileNameW(nullptr, module, MAX_PATH);
     std::wstring exe_dir = module;
     exe_dir = exe_dir.substr(0, exe_dir.find_last_of(L"\\/") + 1);
     for (const std::wstring& base : {std::wstring(), exe_dir})
-        for (const wchar_t* folder : {L"StarWarsTrilogyNative", L"StarWarsTrilogyNative-dev", L"StarWarsTrilogy", L"Star Wars Trilogy"})
-            tries.push_back(base + L"..\\" + folder + L"\\StarWarsTrilogy.exe");
+        for (const wchar_t* folder : rc.folders)
+            tries.push_back(base + L"..\\" + folder + L"\\" + rc.exe);
     for (const std::wstring& t : tries) {
         wchar_t full[MAX_PATH];
         if (!GetFullPathNameW(t.c_str(), MAX_PATH, full, nullptr)) continue;
         DWORD a = GetFileAttributesW(full);
         if (a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY)) {
-            sw_exe_ = full;
-            printf("[menu] Star Wars Trilogy: %ls\n", full);
+            more_exe_[r] = full;
+            printf("[menu] %ls: %ls\n", rc.name, full);
             return;
         }
     }
 }
 
-void Frontend::open_star_wars_page() {   // in the default browser
-    ShellExecuteW(nullptr, L"open", SW_URL, nullptr, nullptr, SW_SHOWNORMAL);
+void Frontend::open_recomp_page(int r) {   // in the default browser
+    ShellExecuteW(nullptr, L"open", RECOMPS[r].url, nullptr, nullptr, SW_SHOWNORMAL);
 }
 
 // Started from its own folder (it finds its ROM, res/ and save/ there); this
 // game closes so the two do not fight over the GPU and the sound
-void Frontend::play_star_wars() {
-    std::wstring dir = sw_exe_.substr(0, sw_exe_.find_last_of(L"\\/"));
-    if (INT_PTR(ShellExecuteW(nullptr, L"open", sw_exe_.c_str(), nullptr, dir.c_str(), SW_SHOWNORMAL)) > 32) {
+void Frontend::play_recomp(int r) {
+    const std::wstring& exe = more_exe_[r];
+    std::wstring dir = exe.substr(0, exe.find_last_of(L"\\/"));
+    if (INT_PTR(ShellExecuteW(nullptr, L"open", exe.c_str(), nullptr, dir.c_str(), SW_SHOWNORMAL)) > 32) {
         push(Action::Quit);
         return;
     }
-    printf("[menu] could not start %ls\n", sw_exe_.c_str());
-    sw_exe_.clear();   // shown as not installed: ENTER opens the page
+    printf("[menu] could not start %ls\n", exe.c_str());
+    more_exe_[r].clear();   // shown as not installed: ENTER opens the page
     dirty_ = true;
 }
 
@@ -1209,8 +1262,8 @@ void Frontend::click(int x, int y) {
         open_coffee();
         return;
     }
-    if (screen_ == Screen::More && PtInRect(&page_rect_, p)) {
-        open_star_wars_page();
+    if (screen_ == Screen::More && PtInRect(&page_rect_, p) && selected_recomp() >= 0) {
+        open_recomp_page(selected_recomp());
         return;
     }
     if (screen_ == Screen::GunTest) {   // the guns fire at it: only BACK, and not while picking them
@@ -1769,17 +1822,18 @@ void Frontend::backdrop_background() {
     fill(0, 0, w_, h_, 0x000000, 0.3f);
     px_ = bg_.data();
     shade_backdrop();
-    // MORE RECOMPS: Star Wars Trilogy's art in place of the picture, its logo on the left
-    bg_more_.clear();
-    if (sw_backdrop_.w > 0) {
-        bg_more_.assign(size_t(w_) * h_, 0xFF000000u);
-        px_ = bg_more_.data();
-        picture(sw_backdrop_, 0, 0, w_, h_);
+    // MORE RECOMPS: each game's art in place of the picture, its logo on the left
+    for (int i = 0; i < RECOMP_COUNT; i++) {
+        bg_more_[i].clear();
+        if (more_backdrop_[i].w <= 0) continue;
+        bg_more_[i].assign(size_t(w_) * h_, 0xFF000000u);
+        px_ = bg_more_[i].data();
+        picture(more_backdrop_[i], 0, 0, w_, h_);
         shade_backdrop();
-        RECT r = sw_logo_rect();
-        if (sw_logo_.w > 0 && r.right > r.left) {
-            logo_shadow(sw_logo_, r);   // the explosion behind it is as bright as the logo
-            sprite(sw_logo_, r.left, r.top, r.right - r.left, r.bottom - r.top);
+        RECT r = more_logo_rect(i);
+        if (r.right > r.left) {
+            logo_shadow(more_logo_[i], r);   // Star Wars: the explosion behind it is as bright as the logo
+            sprite(more_logo_[i], r.left, r.top, r.right - r.left, r.bottom - r.top);
         }
     }
     px_ = keep;
@@ -1877,14 +1931,15 @@ void Frontend::logo_shadow(const Picture& p, RECT r) {
 
 // Centred in the room left of the menu's column, at most 560 (1080p) wide;
 // empty when the window is too narrow for it
-RECT Frontend::sw_logo_rect() const {
-    if (sw_logo_.w <= 0) return RECT{};
+RECT Frontend::more_logo_rect(int i) const {
+    const Picture& logo = more_logo_[i];
+    if (logo.w <= 0) return RECT{};
     auto U = [&](float v) { return int(v * u_ + 0.5f); };
     int room = w_ - U(110) - U(720) - U(40);
-    int lw = std::min(U(560), room - U(120));
+    int lw = std::min(U(RECOMPS[i].logo_w), room - U(120));
     if (lw < U(220)) return RECT{};
-    int lh = lw * sw_logo_.h / sw_logo_.w;
-    int x = (room - lw) / 2, y = int(0.28f * h_);
+    int lh = lw * logo.h / logo.w;
+    int x = (room - lw) / 2, y = int(RECOMPS[i].logo_top * h_);
     return RECT{x, y, x + lw, y + lh};
 }
 
@@ -2089,10 +2144,10 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
         text(ITEM, U(21), COFFEE_LABEL, x0 + U(24) + cup + U(12), cy0 + ch / 2 - U(12), 0, {COFFEE_INK, COFFEE_INK});
     }
 
-    if (screen_ == Screen::More && right && !bg_more_.empty()) {   // under its logo (on the backdrop)
-        RECT r = sw_logo_rect();
+    if (int rc = more_art_; screen_ == Screen::More && right && !bg_more_[rc].empty()) {   // under its logo (on the backdrop)
+        RECT r = more_logo_rect(rc);
         if (r.right > r.left)
-            text(MONO, U(22), L"SEGA  \u00B7  1998  \u00B7  ARCADE RAIL SHOOTER", (r.left + r.right) / 2, r.bottom + U(26), 1,
+            text(MONO, U(22), RECOMPS[rc].caption, (r.left + r.right) / 2, r.bottom + U(26), 1,
                  {0xE8D8B0, 0xC8B080, EDGE, U(2)});
     }
 
@@ -2185,10 +2240,10 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
 
     vgrad(0, h - U(120), w, h, 0x000000, 0.0f, 0.85f);
     const wchar_t* back_what = screen_ == Screen::Main ? nullptr : screen_ == Screen::Pause ? L"RESUME" : L"BACK";
-    // MORE RECOMPS on Star Wars Trilogy: ENTER plays it (or opens its page), G its page
-    bool on_sw = screen_ == Screen::More && selected_ < n && list[selected_].id == STAR_WARS && !coffee_focus_;
-    const wchar_t* enter_what = !on_sw ? L"SELECT" : sw_exe_.empty() ? L"OPEN PAGE" : L"PLAY";
-    bool page_key = on_sw && !sw_exe_.empty();
+    // MORE RECOMPS on one of the games: ENTER plays it (or opens its page), G its page
+    int on_rc = coffee_focus_ ? -1 : selected_recomp();
+    const wchar_t* enter_what = on_rc < 0 ? L"SELECT" : more_exe_[on_rc].empty() ? L"OPEN PAGE" : L"PLAY";
+    bool page_key = on_rc >= 0 && !more_exe_[on_rc].empty();
     int py = h - U(64), x = U(80);
     if (!over_game) {   // the key help at the bottom right; at the left, the credit to the makers of the game
         x = w - U(80) + U(44) - prompt_width(L"A", L"ENTER", enter_what) - (back_what ? prompt_width(L"B", L"ESC", back_what) : 0) -
@@ -2447,7 +2502,7 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
         u_ = std::min(h / 1080.0f, w / 1440.0f);
         bg_.clear();
         bg_stone_.clear();
-        bg_more_.clear();
+        for (auto& b : bg_more_) b.clear();
     }
     partial_ = false;
     if (screen_ == Screen::Splash) {
@@ -2484,9 +2539,10 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
     if (over_game) out.assign(size_t(w) * h, 0);
     else {
         if (bg_.empty()) background();
-        out = has_poster() && page                       ? bg_stone_
-              : screen_ == Screen::More && !bg_more_.empty() ? bg_more_
-                                                             : bg_;
+        if (int rc = selected_recomp(); rc >= 0) more_art_ = rc;   // on BACK: the last one's art stays
+        out = has_poster() && page                                  ? bg_stone_
+              : screen_ == Screen::More && !bg_more_[more_art_].empty() ? bg_more_[more_art_]
+                                                                        : bg_;
     }
     px_ = out.data();
     hit_.clear();

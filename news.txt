@@ -13,6 +13,10 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[7] 2026-11-11
+- Sega Rally 2 is out, recompiled for PC like this one: it is now in the main menu under MORE RECOMPS, beside Star Wars Trilogy
+- If it is in a folder next to this one, ENTER starts it; if not, ENTER opens its page, where you can download it
+
 [6] 2026-11-11
 - Menus: each entry's description now opens right under it
 - New OPTIONS screen, same style as the other ports

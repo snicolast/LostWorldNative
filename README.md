@@ -129,7 +129,7 @@ is in pixels of a 1080p screen (it scales with the window).
 - [Full manual](docs/MANUAL.md): every option, the modes, texture packs, debugging.
 - [How it works](docs/ARCHITECTURE.md): the PowerPC to C++ recompiler and the hardware.
 - Other recompiled arcade games: [Star Wars Trilogy](https://github.com/snicolast/StarWarsTrilogyNative)
-  and [Sega Rally 2](https://github.com/snicolast/SegaRally2Native) (Star Wars also in the main menu under **More recomps**).
+  and [Sega Rally 2](https://github.com/snicolast/SegaRally2Native) (both also in the main menu under **More recomps**).
 
 ## Support
 
