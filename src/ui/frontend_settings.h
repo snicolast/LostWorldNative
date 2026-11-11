@@ -56,6 +56,7 @@ struct FrontendSettings {
     bool check_updates = true;  // at launch, news.txt on GitHub: a window with what is new and UPDATE NOW
     int news_seen = 0;          // the newest news.txt entry the player closed with LATER
     std::string star_wars_path; // MORE RECOMPS: where Star Wars Trilogy is (its folder or StarWarsTrilogy.exe; "" = look for it)
+    std::string sega_rally_2_path; // MORE RECOMPS: where Sega Rally 2 is (its folder or SegaRally2.exe; "" = look for it)
 
     // save/settings.ini; missing keys keep their current value
     void load(const char* path);
