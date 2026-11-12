@@ -224,6 +224,7 @@ target_include_directories(LostWorld PRIVATE
     ${GEN_DIR}
     third_party/vulkan-headers/include
     third_party/volk
+    third_party/minimp3
     third_party/ngx/include
     ${MUSASHI_DIR}
     ${MUSASHI_GEN}
@@ -280,9 +281,11 @@ if(LW_TESTS)
     add_executable(pack2d_test tests/pack2d_test.cpp src/video/pack2d.cpp)
     add_executable(r3d_shelter_test tests/r3d_shelter_test.cpp src/video/r3d_shelter.cpp)
     add_executable(news_test tests/news_test.cpp src/ui/news.cpp)
+    add_executable(menu_music_test tests/menu_music_test.cpp src/ui/menu_music.cpp)
+    target_include_directories(menu_music_test PRIVATE third_party/minimp3)
     foreach(t tilegen_test fnv_test options_test sky_motion_test audio_stream_test rom_zip_test encounter_script_test
               scsp_state_test weather_sound_test sky_procedural_test r3d_state_test worker_test settings_bridge_test
-              pack2d_test r3d_shelter_test news_test)
+              pack2d_test r3d_shelter_test news_test menu_music_test)
         target_include_directories(${t} PRIVATE src/video src/common src/runtime src/audio src/ui ${MINIZ_DIR})
         if(MSVC)
             target_compile_options(${t} PRIVATE /W4 /utf-8)
@@ -305,6 +308,7 @@ if(LW_TESTS)
     add_test(NAME pack2d COMMAND pack2d_test)
     add_test(NAME r3d_shelter COMMAND r3d_shelter_test)
     add_test(NAME news COMMAND news_test)
+    add_test(NAME menu_music COMMAND menu_music_test ${CMAKE_SOURCE_DIR}/res/menu/music.mp3)
     # 3.10: the version the tools need, so an older Python in PATH is skipped (Star Wars Trilogy issue #51)
     find_package(Python3 3.10 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)

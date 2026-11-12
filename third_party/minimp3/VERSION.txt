@@ -1,0 +1,1 @@
+minimp3 (https://github.com/lieff/minimp3), master as of 2026-11-03, CC0. Only minimp3.h is used (MPEG-1 Layer II decoding for the DSB2 music).

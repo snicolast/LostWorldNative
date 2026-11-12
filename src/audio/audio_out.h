@@ -22,6 +22,14 @@ public:
     size_t queued() const { return stream_.queued(); }
     // Any thread; the device is reopened if the channel count changes
     void set_speakers(AudioStream::Speakers s) { speakers_ = int(s); }
+    // Something else to hear on top of the queue (the menus' music): called by
+    // the output thread after each pull with the frames about to be played.
+    // `user` must outlive the output; nullptr as `fn` takes it away
+    using Extra = void (*)(void* user, float* out, size_t frames, int channels, int rate);
+    void set_extra(Extra fn, void* user) {
+        extra_user_ = user;
+        extra_ = fn;
+    }
 
 private:
     void run();
@@ -30,5 +38,7 @@ private:
     std::thread thread_;
     std::atomic<bool> running_{false};
     std::atomic<int> speakers_{int(AudioStream::Speakers::Stereo)};
+    std::atomic<Extra> extra_{nullptr};
+    std::atomic<void*> extra_user_{nullptr};
     AudioStream stream_;
 };

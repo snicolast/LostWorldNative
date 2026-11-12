@@ -1409,7 +1409,10 @@ bool App::init(int argc, char** argv, bool first_start) {
     // Achievement notices, over the game and under the menus
     toast_shown = toast.init("third_party/fonts") && toast_layer.init(presenter);
     toast.set_volume(g_opt.volume);
-    if (g_opt.menu && !g_opt.headless) music.open();
+    if (g_opt.menu && !g_opt.headless && music.open())   // heard through the game's own output
+        g_audio.set_extra([](void* m, float* out, size_t frames, int channels, int rate) {
+            static_cast<MenuMusic*>(m)->mix(out, frames, channels, rate);
+        }, &music);
     music_time = now_seconds();
     prep_thread = std::thread([this] { prepare_frames(); });
     if (g_frame_log && presenter.can_wait_present()) shown_waiter = std::thread([this] { note_presents(); });
@@ -2318,7 +2321,7 @@ void App::shutdown() {
     if (g_opt.replay.empty())
         for (int i = 0; i < 100 && !g_parked; i++) Sleep(10);   // a frame takes ~17 ms; 1 s is plenty
     music.close();
-    g_audio.stop();
+    g_audio.stop();   // before `music` goes: the output thread reads it
     stats_save();
     fflush(stdout);
     ui.shutdown();
