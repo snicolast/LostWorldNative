@@ -13,6 +13,11 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[11] 2026-11-12
+- NicoLauncher is out: one free app that installs, builds, updates and starts this game and the other recomps. No Visual Studio needed
+- Get it at github.com/snicolast/NicoLauncher-Hub. Your current install keeps working, and the launcher can use the folder you already have
+- Menu music now plays through the game's own sound output: no more silent menus on some PCs
+
 [10] 2026-11-12
 - Main menu: the Buy me a coffee button is now inside MORE RECOMPS, above BACK
 
