@@ -56,7 +56,7 @@ with current drivers; started from a command prompt, the game's first `[vulkan]`
 yours offers). DLAA needs an NVIDIA RTX; on other cards it switches itself off, and the game builds
 the same on any GPU.
 
-The easy way is **[NicoLauncher](https://github.com/snicolast/NicoLauncher-Hub)**, a free app that
+Install it with **[NicoLauncher](https://github.com/snicolast/NicoLauncher-Hub)**, a free app that
 downloads, builds, updates and starts the game for you. No Visual Studio, nothing to set up by hand.
 
 1. Download **[NicoLauncher-setup.exe](https://github.com/snicolast/NicoLauncher-Hub/releases/latest)** and run it.
