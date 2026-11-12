@@ -56,12 +56,24 @@ with current drivers; started from a command prompt, the game's first `[vulkan]`
 yours offers). DLAA needs an NVIDIA RTX; on other cards it switches itself off, and the game builds
 the same on any GPU.
 
+The easy way is **[NicoLauncher](https://github.com/snicolast/NicoLauncher-Hub)**, a free app that
+downloads, builds, updates and starts the game for you. No Visual Studio, nothing to set up by hand.
+
+1. Download **[NicoLauncher-setup.exe](https://github.com/snicolast/NicoLauncher-Hub/releases/latest)** and run it.
+2. In the launcher, open **The Lost World**, press **Install** and choose your `lostwsga.zip` when it asks.
+3. Press **Play**.
+
+<details>
+<summary>Without the launcher: install.bat</summary>
+
 1. Download this repository (green **Code** button > **Download ZIP**) and unzip it.
 2. Put `lostwsga.zip` in the folder.
 3. Double-click `install.bat`. It installs what the build needs with winget, Python 3 and the C++
    tools of Build Tools for Visual Studio 2022 (a few GB, accept the Windows prompt), then builds
    the game. It takes a while the first time; you can also drop `lostwsga.zip` on `install.bat`.
 4. Play with `LostWorld.exe`.
+
+</details>
 
 <details>
 <summary>Manual install</summary>
@@ -89,7 +101,9 @@ name and run `build.bat` again.
 
 ### Update
 
-Run `update.bat`. It downloads the latest version from GitHub (no git needed), replaces only the
+With NicoLauncher: it tells you when there is something new. Press **Update**.
+
+Without it: run `update.bat`. It downloads the latest version from GitHub (no git needed), replaces only the
 files that changed and rebuilds `LostWorld.exe`. Your ROM, settings, records, crosshairs and any
 textures of your own are kept; a repository file you edited yourself is copied to
 `out\update_backup\` before it is replaced. `update.bat -Check` only says whether there is
