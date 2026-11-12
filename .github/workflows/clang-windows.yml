@@ -50,6 +50,6 @@ jobs:
         run: >
           cmake --build build\cmake --target shaders m68kmake tilegen_test fnv_test options_test sky_motion_test
           audio_stream_test rom_zip_test encounter_script_test scsp_state_test weather_sound_test sky_procedural_test
-          r3d_state_test worker_test settings_bridge_test pack2d_test r3d_shelter_test news_test
+          r3d_state_test worker_test settings_bridge_test pack2d_test r3d_shelter_test news_test menu_music_test
       - name: Test
         run: ctest --test-dir build\cmake --output-on-failure
