@@ -56,40 +56,18 @@ with current drivers; started from a command prompt, the game's first `[vulkan]`
 yours offers). DLAA needs an NVIDIA RTX; on other cards it switches itself off, and the game builds
 the same on any GPU.
 
-1. Download this repository (green **Code** button > **Download ZIP**) and unzip it.
-2. Put `lostwsga.zip` in the folder.
-3. Double-click `install.bat`. It installs what the build needs with winget, Python 3 and the C++
-   tools of Build Tools for Visual Studio 2022 (a few GB, accept the Windows prompt), then builds
-   the game. It takes a while the first time; you can also drop `lostwsga.zip` on `install.bat`.
-4. Play with `LostWorld.exe`.
+Install it with **[NicoLauncher](https://github.com/snicolast/NicoLauncher-Hub)**, a free app that
+downloads, builds, updates and starts the game for you. No Visual Studio, nothing to set up by hand.
 
-<details>
-<summary>Manual install</summary>
-
-Install [Python 3.10 or later](https://www.python.org/downloads/) and
-[Build Tools for Visual Studio 2022](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)
-with the *Desktop development with C++* workload. The full workload is over 6 GB; the build only
-needs the MSVC compiler, CMake and a Windows SDK. In a command prompt:
-
-```
-winget install Microsoft.VisualStudio.2022.BuildTools --override "--passive --wait --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
-```
-
-Or in the Visual Studio Installer, choose *Individual components* instead of the workload and
-tick *MSVC v143 - VS 2022 C++ x64/x86 build tools (Latest)*, *C++ CMake tools for Windows*
-and one *Windows 11 SDK* (it works on Windows 10 too).
-
-Then run `build.bat` with `lostwsga.zip` next to it. It downloads SDL3, miniz and NVIDIA DLSS on
-the first run. DLSS is optional: if that download fails, the game is built without it and uses MSAA.
-</details>
-
-If the build can't download SDL3 or miniz (a proxy, an antivirus, a flaky connection), it lists
-the links: download them with your browser, put them in `third_party\downloads\` keeping the file
-name and run `build.bat` again.
+1. Download **[NicoLauncher-setup.exe](https://github.com/snicolast/NicoLauncher-Hub/releases/latest)** and run it.
+2. In the launcher, open **The Lost World**, press **Install** and choose your `lostwsga.zip` when it asks.
+3. Press **Play**.
 
 ### Update
 
-Run `update.bat`. It downloads the latest version from GitHub (no git needed), replaces only the
+With NicoLauncher: it tells you when there is something new. Press **Update**.
+
+Without it: run `update.bat`. It downloads the latest version from GitHub (no git needed), replaces only the
 files that changed and rebuilds `LostWorld.exe`. Your ROM, settings, records, crosshairs and any
 textures of your own are kept; a repository file you edited yourself is copied to
 `out\update_backup\` before it is replaced. `update.bat -Check` only says whether there is
