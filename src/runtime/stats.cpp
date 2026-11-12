@@ -177,6 +177,72 @@ struct Counters {
     }
 };
 
+// ---- save/achievements.json: the table with the progress and unlock times ----
+// Written for the launcher (NicoLauncher), which shows them on the game's page
+// without knowing this game's table; the format is in its docs/manifest.md.
+// Nothing reads it back: save/achievements.ini stays the game's own record.
+
+void json_string(std::string& out, const wchar_t* w) {
+    out += '"';
+    for (; *w; w++) {
+        uint32_t c = uint32_t(*w);
+        if (c == '"' || c == '\\') {
+            out += '\\';
+            out += char(c);
+        } else if (c < 0x20) {
+            char b[8];
+            snprintf(b, sizeof b, "\\u%04x", unsigned(c));
+            out += b;
+        } else if (c < 0x80) {
+            out += char(c);
+        } else if (c < 0x800) {
+            out += char(0xC0 | (c >> 6));
+            out += char(0x80 | (c & 0x3F));
+        } else {
+            out += char(0xE0 | ((c >> 12) & 0x0F));
+            out += char(0x80 | ((c >> 6) & 0x3F));
+            out += char(0x80 | (c & 0x3F));
+        }
+    }
+    out += '"';
+}
+
+void write_achievements_json(const Stats& s, const std::vector<int64_t>& unlocked) {
+    std::string out = "{\n  \"schema\": 1,\n  \"achievements\": [\n";
+    for (size_t i = 0; i < TABLE.size(); i++) {
+        const AchievementInfo& a = TABLE[i];
+        int64_t p = std::clamp<int64_t>(a.progress(s), 0, a.goal);
+        int64_t when = i < unlocked.size() ? unlocked[i] : 0;
+        if (when) p = a.goal;
+        out += "    {\"id\": \"" + std::string(a.key) + "\", \"name\": ";
+        json_string(out, a.name);
+        out += ", \"description\": ";
+        json_string(out, a.text);
+        out += ", \"goal\": " + std::to_string(a.goal) + ", \"progress\": " + std::to_string(p);
+        if (std::string(a.key) == "veteran") {   // play time, counted in frames
+            int minutes = int(double(p) / FRAME_HZ / 60);
+            char b[48];
+            snprintf(b, sizeof b, "%dh %02dm / %dh", minutes / 60, minutes % 60, int(double(a.goal) / FRAME_HZ / 3600 + 0.5));
+            out += std::string(", \"progress_text\": \"") + b + "\"";
+        }
+        out += ", \"unlocked\": " + std::to_string(when) + "}";
+        out += i + 1 < TABLE.size() ? ",\n" : "\n";
+    }
+    out += "  ]\n}\n";
+    const char* path = "save/achievements.json";
+    std::string tmp = std::string(path) + ".tmp";
+    FILE* f = fopen(tmp.c_str(), "wb");
+    if (!f) return;
+    bool ok = fwrite(out.data(), 1, out.size(), f) == out.size();
+    ok = fclose(f) == 0 && ok;
+#ifdef _WIN32
+    ok = ok && MoveFileExA(tmp.c_str(), path, MOVEFILE_REPLACE_EXISTING);
+#else
+    ok = ok && rename(tmp.c_str(), path) == 0;
+#endif
+    if (!ok) printf("[achievements] could not save %s\n", path);
+}
+
 struct Tracker {
     bool on = false;
     std::mutex mutex;   // everything below: the window reads copies
@@ -228,6 +294,7 @@ struct Tracker {
         for (size_t i = 0; i < TABLE.size(); i++)
             if (unlocked[i]) a.put(TABLE[i].key, unlocked[i]);
         if (!ini.save(STATS_FILE) || !a.save(ACHIEVEMENTS_FILE)) printf("[achievements] could not save save/stats.ini\n");
+        write_achievements_json(stats, unlocked);
         saved_at = frame;
         dirty = false;
     }
@@ -363,6 +430,7 @@ int64_t achievement_progress(const Stats& s, int index) {
 void stats_init() {
     std::lock_guard<std::mutex> lock(g.mutex);
     g.load();
+    write_achievements_json(g.stats, g.unlocked);   // for the launcher, from the first launch of a new build
     g.on = true;
     g.rebase = true;
     rt_hook_function(FN_ADD_SCORE);

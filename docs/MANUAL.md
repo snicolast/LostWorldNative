@@ -108,7 +108,8 @@ statistics (STATS): games, time played, shots, hits and accuracy,
 technique shots, dinosaurs killed, lives lost, continues, best
 scores per route, and best time per stage and per boss. They are read from
 the same counters the game uses for its results screen and are
-saved in save/stats.ini and save/achievements.ini; when an achievement is unlocked a
+saved in save/stats.ini and save/achievements.ini (with a copy in
+save/achievements.json that the launcher shows on the game's page); when an achievement is unlocked a
 notification appears in the bottom right. Tests (--auto, --headless, LW_SURV_GOD...)
 don't count.
 `LostWorld.exe --headless --frames 1800` runs it without a window, at full
