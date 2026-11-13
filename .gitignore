@@ -6,6 +6,7 @@ __pycache__/
 *.pyc
 LostWorld.exe
 save/
+/achievements/
 *.dll
 *.spv
 third_party/ngx/
