@@ -13,6 +13,10 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[12] 2026-11-13
+- Fixed: every stage's results screen said STAGE 1. Each stage shows its own number again
+- NicoLauncher can now show your achievements
+
 [11] 2026-11-12
 - NicoLauncher is out: one free app that installs, builds, updates and starts this game and the other recomps. No Visual Studio needed
 - Get it at github.com/snicolast/NicoLauncher-Hub. Your current install keeps working, and the launcher can use the folder you already have
