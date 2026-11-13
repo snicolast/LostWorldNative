@@ -14,6 +14,8 @@
 // god mode, the boss state maker) never call stats_init, so they count nothing.
 #include "stats.h"
 
+#include "achievements_csv.h"
+
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -181,6 +183,7 @@ struct Counters {
 // Written for the launcher (NicoLauncher), which shows them on the game's page
 // without knowing this game's table; the format is in its docs/manifest.md.
 // Nothing reads it back: save/achievements.ini stays the game's own record.
+// The same list goes to achievements/achievements.csv (achievements_csv.h).
 
 void json_string(std::string& out, const wchar_t* w) {
     out += '"';
@@ -209,11 +212,13 @@ void json_string(std::string& out, const wchar_t* w) {
 
 void write_achievements_json(const Stats& s, const std::vector<int64_t>& unlocked) {
     std::string out = "{\n  \"schema\": 1,\n  \"achievements\": [\n";
+    std::vector<CsvAchievement> csv;
     for (size_t i = 0; i < TABLE.size(); i++) {
         const AchievementInfo& a = TABLE[i];
         int64_t p = std::clamp<int64_t>(a.progress(s), 0, a.goal);
         int64_t when = i < unlocked.size() ? unlocked[i] : 0;
         if (when) p = a.goal;
+        csv.push_back({a.key, a.name, a.text, a.goal, p, when});
         out += "    {\"id\": \"" + std::string(a.key) + "\", \"name\": ";
         json_string(out, a.name);
         out += ", \"description\": ";
@@ -241,6 +246,7 @@ void write_achievements_json(const Stats& s, const std::vector<int64_t>& unlocke
     ok = ok && rename(tmp.c_str(), path) == 0;
 #endif
     if (!ok) printf("[achievements] could not save %s\n", path);
+    write_achievements_csv(csv);
 }
 
 struct Tracker {

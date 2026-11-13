@@ -27,6 +27,7 @@
 - **Arcade sound**, with surround and headphone modes.
 - **Mouse, gamepad (gyro too) or two mice** for 2 players.
 - **New modes**: Random Spawns (the arcade game shuffled), Boss Fight, Survival, achievements and stats.
+  The achievements are also written to `achievements/achievements.csv` for [PlayniteAchievements](https://github.com/justin-delano/PlayniteAchievements) (Editor, Spreadsheet Import).
 - **NEW:** Ultra-widescreen support.
 
 <p align="center">
