@@ -1753,7 +1753,7 @@ void App::update_boss_mode() {
             // The boss states put the boss's stage first in the run, over
             // stage 1, and left the rest of the list as it was (0,1,2,3,4):
             // after the Deinosuchus came stage 2 again. The stages after it
-            // follow on from it instead (2,3,4,0 for stage 2), so its stage
+            // follow on from it instead (1,2,3,4,0 for stage 2), so its stage
             // ends when the boss is down (states made before this included)
             int stage = BOSSES[boss_fight].stage_index;
             int index = int32_t(rd32(0x1C2B10));   // the run's stage list (0x1C2AFC) and position
