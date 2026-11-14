@@ -13,6 +13,12 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[14] 2026-11-14
+- BOSS FIGHT: beating the Deinosuchus now counts as a win, and it no longer replays stage 2 first
+- BOSS FIGHT: beating the T-Rex in San Diego now counts as a win too, so both give their achievements
+- BOSS FIGHT: fights load faster, and the next stage's map no longer flashes on screen
+- Started from a command prompt, the prompt now comes back on its own when the game closes
+
 [13] 2026-11-14
 - Achievements are now also saved for PlayniteAchievements: import achievements/achievements.csv from its Editor (Spreadsheet Import)
 
