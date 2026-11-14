@@ -1362,9 +1362,11 @@ void rt_event(Ctx& c) {
             video_snapshot();
             if (!g_logo_up && ((g_frame % 4 == 0 && boot_logo_up()) || g_frame > 3000)) g_logo_up = true;
             // Survival mode: on to the chosen stage at full speed, behind its loading screen
+            // Boss mode: on to the fight's state, behind the menu (app.cpp, update_boss_mode)
             bool boot_done = survival_enabled() ? !survival_owns_inputs() || g_frame > 200000   // (survival gives up first)
-                             : g_arcade_entry   ? arcade_entry_frame()
-                                                : (g_frame % 4 == 0 && boot_logo_up()) || g_frame > 3000;
+                             : g_arcade_entry    ? arcade_entry_frame()
+                             : g_logo_up && game_state_pending() ? false
+                                                 : (g_frame % 4 == 0 && boot_logo_up()) || g_frame > 3000;
             if (g_boot_skip && boot_done) {
                 g_boot_skip = g_fast_idle = false;
                 // The arcade game at its SEGA logo: the home state, also when

@@ -818,6 +818,8 @@ struct App {
     bool boss_loading = false; // asked the game thread for it
     int boss_fight = -1;       // the fight on
     double boss_over_at = 0;   // when its stage ended or the game was over
+    int boss_lives = 0;        // player 1's lives, last seen before it was out
+    double boss_shown_at = 0;  // when the menu closes on the fight just put back
 
     // Survival mode screens (loading, start, wave counter, results)
     SurvivalUi survival_ui;
@@ -1655,7 +1657,9 @@ void App::handle_menu_actions() {
         case Frontend::Action::StartBoss:
             cancel_arcade_entry();
             random_spawns_set(false);
-            if (frontend.boss_status[frontend.boss_choice] == Frontend::BOSS_READY) boss_pending = frontend.boss_choice;
+            // (not again while a fight is being put back behind the menu)
+            if (frontend.boss_status[frontend.boss_choice] == Frontend::BOSS_READY && !boss_loading && boss_shown_at == 0)
+                boss_pending = frontend.boss_choice;
             break;
         case Frontend::Action::PrepareBosses:
             for (int i = 0; i < BOSS_COUNT; i++)
@@ -1738,8 +1742,19 @@ void App::update_boss_mode() {
             boss_loading = true;
             boss_fight = boss_pending;
             boss_over_at = 0;
+            boss_shown_at = 0;
             frontend.boss_mode = true;
-            close_menu();
+            // The menu stays up while the game runs on, unseen, muted and
+            // at full speed, to put the fight back (a state only goes in from
+            // the game's main loop, which can be seconds away, e.g. while the
+            // next stage loads after a win). Closed at once, the game's last
+            // picture showed for a moment first; at real speed behind the
+            // menu, the click seemed not to work (runtime.cpp: the boot skip
+            // ends once the state is in)
+            g_boot_skip = g_fast_idle = true;
+            g_sound.set_dsp_enabled(false);
+            g_sound.set_muted(true);
+            g_hold = false;
         } else {
             frontend.boss_status[boss_pending] = Frontend::BOSS_MISSING;   // made again
             frontend.invalidate();
@@ -1748,7 +1763,19 @@ void App::update_boss_mode() {
     }
     if (boss_loading && game_state_result() != 0) {
         boss_loading = false;
-        if (game_state_result() > 0) stats_boss_begin(boss_fight);
+        if (game_state_result() > 0) {
+            // The boss states put the boss's stage first in the run, over
+            // stage 1, and left the rest of the list as it was (0,1,2,3,4):
+            // after the Deinosuchus came stage 2 again. The stages after it
+            // follow on from it instead (1,2,3,4,0 for stage 2), so its stage
+            // ends when the boss is down (states made before this included)
+            int stage = BOSSES[boss_fight].stage_index;
+            int index = int32_t(rd32(0x1C2B10));   // the run's stage list (0x1C2AFC) and position
+            for (int k = 1; index >= 0 && index + k < 5; k++) wr32(0x1C2AFC + 4 * (index + k), uint32_t((stage + k) % 5));
+            boss_lives = rd8(0x1A3723);
+            stats_boss_begin(boss_fight);
+            boss_shown_at = now_seconds() + 0.1;   // its first frames drawn
+        }
         if (game_state_result() < 0) {
             printf("[boss] could not start the fight\n");
             boss_fight = -1;
@@ -1757,18 +1784,30 @@ void App::update_boss_mode() {
             g_menu_open = g_hold = true;
         }
     }
+    if (boss_shown_at > 0 && now_seconds() >= boss_shown_at) {
+        boss_shown_at = 0;
+        if (boss_fight >= 0) close_menu();
+    }
     // The fight is over once its stage ends (the boss is down) or the
     // game is (no credits left): a moment later, the main menu, with
-    // the arcade game as it was waiting behind it
+    // the arcade game as it was waiting behind it. Stage 5 is the last:
+    // the game ends after it (the ending, TOTAL SCORE) with the stage
+    // unchanged, and the player goes out with lives left, as when a whole
+    // game is finished (stats.cpp, end_game); out with none, the continue
+    // ran out
     if (boss_fight >= 0 && !boss_loading && !frontend.active()) {
-        // Player 1 state (docs/game_ram.md): 3 once the continue has run out
-        bool over = rd8(0x1A623C) != BOSSES[boss_fight].stage_index || rd8(0x1A3784 + 0xD) == 3;
+        // Player 1 state (docs/game_ram.md): 3 out, 0 on the CONTINUE screen
+        bool out = rd8(0x1A3784 + 0xD) == 3;
+        if (!out) boss_lives = rd8(0x1A3723);
+        bool stage_ended = rd8(0x1A623C) != BOSSES[boss_fight].stage_index;
+        bool over = stage_ended || out;
         if (!over) boss_over_at = 0;
         else if (boss_over_at == 0) {
             boss_over_at = now_seconds();
-            stats_boss_end(rd8(0x1A623C) != BOSSES[boss_fight].stage_index);   // the stage ended: the boss is down
+            stats_boss_end(stage_ended || boss_lives > 0);   // the boss is down
         }
-        else if (now_seconds() - boss_over_at > 3) {
+        // The next stage starting (its map) is not shown: the menu at once
+        if (boss_over_at > 0 && (stage_ended || now_seconds() - boss_over_at > 3)) {
             boss_fight = -1;
             frontend.boss_mode = false;
             game_state_load_home();
