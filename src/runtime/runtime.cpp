@@ -816,6 +816,7 @@ double g_boot_s = now_seconds();   // when the process started (the boot skip re
     fflush(stdout);
     if (g_state_writer.joinable()) g_state_writer.join();   // a state still being written
     g_audio.stop();
+    console_prompt();
     ExitProcess(code);
 }
 
