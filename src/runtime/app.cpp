@@ -819,6 +819,7 @@ struct App {
     int boss_fight = -1;       // the fight on
     double boss_over_at = 0;   // when its stage ended or the game was over
     int boss_lives = 0;        // player 1's lives, last seen before it was out
+    double boss_shown_at = 0;  // when the menu closes on the fight just put back
 
     // Survival mode screens (loading, start, wave counter, results)
     SurvivalUi survival_ui;
@@ -1739,8 +1740,12 @@ void App::update_boss_mode() {
             boss_loading = true;
             boss_fight = boss_pending;
             boss_over_at = 0;
+            boss_shown_at = 0;
             frontend.boss_mode = true;
-            close_menu();
+            // The menu stays up while the game runs on to put the fight
+            // back: closed at once, the game's last picture showed for a
+            // moment first (after a win, the next stage's map)
+            g_hold = false;
         } else {
             frontend.boss_status[boss_pending] = Frontend::BOSS_MISSING;   // made again
             frontend.invalidate();
@@ -1760,6 +1765,7 @@ void App::update_boss_mode() {
             for (int k = 1; index >= 0 && index + k < 5; k++) wr32(0x1C2AFC + 4 * (index + k), uint32_t((stage + k) % 5));
             boss_lives = rd8(0x1A3723);
             stats_boss_begin(boss_fight);
+            boss_shown_at = now_seconds() + 0.1;   // its first frames drawn
         }
         if (game_state_result() < 0) {
             printf("[boss] could not start the fight\n");
@@ -1768,6 +1774,10 @@ void App::update_boss_mode() {
             frontend.open_boss_list(true);
             g_menu_open = g_hold = true;
         }
+    }
+    if (boss_shown_at > 0 && now_seconds() >= boss_shown_at) {
+        boss_shown_at = 0;
+        if (boss_fight >= 0) close_menu();
     }
     // The fight is over once its stage ends (the boss is down) or the
     // game is (no credits left): a moment later, the main menu, with
