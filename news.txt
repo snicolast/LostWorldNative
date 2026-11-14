@@ -13,6 +13,9 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[13] 2026-11-14
+- Achievements are now also saved for PlayniteAchievements: import achievements/achievements.csv from its Editor (Spreadsheet Import)
+
 [12] 2026-11-13
 - Fixed: every stage's results screen said STAGE 1. Each stage shows its own number again
 - NicoLauncher can now show your achievements
