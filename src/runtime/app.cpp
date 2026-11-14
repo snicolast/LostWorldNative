@@ -1657,7 +1657,9 @@ void App::handle_menu_actions() {
         case Frontend::Action::StartBoss:
             cancel_arcade_entry();
             random_spawns_set(false);
-            if (frontend.boss_status[frontend.boss_choice] == Frontend::BOSS_READY) boss_pending = frontend.boss_choice;
+            // (not again while a fight is being put back behind the menu)
+            if (frontend.boss_status[frontend.boss_choice] == Frontend::BOSS_READY && !boss_loading && boss_shown_at == 0)
+                boss_pending = frontend.boss_choice;
             break;
         case Frontend::Action::PrepareBosses:
             for (int i = 0; i < BOSS_COUNT; i++)
@@ -1742,9 +1744,16 @@ void App::update_boss_mode() {
             boss_over_at = 0;
             boss_shown_at = 0;
             frontend.boss_mode = true;
-            // The menu stays up while the game runs on to put the fight
-            // back: closed at once, the game's last picture showed for a
-            // moment first (after a win, the next stage's map)
+            // The menu stays up while the game runs on, unseen, muted and
+            // at full speed, to put the fight back (a state only goes in from
+            // the game's main loop, which can be seconds away, e.g. while the
+            // next stage loads after a win). Closed at once, the game's last
+            // picture showed for a moment first; at real speed behind the
+            // menu, the click seemed not to work (runtime.cpp: the boot skip
+            // ends once the state is in)
+            g_boot_skip = g_fast_idle = true;
+            g_sound.set_dsp_enabled(false);
+            g_sound.set_muted(true);
             g_hold = false;
         } else {
             frontend.boss_status[boss_pending] = Frontend::BOSS_MISSING;   // made again
@@ -1797,7 +1806,8 @@ void App::update_boss_mode() {
             boss_over_at = now_seconds();
             stats_boss_end(stage_ended || boss_lives > 0);   // the boss is down
         }
-        else if (now_seconds() - boss_over_at > 3) {
+        // The next stage starting (its map) is not shown: the menu at once
+        if (boss_over_at > 0 && (stage_ended || now_seconds() - boss_over_at > 3)) {
             boss_fight = -1;
             frontend.boss_mode = false;
             game_state_load_home();
