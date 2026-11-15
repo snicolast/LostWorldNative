@@ -1,11 +1,15 @@
-<p align="center">
-  <img src="docs/img/marquee.png" alt="The Lost World - Arcade" width="100%">
-</p>
+<h1 align="center">Nico TLW</h1>
 
 <p align="center">
-  <b>Sega's 1997 arcade light-gun game, running natively on PC.</b><br>
-  Not an emulator: the original code, recompiled to C++, with a modern Vulkan renderer.
+  <b>An unofficial, fan-made recompilation of the 1997 arcade game The Lost World: Jurassic Park.</b><br>
+  Not an emulator: the original program, recompiled to C++ on your own PC from your own copy, with a modern Vulkan renderer.
 </p>
+
+> [!IMPORTANT]
+> **Unofficial fan project.** Not affiliated with, endorsed or sponsored by SEGA or the owners of
+> The Lost World and Jurassic Park. Nothing from the original game is in this repository: no ROM,
+> no code, no music or voices. To play you need your own copy of the arcade game (`lostwsga.zip`),
+> and the game is built from it on your PC.
 
 <p align="center">
   <a href="https://www.youtube.com/@snicolast"><img src="https://img.shields.io/badge/YouTube-@snicolast-red?logo=youtube&logoColor=white" alt="YouTube: snicolast"></a>
@@ -34,12 +38,9 @@
   <img src="docs/img/widescreen.jpg" alt="Arcade 4:3 next to native 16:9" width="100%">
 </p>
 
-<table>
-  <tr>
-    <td><img src="docs/img/main_menu.jpg" alt="Main menu"></td>
-    <td><img src="docs/img/stage_select.jpg" alt="Stage select redrawn in HD"></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/img/stage_select.jpg" alt="Stage select redrawn in HD" width="100%">
+</p>
 
 ## ⚠️ ROM not included
 
@@ -131,5 +132,5 @@ port, a ROM, or anything made from one. I have never published any of them: ever
 game themselves from their own `lostwsga.zip`. Any ready-to-play download you find elsewhere is
 not from me, breaks the license, and is at your own risk.
 
-<sub>A fan project for personal use, not affiliated with or endorsed by Sega.
+<sub>A fan project for personal use, not affiliated with or endorsed by SEGA.
 The Lost World and Jurassic Park are trademarks of their respective owners.</sub>
