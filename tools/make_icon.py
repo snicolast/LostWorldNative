@@ -1,52 +1,47 @@
-"""Builds res/lostworld.ico from res/logo.png (the Lost World emblem on a dark background).
-
-The emblem (circle + banner) is cut out on a transparent background. The 256/64/48
-sizes show the whole emblem; the 32/24/16 ones crop to the T-Rex head so it stays
-readable in Explorer lists and the taskbar.
-Usage: python tools/make_icon.py
+"""Builds res/lostworld.ico: an orange rounded badge with a white inner ring and "TLW"
+in white condensed capitals (Anton, from third_party/fonts/). No official artwork.
+Every size is drawn on its own (4x supersampled) so the small ones stay sharp.
+Usage: python tools/make_icon.py   (needs Pillow)
 """
 import os
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, "res", "logo.png")
 DST = os.path.join(ROOT, "res", "lostworld.ico")
+FONT = os.path.join(ROOT, "third_party", "fonts", "Anton-Regular.ttf")
+ORANGE = (214, 104, 18, 255)
+WHITE = (255, 255, 255, 255)
+TEXT = "TLW"
 
-# Emblem geometry measured on logo.png (602x468)
-CIRCLE = (301, 234.5, 218)       # center x, center y, radius (outer edge of the orange ring)
-BANNER = (13, 233, 590, 349)     # left, top, right, bottom of the title banner
-HEAD = (262, 17, 482, 237)       # square around the T-Rex head, above the banner, for the small sizes
 
+def draw(size, ss=4):
+    s = size * ss
+    im = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    radius = size // 5
+    d.rounded_rectangle([0, 0, s - 1, s - 1], radius * ss, fill=ORANGE)
+    if size >= 24:  # white inner ring (too fine to read below that)
+        m = max(1, size // 20) * ss
+        w = max(1, int(size / 20 * 0.8 * ss))
+        d.rounded_rectangle([m, m, s - 1 - m, s - 1 - m], radius * ss - m, outline=WHITE, width=w)
 
-def emblem_mask(size, ss=4):
-    w, h = size
-    m = Image.new("L", (w * ss, h * ss), 0)
-    d = ImageDraw.Draw(m)
-    cx, cy, r = CIRCLE
-    d.ellipse([(cx - r) * ss, (cy - r) * ss, (cx + r) * ss, (cy + r) * ss], fill=255)
-    d.rectangle([v * ss for v in BANNER], fill=255)
-    return m.resize(size, Image.LANCZOS)
+    font = ImageFont.truetype(FONT, int(s * (0.50 if size >= 24 else 0.66)))
+    bb = d.textbbox((0, 0), TEXT, font=font)
+    tw, th = bb[2] - bb[0], bb[3] - bb[1]
+    text = Image.new("RGBA", (tw, th), (0, 0, 0, 0))
+    ImageDraw.Draw(text).text((-bb[0], -bb[1]), TEXT, font=font, fill=WHITE)
+    maxw = int(s * (0.70 if size >= 24 else 0.90))
+    if tw > maxw:  # squeeze it sideways to fit the badge
+        text = text.resize((maxw, th), Image.LANCZOS)
+    im.alpha_composite(text, ((s - text.width) // 2, (s - th) // 2))
+    return im.resize((size, size), Image.LANCZOS)
 
 
 def main():
-    logo = Image.open(SRC).convert("RGBA")
-    logo.putalpha(emblem_mask(logo.size))
-
-    # Whole emblem, centered in a square
-    side = max(logo.size)
-    full = Image.new("RGBA", (side, side), (0, 0, 0, 0))
-    full.paste(logo, ((side - logo.width) // 2, (side - logo.height) // 2))
-
-    # T-Rex head, keeping the round edge of the emblem and cut at the banner top
-    head = logo.crop(HEAD)
-
-    images = []
-    for s in (256, 64, 48):
-        images.append(full.resize((s, s), Image.LANCZOS))
-    for s in (32, 24, 16):
-        images.append(head.resize((s, s), Image.LANCZOS))
-    images[0].save(DST, format="ICO", sizes=[im.size for im in images], append_images=images[1:])
-    print("Wrote", DST)
+    sizes = [256, 64, 48, 32, 24, 16]
+    images = [draw(n) for n in sizes]
+    images[0].save(DST, format="ICO", sizes=[(n, n) for n in sizes], append_images=images[1:])
+    print(f"{DST}: {', '.join(map(str, sizes))}")
 
 
 if __name__ == "__main__":
