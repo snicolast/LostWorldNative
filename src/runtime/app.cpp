@@ -1252,7 +1252,7 @@ bool App::init(int argc, char** argv, bool first_start) {
             stats_init();
         g_audio.start();
         intro = intro && !survival_cli && g_opt.replay.empty() && !g_opt.shot_frame && ini.splash &&
-                !getenv("LW_MENU_KEYS") && !getenv("LW_MENU_SHOT");
+                !getenv("LW_MENU_KEYS") && !getenv("LW_MENU_SHOT") && !getenv("LW_MENU_FILM");
         g_hold = (g_opt.menu || intro) && !survival_cli;   // the main menu (or the splash) comes first
         g_boot_skip = g_fast_idle = !g_opt.show_boot;
         g_sound.set_dsp_enabled(!g_boot_skip);
@@ -1341,7 +1341,7 @@ bool App::init(int argc, char** argv, bool first_start) {
         if (s.fullscreen && !presenter.fullscreen()) presenter.toggle_fullscreen();
         if (!survival_cli) {   // survival mode goes straight into the game
             // the logos first (not when a debugging aid drives the menu)
-            if (getenv("LW_MENU_KEYS") || getenv("LW_MENU_SHOT")) frontend.open(Frontend::Screen::Main);
+            if (getenv("LW_MENU_KEYS") || getenv("LW_MENU_SHOT") || getenv("LW_MENU_FILM")) frontend.open(Frontend::Screen::Main);
             else {
                 frontend.open_splash();
                 frontend.check_for_news();   // news.txt on GitHub while the logo plays
@@ -1911,11 +1911,48 @@ void App::update_menus() {
         frontend.pad_prompts = pad_in_menu || menu_pad;
         frontend.invalidate();
     }
+    // Debugging aid: LW_MENU_FILM=N saves the menu's next N pictures at half
+    // size as out/menu_film/000.bmp.. (the menu's clock at LW_MENU_FPS, 30 if
+    // not set: one step a picture, none skipped), then quits.
+    // LW_MENU_FILM_KEYS="40:13,75:27" presses key 13 after picture 40, ...
+    static int film_left = getenv("LW_MENU_FILM") ? atoi(getenv("LW_MENU_FILM")) : 0;
+    static int film_index = 0;
+    static const char* film_keys = getenv("LW_MENU_FILM_KEYS");
+    if (film_left > 0 && frontend.active()) frontend.invalidate();   // a picture every refresh
     if (frontend.active()) {
         RECT rc;
         GetClientRect(presenter.hwnd(), &rc);
         double t0 = now_seconds();
         if (frontend.draw(rc.right, rc.bottom, ui_pixels)) {
+            if (film_left > 0) {
+                int fw = rc.right / 2, fh = rc.bottom / 2;
+                std::vector<uint32_t> half(size_t(fw) * fh);
+                for (int y = 0; y < fh; y++)
+                    for (int x = 0; x < fw; x++) {
+                        const uint32_t* q = &ui_pixels[size_t(2 * y) * rc.right + 2 * x];
+                        uint32_t px = 0xFF000000u;
+                        for (int sh = 0; sh <= 16; sh += 8) {
+                            uint32_t c = ((q[0] >> sh) & 0xFF) + ((q[1] >> sh) & 0xFF) + ((q[rc.right] >> sh) & 0xFF) +
+                                         ((q[rc.right + 1] >> sh) & 0xFF);
+                            px |= ((c + 2) / 4) << sh;
+                        }
+                        half[size_t(y) * fw + x] = px;
+                    }
+                CreateDirectoryA("out", nullptr);
+                CreateDirectoryA("out/menu_film", nullptr);
+                char path[64];
+                snprintf(path, sizeof(path), "out/menu_film/%03d.bmp", film_index);
+                bmp_save(path, fw, fh, half.data());
+                for (const char* k = film_keys; k && *k;) {
+                    int at = 0, vk = 0, len = 0;
+                    if (sscanf(k, "%d:%d%n", &at, &vk, &len) < 2) break;
+                    if (at == film_index) frontend.key(vk);
+                    k += len;
+                    if (*k == ',') k++;
+                }
+                film_index++;
+                if (--film_left == 0) presenter.close();
+            }
             int y0, y1;
             if (frontend.partial_rows(y0, y1)) ui.update_rows(ui_pixels.data(), rc.right, rc.bottom, y0, y1);
             else ui.set_image(ui_pixels.data(), rc.right, rc.bottom);
