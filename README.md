@@ -1,4 +1,4 @@
-<h1 align="center">Nico Dinos</h1>
+<h1 align="center">Nico TLW</h1>
 
 <p align="center">
   <b>An unofficial, fan-made recompilation of the 1997 arcade game The Lost World: Jurassic Park.</b><br>
