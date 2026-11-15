@@ -1924,6 +1924,13 @@ void App::update_menus() {
         GetClientRect(presenter.hwnd(), &rc);
         double t0 = now_seconds();
         if (frontend.draw(rc.right, rc.bottom, ui_pixels)) {
+            int y0, y1;
+            if (frontend.partial_rows(y0, y1)) ui.update_rows(ui_pixels.data(), rc.right, rc.bottom, y0, y1);
+            else ui.set_image(ui_pixels.data(), rc.right, rc.bottom);
+            double ms = (now_seconds() - t0) * 1000;
+            if (ms > 20) printf("[menu] slow redraw: %.0f ms\n", ms);
+            static const char* menu_shot = getenv("LW_MENU_SHOT");   // debugging aid: the menu picture
+            if (menu_shot) bmp_save(menu_shot, rc.right, rc.bottom, ui_pixels.data());
             if (film_left > 0) {
                 int fw = rc.right / 2, fh = rc.bottom / 2;
                 std::vector<uint32_t> half(size_t(fw) * fh);
@@ -1953,13 +1960,6 @@ void App::update_menus() {
                 film_index++;
                 if (--film_left == 0) presenter.close();
             }
-            int y0, y1;
-            if (frontend.partial_rows(y0, y1)) ui.update_rows(ui_pixels.data(), rc.right, rc.bottom, y0, y1);
-            else ui.set_image(ui_pixels.data(), rc.right, rc.bottom);
-            double ms = (now_seconds() - t0) * 1000;
-            if (ms > 20) printf("[menu] slow redraw: %.0f ms\n", ms);
-            static const char* menu_shot = getenv("LW_MENU_SHOT");   // debugging aid: the menu picture
-            if (menu_shot) bmp_save(menu_shot, rc.right, rc.bottom, ui_pixels.data());
         }
     }
 }

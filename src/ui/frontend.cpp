@@ -1930,18 +1930,27 @@ bool Frontend::strike_light(float& shade, float& flash) {
     return false;
 }
 
-// out = bg_ darkened to shade, then flash of the way to bg_lit_
+// out = bg_ darkened to shade, then flash of the way to bg_lit_ (a few
+// threads: the whole window, every refresh while it lasts)
 void Frontend::relight(std::vector<uint32_t>& out, float shade, float flash) const {
     out.resize(bg_.size());
     const int S = int(shade * 256 + 0.5f), F = int(flash * 256 + 0.5f);
-    for (size_t i = 0; i < bg_.size(); i++) {
-        uint32_t a = bg_[i], b = bg_lit_[i], r = 0xFF000000u;
-        for (int sh = 0; sh <= 16; sh += 8) {
-            int ca = int((a >> sh) & 0xFF), cb = int((b >> sh) & 0xFF);
-            r |= uint32_t(std::clamp((ca * S + (cb - ca) * F) >> 8, 0, 255)) << sh;
+    auto rows = [&](size_t i0, size_t i1) {
+        for (size_t i = i0; i < i1; i++) {
+            uint32_t a = bg_[i], b = bg_lit_[i], r = 0xFF000000u;
+            for (int sh = 0; sh <= 16; sh += 8) {
+                int ca = int((a >> sh) & 0xFF), cb = int((b >> sh) & 0xFF);
+                r |= uint32_t(std::clamp((ca * S + (cb - ca) * F) >> 8, 0, 255)) << sh;
+            }
+            out[i] = r;
         }
-        out[i] = r;
-    }
+    };
+    const size_t n = bg_.size();
+    const unsigned parts = std::clamp(std::thread::hardware_concurrency(), 1u, 8u);
+    std::vector<std::thread> pool;
+    for (unsigned p = 1; p < parts; p++) pool.emplace_back(rows, n * p / parts, n * (p + 1) / parts);
+    rows(0, n / parts);
+    for (std::thread& t : pool) t.join();
 }
 
 void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
