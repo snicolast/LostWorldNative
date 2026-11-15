@@ -13,6 +13,9 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[15] 2026-11-15
+- Updating is more reliable: an update now always recompiles every file that changed, so it no longer fails to build when the game was updated more than once in a short time
+
 [14] 2026-11-15
 - BOSS FIGHT: beating the Deinosuchus now counts as a win, and it no longer replays stage 2 first
 - BOSS FIGHT: beating the T-Rex in San Diego now counts as a win too, so both give their achievements
