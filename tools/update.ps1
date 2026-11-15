@@ -202,6 +202,10 @@ try {
             $added++
         }
         Copy-Item -LiteralPath $f.FullName -Destination $dst -Force
+        # The zip gives every file the commit's time (read as local time, so up to a
+        # day early): older than the objects of a build made since, and Ninja would
+        # not compile the new code. Changed now, as git pull does
+        (Get-Item -LiteralPath $dst -Force).LastWriteTime = Get-Date
     }
 
     # Files the previous version had and this one does not: removed (backed up
