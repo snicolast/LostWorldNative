@@ -2081,8 +2081,8 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
     int y_end = y;
 
     // The highlight, gliding from the last entry to the chosen one: on the
-    // backdrop Star Wars Trilogy's band (in amber), fading in from the
-    // column's left with a bright blade at the right edge; over the game a band
+    // backdrop Sega Rally 2's slanted ribbon (in amber) with a thin stripe
+    // before it, over the game a band
     bool settled = true;
     if (selected_ < n) {
         float target = float(row_y[size_t(selected_)]), target_h = float(row_h(selected_));
@@ -2094,14 +2094,14 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
         int by = int(band_y_ + 0.5f), bh = int(band_h_ + 0.5f);
         bool en = list[size_t(selected_)].enabled;
         float a = (en ? 1.0f : 0.45f) * reveal_;
-        if (right) {   // from nothing at the column's left to the right edge, a bright blade along it
-            hgrad(band0, by, band1, by + bh, AMBER, 0.0f, a * 0.42f);
-            int edge = std::max(3, U(7));
-            fill(w - edge - U(4), by, w, by + bh, AMBER, a * 0.6f);
-            fill(w - edge, by, w, by + bh, 0xFFE8B8, a);
+        int edge = std::max(3, U(8));
+        if (right) {   // as in Star Wars Trilogy: a straight band rising out of nothing to the right edge, a bright blade along it
+            int x0 = hero_menu ? tx - U(620) : band0;
+            hgrad(x0, by, w, by + bh, AMBER, 0.0f, a * 0.55f);
+            fill(w - edge - U(5), by, w, by + bh, AMBER, a * 0.75f);
+            fill(w - edge, by, w, by + bh, 0xFFE3A8, a);
         } else {
             hgrad(band0, by, band1, by + bh, AMBER, a * 0.34f, 0.0f);
-            int edge = std::max(3, U(8));
             fill(0, by, edge, by + bh, AMBER, a);
         }
     } else band_y_ = band_h_ = -1;
