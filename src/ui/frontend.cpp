@@ -1825,8 +1825,12 @@ void Frontend::shade_backdrop() {
     hgrad(int(w_ * 0.64f), 0, w_, h_, 0x040508, 0.0f, 0.6f);
     vgrad(0, int(h_ * 0.72f), w_, h_, 0x000000, 0.0f, 0.6f);
     if (has_logo()) {   // the logo picture, area-averaged down to LOGO_SCREEN_H of the window
+        // no wider than the column it is centred on: a wide logo is set
+        // smaller, in the middle of the same band
         int lh = int(LOGO_SCREEN_H * h_), lw = lh * logo_.w / logo_.h;
-        sprite(logo_, int(w_ - LOGO_PICTURE_X * u_) - lw / 2, int(LOGO_SCREEN_TOP * h_), lw, lh);
+        const int max_w = int(2 * (LOGO_PICTURE_X - 30) * u_);
+        if (lw > max_w) { lw = max_w; lh = lw * logo_.h / logo_.w; }
+        sprite(logo_, int(w_ - LOGO_PICTURE_X * u_) - lw / 2, int(LOGO_SCREEN_TOP * h_) + (int(LOGO_SCREEN_H * h_) - lh) / 2, lw, lh);
     } else if (has_poster()) {   // the logo cut out of the poster: its disc and its banner (cover.png's shapes)
         float s, x0, y0;
         poster_layout(s, x0, y0);
