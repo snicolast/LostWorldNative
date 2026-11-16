@@ -9,6 +9,7 @@
 #include <climits>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <cwctype>
 #include <ctime>
@@ -26,41 +27,6 @@ namespace {
 constexpr uint32_t GOLD_TOP = 0xFFEA5C, GOLD_BOTTOM = 0xFF8A00, EDGE = 0x1C0A00;
 constexpr uint32_t PALE_TOP = 0xE6DCC0, PALE_BOTTOM = 0xBFB294, DIM = 0x6A6559;
 constexpr uint32_t AMBER = 0xFFA032, HINT = 0xC9B88E, FOOT = 0x8A8070;
-
-// The donation link in MORE RECOMPS, for whoever wants to support the port
-constexpr const wchar_t* COFFEE_URL = L"https://buymeacoffee.com/snicolast8u";
-constexpr const wchar_t* COFFEE_LABEL = L"BUY ME A COFFEE";
-constexpr uint32_t COFFEE_INK = 0x0D0C22;   // their dark blue-black
-constexpr const wchar_t* COFFEE_HINT = L"Support the port: opens buymeacoffee.com in your browser";
-
-// MORE RECOMPS: snicolast's other ports, in the menu's order (the Ids in
-// Frontend::recomp_of). Each one is looked for where its settings key says,
-// else in one of `folders` next to this port's folder
-struct Recomp {
-    const wchar_t* name;          // the menu entry
-    const wchar_t* about;         // the start of its description
-    const wchar_t* url;           // its GitHub page
-    const wchar_t* exe;           // its .exe
-    const wchar_t* folders[4];    // its usual folder names
-    const wchar_t* backdrop;      // its art
-    const wchar_t* logo;
-    const wchar_t* caption;       // under its logo
-    float logo_top;               // where its logo starts, of the window's height
-    float logo_w;                 // its logo at most this wide (1080p)
-};
-constexpr Recomp RECOMPS[] = {
-    {L"STAR WARS TRILOGY", L"Star Wars Trilogy Arcade, the 1998 SEGA arcade game, remastered for PC like this one.  ",
-     L"https://github.com/snicolast/StarWarsTrilogyNative", L"StarWarsTrilogy.exe",
-     {L"StarWarsTrilogyNative", L"StarWarsTrilogyNative-dev", L"StarWarsTrilogy", L"Star Wars Trilogy"},
-     L"res/menu/more/star_wars_background.jpg", L"res/menu/more/star_wars_logo.png",
-     L"SEGA  \u00B7  1998  \u00B7  ARCADE RAIL SHOOTER", 0.28f, 560},
-    // The car is on the left of its art: the logo goes above it
-    {L"SEGA RALLY 2", L"Sega Rally 2, the 1998 SEGA arcade rally game, remastered for PC like this one.  ",
-     L"https://github.com/snicolast/SegaRally2Native", L"SegaRally2.exe",
-     {L"SegaRally2Native", L"SegaRally2Native-dev", L"SegaRally2", L"Sega Rally 2"},
-     L"res/menu/more/sega_rally_2_background.jpg", L"res/menu/more/sega_rally_2_logo.png",
-     L"SEGA  \u00B7  1998  \u00B7  ARCADE RALLY RACING", 0.05f, 460},
-};
 
 // UPDATE AVAILABLE: news.txt on the public repository's master branch (news.h)
 constexpr const wchar_t* NEWS_HOST = L"raw.githubusercontent.com";
@@ -436,15 +402,6 @@ void FrontendSettings::load(const char* path) {
     if (!f) return;
     char line[512];
     while (fgets(line, sizeof(line), f)) {
-        bool sw = strncmp(line, "star_wars_path", 14) == 0, sr2 = strncmp(line, "sega_rally_2_path", 17) == 0;
-        if (sw || sr2) {   // a folder: may have spaces
-            const char* v = strchr(line, '=');
-            std::string p = v ? v + 1 : "";
-            while (!p.empty() && strchr(" \t\r\n\"", p.front())) p.erase(0, 1);
-            while (!p.empty() && strchr(" \t\r\n\"", p.back())) p.pop_back();
-            (sw ? star_wars_path : sega_rally_2_path) = p;
-            continue;
-        }
         char key[64], value[400];   // device paths are long
         if (sscanf(line, " %63[^= ] = %399s", key, value) != 2) continue;
         for (const Frontend::Setting& d : Frontend::setting_table())
@@ -458,8 +415,6 @@ void FrontendSettings::save(const char* path) const {
     if (!f) return;
     for (const Frontend::Setting& d : Frontend::setting_table())
         if (d.key) fprintf(f, "%s = %s\n", d.key, d.write(*this).c_str());
-    if (!star_wars_path.empty()) fprintf(f, "star_wars_path = %s\n", star_wars_path.c_str());
-    if (!sega_rally_2_path.empty()) fprintf(f, "sega_rally_2_path = %s\n", sega_rally_2_path.c_str());
     fclose(f);
 }
 
@@ -510,10 +465,6 @@ bool Frontend::init(const std::string& font_dir) {
             printf("[menu] background %ls (%dx%d)\n", p, backdrop_.w, backdrop_.h);
             break;
         }
-    for (int r = 0; r < RECOMP_COUNT; r++) {
-        load_image(RECOMPS[r].backdrop, more_backdrop_[r].px, more_backdrop_[r].w, more_backdrop_[r].h);
-        load_image(RECOMPS[r].logo, more_logo_[r].px, more_logo_[r].w, more_logo_[r].h);
-    }
     return ok;
 }
 
@@ -666,23 +617,7 @@ std::vector<Frontend::Item> Frontend::items() const {
         return {{PLAY, L"PLAY", L"", L"Start a game"},
                 {OPTIONS, L"OPTIONS", L"", L"Display, sound and graphics"},
                 {RECORDS, L"RECORDS", L"", L"Achievements and your statistics"},
-                {MORE_GAMES, L"MORE RECOMPS", L"", L"Other arcade games recompiled for PC by snicolast"},
                 {QUIT, L"QUIT", L"", L"Close the game"}};
-    case Screen::More:
-    {
-        std::vector<Item> list;
-        for (Id id : {STAR_WARS, SEGA_RALLY_2}) {
-            int r = recomp_of(id);
-            bool found = !more_exe_[r].empty();
-            list.push_back({id, RECOMPS[r].name, found ? L"INSTALLED" : L"FREE DOWNLOAD",
-                            std::wstring(RECOMPS[r].about) + (found ? L"Found on this PC: " : L"Not found on this PC: ") +
-                                (pad_prompts ? L"A" : L"ENTER") +
-                                (found ? L" closes this game and starts it" : L" opens its page, where you can download it")});
-        }
-        list.push_back({COFFEE, COFFEE_LABEL, L"", COFFEE_HINT});
-        list.push_back({BACK, L"BACK", L"", L"Return to the main menu"});
-        return list;
-    }
     case Screen::Play:
         return {{CLASSIC, L"CLASSIC ARCADE", L"", L"The arcade game: as it was, or with the dinosaurs shuffled"},
                 {BOSS, L"BOSS FIGHT", L"", L"Pick a boss and go straight to the fight"},
@@ -804,6 +739,8 @@ void Frontend::open_splash() {
 }
 
 void Frontend::open(Screen s) {
+    const Screen was = screen_;
+    const bool was_dark = was == Screen::None || was == Screen::Splash || over_game();   // the game or the logos before
     if (screen_ == Screen::Splash && s != Screen::Splash) {   // not needed again
         splash_px_ = {}, splash_px_on_ = -1;
         video_.close();
@@ -817,6 +754,13 @@ void Frontend::open(Screen s) {
     hovered_ = -1;
     hit_.clear();
     dirty_ = true;
+    // The lightning: the main menu coming up after the logos or a game, or
+    // one side menu after another (not back from OPTIONS or RECORDS)
+    strike_from_ = next_idle_strike_ = -1;
+    if (side_menu(s) && !over_game()) {
+        if (was_dark) start_strike(STRIKE_INTRO);
+        else if (side_menu(was) && was != s) start_strike(STRIKE_SWAP);
+    }
 }
 
 void Frontend::open_boss_list(bool over_game) {
@@ -845,17 +789,6 @@ void Frontend::activate(const Item& it, int dir) {
     case OPTIONS: options_from_pause_ = false; tab_ = 0; open(Screen::Options); selected_ = 1; break;
     case RECORDS: tab_ = 0; record_scroll_ = 0; open(Screen::Records); break;
     case QUIT: push(Action::Quit); break;
-    case MORE_GAMES:
-        for (int r = 0; r < RECOMP_COUNT; r++) find_recomp(r);
-        open(Screen::More);
-        break;
-    case STAR_WARS: case SEGA_RALLY_2: {
-        int r = recomp_of(it.id);
-        if (more_exe_[r].empty()) open_recomp_page(r);
-        else play_recomp(r);
-        break;
-    }
-    case COFFEE: open_coffee(); break;
     case QUIT_TO_MENU: push(Action::QuitToMenu); break;
     case CLASSIC: open(Screen::Classic); selected_ = random_spawns ? 1 : 0; break;
     case ARCADE: random_spawns = false; push(Action::StartArcade); break;
@@ -939,7 +872,6 @@ void Frontend::back() {
         }
         break;
     case Screen::Records: open(Screen::Main); selected_ = index_of(RECORDS); break;
-    case Screen::More: open(Screen::Main); selected_ = index_of(MORE_GAMES); break;
     case Screen::Survival: open(Screen::Play); selected_ = 2; break;   // onto Survival
     case Screen::Classic: open(Screen::Play); selected_ = 0; break;    // onto Classic arcade
     case Screen::Weather:   // onto the arena, or RANDOM SPAWNS
@@ -971,6 +903,7 @@ bool Frontend::key(int vk) {
         if (vk == VK_RETURN || vk == VK_SPACE || vk == VK_ESCAPE || vk == VK_BACK) skip_splash();
         return true;
     }
+    end_strike();
     if (news_open_ && screen_ == Screen::Main) return news_key(vk);
     if (locked_notice_) {   // any of these closes it
         if (vk != VK_RETURN && vk != VK_SPACE && vk != VK_ESCAPE && vk != VK_BACK) return true;
@@ -1016,10 +949,6 @@ bool Frontend::key(int vk) {
         case VK_TAB: set_tab(tab_ + ((GetKeyState(VK_SHIFT) & 0x8000) ? -1 : 1)); return true;
         case 'R': reset_tab(); return true;
         }
-    if (screen_ == Screen::More && (vk == 'G' || vk == 'R') && selected_recomp() >= 0) {   // its page, also when it is installed (R: a pad's Y)
-        open_recomp_page(selected_recomp());
-        return true;
-    }
     switch (vk) {
     case VK_UP: case 'W': select((selected_ + n - 1) % n); return true;
     case VK_DOWN: case 'S': select((selected_ + 1) % n); return true;
@@ -1040,75 +969,11 @@ bool Frontend::key(int vk) {
     return false;
 }
 
-void Frontend::open_coffee() {   // in the default browser
-    ShellExecuteW(nullptr, L"open", COFFEE_URL, nullptr, nullptr, SW_SHOWNORMAL);
-}
-
 int Frontend::index_of(Id id) const {
     auto list = items();
     for (int i = 0; i < int(list.size()); i++)
         if (list[i].id == id) return i;
     return 0;
-}
-
-int Frontend::recomp_of(Id id) { return id == STAR_WARS ? 0 : id == SEGA_RALLY_2 ? 1 : -1; }
-
-int Frontend::selected_recomp() const {
-    if (screen_ != Screen::More) return -1;
-    std::vector<Item> list = items();
-    return selected_ >= 0 && selected_ < int(list.size()) ? recomp_of(list[selected_].id) : -1;
-}
-
-std::string& Frontend::recomp_path(int r) { return r == 0 ? settings.star_wars_path : settings.sega_rally_2_path; }
-
-// Its .exe: where the settings say, else in a folder next to this port's
-// (from the working folder, then from the exe's)
-void Frontend::find_recomp(int r) {
-    const Recomp& rc = RECOMPS[r];
-    more_exe_[r].clear();
-    std::vector<std::wstring> tries;
-    if (const std::string& p = recomp_path(r); !p.empty()) {
-        int n = MultiByteToWideChar(CP_UTF8, 0, p.c_str(), -1, nullptr, 0);
-        std::wstring wp(n > 0 ? n - 1 : 0, L'\0');
-        if (n > 1) MultiByteToWideChar(CP_UTF8, 0, p.c_str(), -1, wp.data(), n);
-        bool exe = wp.size() > 4 && _wcsicmp(wp.c_str() + wp.size() - 4, L".exe") == 0;
-        tries.push_back(exe ? wp : wp + L"\\" + rc.exe);
-    }
-    wchar_t module[MAX_PATH] = {};
-    GetModuleFileNameW(nullptr, module, MAX_PATH);
-    std::wstring exe_dir = module;
-    exe_dir = exe_dir.substr(0, exe_dir.find_last_of(L"\\/") + 1);
-    for (const std::wstring& base : {std::wstring(), exe_dir})
-        for (const wchar_t* folder : rc.folders)
-            tries.push_back(base + L"..\\" + folder + L"\\" + rc.exe);
-    for (const std::wstring& t : tries) {
-        wchar_t full[MAX_PATH];
-        if (!GetFullPathNameW(t.c_str(), MAX_PATH, full, nullptr)) continue;
-        DWORD a = GetFileAttributesW(full);
-        if (a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY)) {
-            more_exe_[r] = full;
-            printf("[menu] %ls: %ls\n", rc.name, full);
-            return;
-        }
-    }
-}
-
-void Frontend::open_recomp_page(int r) {   // in the default browser
-    ShellExecuteW(nullptr, L"open", RECOMPS[r].url, nullptr, nullptr, SW_SHOWNORMAL);
-}
-
-// Started from its own folder (it finds its ROM, res/ and save/ there); this
-// game closes so the two do not fight over the GPU and the sound
-void Frontend::play_recomp(int r) {
-    const std::wstring& exe = more_exe_[r];
-    std::wstring dir = exe.substr(0, exe.find_last_of(L"\\/"));
-    if (INT_PTR(ShellExecuteW(nullptr, L"open", exe.c_str(), nullptr, dir.c_str(), SW_SHOWNORMAL)) > 32) {
-        push(Action::Quit);
-        return;
-    }
-    printf("[menu] could not start %ls\n", exe.c_str());
-    more_exe_[r].clear();   // shown as not installed: ENTER opens the page
-    dirty_ = true;
 }
 
 // ---- UPDATE AVAILABLE ----
@@ -1230,6 +1095,7 @@ void Frontend::click(int x, int y) {
         skip_splash();
         return;
     }
+    end_strike();
     if (news_open_ && screen_ == Screen::Main) {
         for (int b = 0; b < 2; b++)
             if (PtInRect(&news_buttons_[b], p)) news_choose(b);
@@ -1238,10 +1104,6 @@ void Frontend::click(int x, int y) {
     if (locked_notice_) {
         locked_notice_ = false;
         dirty_ = true;
-        return;
-    }
-    if (screen_ == Screen::More && PtInRect(&page_rect_, p) && selected_recomp() >= 0) {
-        open_recomp_page(selected_recomp());
         return;
     }
     if (screen_ == Screen::GunTest) {   // the guns fire at it: only BACK, and not while picking them
@@ -1800,19 +1662,17 @@ void Frontend::backdrop_background() {
     fill(0, 0, w_, h_, 0x000000, 0.3f);
     px_ = bg_.data();
     shade_backdrop();
-    // MORE RECOMPS: each game's art in place of the picture, its logo on the left
-    for (int i = 0; i < RECOMP_COUNT; i++) {
-        bg_more_[i].clear();
-        if (more_backdrop_[i].w <= 0) continue;
-        bg_more_[i].assign(size_t(w_) * h_, 0xFF000000u);
-        px_ = bg_more_[i].data();
-        picture(more_backdrop_[i], 0, 0, w_, h_);
-        shade_backdrop();
-        RECT r = more_logo_rect(i);
-        if (r.right > r.left) {
-            logo_shadow(more_logo_[i], r);   // Star Wars: the explosion behind it is as bright as the logo
-            sprite(more_logo_[i], r.left, r.top, r.right - r.left, r.bottom - r.top);
-        }
+    // The same lit by a strike: brighter and bluer, its brightest parts (the
+    // bolt, the sky) the most
+    bg_lit_.resize(bg_.size());
+    static const float TINT[3] = {0.80f, 0.88f, 1.0f};
+    for (size_t i = 0; i < bg_.size(); i++) {
+        float c[3] = {chan(bg_[i], 16), chan(bg_[i], 8), chan(bg_[i], 0)};
+        float lum = (c[0] + c[1] + c[2]) / 3, glow = lum * std::sqrt(lum) * 2.2f + 0.1f;
+        uint32_t o = 0xFF000000u;
+        for (int m = 0; m < 3; m++)
+            o |= uint32_t(std::clamp(c[m] * 2.6f + glow * TINT[m], 0.0f, 1.0f) * 255.0f + 0.5f) << (16 - 8 * m);
+        bg_lit_[i] = o;
     }
     px_ = keep;
 }
@@ -1859,70 +1719,6 @@ void Frontend::shade_backdrop() {
                 blend(x, y, uint32_t(rgb[0] * 255) << 16 | uint32_t(rgb[1] * 255) << 8 | uint32_t(rgb[2] * 255), a);
             }
     }
-}
-
-// Under a logo on a bright picture: the picture darker round it, and a soft
-// black shadow of its own shape (wider than it, so its letters' holes fill)
-void Frontend::logo_shadow(const Picture& p, RECT r) {
-    int lw = r.right - r.left, lh = r.bottom - r.top;
-    float cx = r.left + lw * 0.5f, cy = r.top + lh * 0.5f;
-    float rx = lw * 0.75f, ry = lh * 0.85f;
-    for (int y = std::max(0, int(cy - ry)); y < std::min(h_, int(cy + ry) + 1); y++)
-        for (int x = std::max(0, int(cx - rx)); x < std::min(w_, int(cx + rx) + 1); x++) {
-            float dx = (x - cx) / rx, dy = (y - cy) / ry;
-            float t = std::clamp(1 - std::sqrt(dx * dx + dy * dy), 0.0f, 1.0f);
-            if (t > 0) blend(x, y, 0x000000, 0.5f * t * t * (3 - 2 * t));
-        }
-    // The logo's alpha at its size on screen, with a margin for the blur
-    int pad = std::max(4, lw / 30), sw = lw + 2 * pad, sh = lh + 2 * pad;
-    std::vector<float> m(size_t(sw) * sh, 0.0f), t(m.size());
-    for (int y = 0; y < lh; y++)
-        for (int x = 0; x < lw; x++)
-            m[size_t(y + pad) * sw + x + pad] = chan(p.px[size_t(y * p.h / lh) * p.w + size_t(x * p.w / lw)], 24);
-    int rad = std::max(1, pad / 2);
-    for (int pass = 0; pass < 3; pass++) {   // a box blur across, then down, three times: close to a gaussian
-        for (int y = 0; y < sh; y++) {
-            float acc = 0;
-            for (int x = -rad; x <= rad; x++) acc += x >= 0 && x < sw ? m[size_t(y) * sw + x] : 0;
-            for (int x = 0; x < sw; x++) {
-                t[size_t(y) * sw + x] = acc / (2 * rad + 1);
-                int in = x + rad + 1, out = x - rad;
-                if (in < sw) acc += m[size_t(y) * sw + in];
-                if (out >= 0) acc -= m[size_t(y) * sw + out];
-            }
-        }
-        for (int x = 0; x < sw; x++) {
-            float acc = 0;
-            for (int y = -rad; y <= rad; y++) acc += y >= 0 && y < sh ? t[size_t(y) * sw + x] : 0;
-            for (int y = 0; y < sh; y++) {
-                m[size_t(y) * sw + x] = acc / (2 * rad + 1);
-                int in = y + rad + 1, out = y - rad;
-                if (in < sh) acc += t[size_t(in) * sw + x];
-                if (out >= 0) acc -= t[size_t(out) * sw + x];
-            }
-        }
-    }
-    for (int y = 0; y < sh; y++)
-        for (int x = 0; x < sw; x++) {
-            int px = r.left - pad + x, py = r.top - pad + y;
-            if (px < 0 || py < 0 || px >= w_ || py >= h_) continue;
-            float a = std::min(1.0f, m[size_t(y) * sw + x] * 1.6f) * 0.9f;
-            if (a > 0) blend(px, py, 0x000000, a);
-        }
-}
-
-// Centred in the room left of the menu's column, at most 560 (1080p) wide;
-// empty when the window is too narrow for it
-RECT Frontend::more_logo_rect(int i) const {
-    const Picture& logo = more_logo_[i];
-    if (logo.w <= 0) return RECT{};
-    auto U = [&](float v) { return int(v * u_ + 0.5f); };
-    int room = w_ - U(110) - U(720) - U(40);
-    int lw = std::min(U(RECOMPS[i].logo_w), room - U(120));
-    if (lw < U(220)) return RECT{};
-    int lh = lw * logo.h / logo.w;
-    int x = (room - lw) / 2, y = int(RECOMPS[i].logo_top * h_);
-    return RECT{x, y, x + lw, y + lh};
 }
 
 // Main menu backdrop: dark jungle green, a warm glow behind the title and a
@@ -2044,6 +1840,123 @@ int Frontend::draw_value(const Item& it, bool sel, int x1, int y, int item_px) {
 
 // Main, Play, Boss and Survival on the backdrop, and Pause (or the boss list)
 // over the game: the entries in a column at the left, under the logo or the title
+// ---- Lightning ----
+//
+// The Lost World's own entrance for the side menus, in place of Sega Rally 2's
+// slide. The main menu coming up (after the logos, back from a game) waits a
+// moment in the dark, then a double strike lights the backdrop, its bolt and
+// sky the most, and the entries come on with it, their letters white for a
+// moment. From one side menu to another (PLAY and the lists under it) one
+// smaller strike brings the new entries. While a side menu sits still, now
+// and then a faint strike far off. A key or a click ends a strike at once
+// (and does its job).
+
+namespace {
+struct Bolt { double at; float amp, decay; };   // one flash: when, how bright, how fast it dies
+constexpr Bolt INTRO_BOLTS[] = {{0.0, 0.55f, 0.06f}, {0.13, 1.0f, 0.22f}, {0.36, 0.35f, 0.12f}};
+constexpr Bolt SWAP_BOLTS[] = {{0.0, 0.6f, 0.16f}, {0.11, 0.25f, 0.08f}};
+constexpr Bolt IDLE_BOLTS[] = {{0.0, 0.5f, 0.07f}, {0.16, 1.0f, 0.18f}};   // times strike_amp_
+constexpr double INTRO_DARK = 0.35;                  // the main menu in the dark before the strike
+constexpr double INTRO_LEN = INTRO_DARK + 1.3, SWAP_LEN = 0.6, IDLE_LEN = 0.9;
+
+template <size_t N>
+float flash_at(const Bolt (&bolts)[N], double t) {
+    float v = 0;
+    for (const Bolt& b : bolts)
+        if (t >= b.at) v = std::max(v, b.amp * float(std::exp(-(t - b.at) / b.decay)));
+    return v;
+}
+
+float ease_out(double x) {
+    float k = 1 - float(std::clamp(x, 0.0, 1.0));
+    return 1 - k * k * k;
+}
+}  // namespace
+
+double Frontend::menu_clock() const {
+    static const double fps = getenv("LW_MENU_FPS") ? atof(getenv("LW_MENU_FPS")) : getenv("LW_MENU_FILM") ? 30 : 0;
+    return fps > 0 ? double(menu_frames_) / fps : now_seconds();
+}
+
+bool Frontend::side_menu(Screen s) {
+    return s == Screen::Main || s == Screen::Play || s == Screen::Classic || s == Screen::Boss || s == Screen::Survival ||
+           s == Screen::Weather;
+}
+
+void Frontend::start_strike(Strike kind) {
+    // (not while a debugging aid takes screenshots: they would catch it half way)
+    static const bool still = (getenv("LW_MENU_KEYS") || getenv("LW_MENU_SHOT")) && !getenv("LW_MENU_FILM");
+    if (still || !has_backdrop()) return;
+    strike_kind_ = kind;
+    strike_from_ = menu_clock();
+    strike_amp_ = kind == STRIKE_IDLE ? 0.3f + 0.25f * float(std::rand() % 1000) / 1000.0f : 1.0f;
+    next_idle_strike_ = -1;
+    dirty_ = true;
+}
+
+void Frontend::end_strike() {
+    if (strike_from_ < 0) return;
+    strike_from_ = -1;
+    dirty_ = true;
+}
+
+bool Frontend::strike_light(float& shade, float& flash) {
+    shade = 1, flash = 0, reveal_ = 1, glare_ = 0;
+    if (strike_from_ < 0 || !side_menu(screen_)) return false;
+    double t = menu_clock() - strike_from_;
+    switch (strike_kind_) {
+    case STRIKE_INTRO: {
+        if (t >= INTRO_LEN) break;
+        double k = t - INTRO_DARK;
+        if (k < 0) {   // dark, the entries not there yet
+            shade = 0.5f, reveal_ = 0;
+            return true;
+        }
+        flash = flash_at(INTRO_BOLTS, k);
+        shade = 0.5f + 0.5f * ease_out(k / 0.9);   // the eye getting used to the dark again
+        reveal_ = k < 0.13 ? 0.4f : 0.4f + 0.6f * ease_out((k - 0.13) / 0.35);
+        glare_ = flash * 0.6f;
+        return true;
+    }
+    case STRIKE_SWAP:
+        if (t >= SWAP_LEN) break;
+        flash = flash_at(SWAP_BOLTS, t);
+        reveal_ = t < 0.03 ? 0.0f : 0.45f + 0.55f * ease_out((t - 0.03) / 0.3);
+        glare_ = flash * 0.6f;
+        return true;
+    case STRIKE_IDLE:
+        if (t >= IDLE_LEN) break;
+        flash = flash_at(IDLE_BOLTS, t) * strike_amp_;
+        glare_ = flash * 0.25f;
+        return true;
+    }
+    strike_from_ = -1;   // over
+    return false;
+}
+
+// out = bg_ darkened to shade, then flash of the way to bg_lit_ (a few
+// threads: the whole window, every refresh while it lasts)
+void Frontend::relight(std::vector<uint32_t>& out, float shade, float flash) const {
+    out.resize(bg_.size());
+    const int S = int(shade * 256 + 0.5f), F = int(flash * 256 + 0.5f);
+    auto rows = [&](size_t i0, size_t i1) {
+        for (size_t i = i0; i < i1; i++) {
+            uint32_t a = bg_[i], b = bg_lit_[i], r = 0xFF000000u;
+            for (int sh = 0; sh <= 16; sh += 8) {
+                int ca = int((a >> sh) & 0xFF), cb = int((b >> sh) & 0xFF);
+                r |= uint32_t(std::clamp((ca * S + (cb - ca) * F) >> 8, 0, 255)) << sh;
+            }
+            out[i] = r;
+        }
+    };
+    const size_t n = bg_.size();
+    const unsigned parts = std::clamp(std::thread::hardware_concurrency(), 1u, 8u);
+    std::vector<std::thread> pool;
+    for (unsigned p = 1; p < parts; p++) pool.emplace_back(rows, n * p / parts, n * (p + 1) / parts);
+    rows(0, n / parts);
+    for (std::thread& t : pool) t.join();
+}
+
 void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
     auto U = [&](float v) { return int(v * u_ + 0.5f); };
     int w = w_, h = h_;
@@ -2075,7 +1988,6 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
             y0 = U(430);
         }
         const wchar_t* sub = screen_ == Screen::Play ? L"SELECT MODE" : screen_ == Screen::Survival ? L"SELECT ARENA"
-                             : screen_ == Screen::More ? L"MORE RECOMPS BY SNICOLAST"
                              : screen_ == Screen::Classic ? L"CLASSIC ARCADE"
                              : screen_ == Screen::Weather ? L"WEATHER"
                              : boss ? L"SELECT BOSS" : nullptr;
@@ -2108,25 +2020,22 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
         }
     }
 
-    if (int rc = more_art_; screen_ == Screen::More && right && !bg_more_[rc].empty()) {   // under its logo (on the backdrop)
-        RECT r = more_logo_rect(rc);
-        if (r.right > r.left)
-            text(MONO, U(22), RECOMPS[rc].caption, (r.left + r.right) / 2, r.bottom + U(26), 1,
-                 {0xE8D8B0, 0xC8B080, EDGE, U(2)});
-    }
-
     // The entries share what is left of the height; the description of the
-    // chosen one opens right under it and the entries below make room
+    // chosen one opens right under it and the entries below make room. The
+    // main menu on the backdrop as Sega Rally 2's: PLAY big, the rest smaller
     int n = int(list.size());
     int desc_line = U(30), desc_pad = U(14);
     int desc_room = 3 * desc_line + desc_pad;   // up to three lines without squeezing the entries
     int spacing = std::clamp((h - U(190) - y0 - desc_room) / std::max(1, n), U(46), U(86));
     int item_px = std::min(U(60), spacing * 72 / 100);
     int desc_w = col_w - U(20);
+    const bool hero_menu = right && screen_ == Screen::Main;
+    auto row_h = [&](int i) { return !hero_menu ? spacing : list[size_t(i)].id == PLAY ? U(104) : U(62); };
+    auto row_px = [&](int i) { return !hero_menu ? item_px : list[size_t(i)].id == PLAY ? U(92) : U(46); };
 
-    // Animation: each description eases open or shut, the band glides to the
+    // Animation: each description eases open or shut, the ribbon glides to the
     // chosen entry.  A new screen (or a new list) starts settled
-    double now = now_seconds();
+    double now = menu_clock();
     bool snap = anim_screen_ != screen_ || int(desc_open_.size()) != n || anim_last_ < 0 || now - anim_last_ > 0.25;
     float dt = snap ? 0.0f : float(now - anim_last_);
     anim_last_ = now, anim_screen_ = screen_;
@@ -2144,7 +2053,7 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
     int y = y0;
     for (int i = 0; i < n; i++) {
         row_y[size_t(i)] = y;
-        y += spacing;
+        y += row_h(i);
         if (desc_open_[size_t(i)] > 0.0f && !list[size_t(i)].hint.empty()) {
             desc[size_t(i)] = wrap(BODY, U(23), list[size_t(i)].hint, desc_w);
             float o = desc_open_[size_t(i)], k = o * o * (3.0f - 2.0f * o);   // smoothstep
@@ -2153,62 +2062,62 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
     }
     int y_end = y;
 
-    // The highlight band, gliding from the last entry to the chosen one
+    // The highlight, gliding from the last entry to the chosen one: on the
+    // backdrop Sega Rally 2's slanted ribbon (in amber) with a thin stripe
+    // before it, over the game a band
+    bool settled = true;
     if (selected_ < n) {
-        float target = float(row_y[size_t(selected_)]);
-        band_y_ = snap || band_y_ < 0 ? target : band_y_ + (target - band_y_) * (1.0f - std::exp(-dt * 20.0f));
-        if (std::fabs(target - band_y_) < 0.5f) band_y_ = target;
-        else animating_ = true;
-        int by = int(band_y_ + 0.5f);
+        float target = float(row_y[size_t(selected_)]), target_h = float(row_h(selected_));
+        float k = 1.0f - std::exp(-dt * 20.0f);
+        band_y_ = snap || band_y_ < 0 ? target : band_y_ + (target - band_y_) * k;
+        band_h_ = snap || band_h_ < 0 ? target_h : band_h_ + (target_h - band_h_) * k;
+        if (std::fabs(target - band_y_) < 0.5f && std::fabs(target_h - band_h_) < 0.5f) band_y_ = target, band_h_ = target_h;
+        else animating_ = true, settled = false;
+        int by = int(band_y_ + 0.5f), bh = int(band_h_ + 0.5f);
         bool en = list[size_t(selected_)].enabled;
-        float a = en ? 0.34f : 0.16f;
-        hgrad(band0, by, band1, by + spacing, AMBER, right ? 0.0f : a, right ? a : 0.0f);
+        float a = (en ? 1.0f : 0.45f) * reveal_;
+        if (right) {
+            int slant = bh * 45 / 100, x0 = hero_menu ? tx - U(470) : band0 + U(120);
+            for (int yy = by; yy < by + bh; yy++) {
+                int xs = x0 + (by + bh - yy) * slant / std::max(1, bh);
+                fill(xs, yy, w, yy + 1, AMBER, a * 0.30f);
+                hgrad(xs, yy, w, yy + 1, AMBER, 0.0f, a * 0.28f);
+                fill(xs - U(30), yy, xs - U(18), yy + 1, AMBER, a * 0.8f);
+            }
+        } else {
+            hgrad(band0, by, band1, by + bh, AMBER, a * 0.34f, 0.0f);
+        }
         int edge = std::max(3, U(8));
-        fill(right ? w - edge : 0, by, right ? w : edge, by + spacing, AMBER, en ? 1.0f : 0.5f);
-    } else band_y_ = -1;
+        fill(right ? w - edge : 0, by, right ? w : edge, by + bh, AMBER, a);
+    } else band_y_ = band_h_ = -1;
 
     for (int i = 0; i < n; i++) {
         const Item& it = list[i];
         bool sel = i == selected_;
-        int ry = row_y[size_t(i)];
-        const Style st = !it.enabled ? Style{DIM, DIM, INK, U(2), 0.9f, U(3)}
-                         : sel       ? Style{WHITE_TOP, WHITE_BOTTOM, INK, U(2), 1, U(3)}
-                                     : Style{PALE_TOP, PALE_BOTTOM, INK, U(2), 0.95f, U(3)};
-        int ty = ry + spacing / 2 - item_px * 55 / 100;
-        if (it.id == COFFEE) {   // the donation link: Buy Me a Coffee's yellow button and its cup, on the entries' edge
-            int ch = std::min(U(56), spacing - U(14)), cup = ch / 2;
-            int cw = U(24) + cup + U(12) + extent(ITEM, U(21), COFFEE_LABEL) + U(28);
-            int x0 = right ? tx - cw : tx, x1 = x0 + cw, cy0 = ry + (spacing - ch) / 2;
-            if (sel)   // chosen: an amber ring round it, like the band, and brighter
-                pill(x0 - U(5), cy0 - U(5), x1 + U(5), cy0 + ch + U(5), AMBER, 1);
-            pill(x0, cy0, x1, cy0 + ch, sel ? 0xFFE94D : 0xFFDD00, sel ? 1.0f : 0.9f);
-            // A takeaway cup: the lid, the body narrowing to the bottom, a yellow sleeve round its middle
-            int cx = x0 + U(24) + cup / 2, cy = cy0 + (ch - cup) / 2;
-            pill(cx - cup / 2, cy, cx + cup / 2, cy + cup * 22 / 100, COFFEE_INK, 1);
-            for (int yy = cy + cup * 26 / 100; yy < cy + cup; yy++) {
-                int half = cup * 42 / 100 - (yy - cy) * 12 / 100, edge = std::max(1, U(2));
-                fill(cx - half, yy, cx + half, yy + 1, COFFEE_INK, 1);
-                if (yy >= cy + cup * 48 / 100 && yy < cy + cup * 72 / 100)
-                    fill(cx - half + edge, yy, cx + half - edge, yy + 1, 0xFFDD00, 1);
-            }
-            text(ITEM, U(21), COFFEE_LABEL, x0 + U(24) + cup + U(12), cy0 + ch / 2 - U(12), 0, {COFFEE_INK, COFFEE_INK});
-        } else {
-            text(TITLE, item_px, it.label, tx, ty, talign, st);
-        }
-        if (!it.value.empty())   // e.g. the stage of a boss, "NOT READY" or a record
-            text(ITEM, U(24), it.value, right ? tx - measure(TITLE, item_px, it.label) - U(30) : left + col_w - U(60),
-                 ry + spacing / 2 - U(14), 2, {0xF4D27A, 0xE0A848});
-        hit_.push_back({band0, ry, band1, ry + spacing});
+        int ry = row_y[size_t(i)], rh = row_h(i), px = row_px(i);
+        // Lit by a strike: the letters whiter for a moment, the entries coming on
+        auto lit = [&](uint32_t c) { return glare_ > 0 ? mix(c, 0xFFFFFF, glare_) : c; };
+        const Style st = !it.enabled ? Style{DIM, DIM, INK, U(2), 0.9f * reveal_, U(3)}
+                         : sel       ? Style{lit(WHITE_TOP), lit(WHITE_BOTTOM), INK, U(2), reveal_, U(3)}
+                                     : Style{lit(PALE_TOP), lit(PALE_BOTTOM), INK, U(2), 0.95f * reveal_, U(3)};
+        int ty = ry + rh / 2 - px * 55 / 100;
+        int tw = reveal_ > 0 ? text(TITLE, px, it.label, tx, ty, talign, st) : measure(TITLE, px, it.label);
+        bool chevron = sel && right && it.enabled && settled;   // before the chosen one, once the ribbon is there
+        if (chevron && reveal_ > 0) triangle(tx - tw - U(28), ry + rh / 2, U(22), +1, 0xFFE08A, 0.95f * reveal_);
+        if (!it.value.empty() && reveal_ > 0)   // e.g. the stage of a boss, "NOT READY" or a record
+            text(ITEM, U(24), it.value, right ? tx - tw - U(chevron ? 70.0f : 30.0f) : left + col_w - U(60),
+                 ry + rh / 2 - U(14), 2, {0xF4D27A, 0xE0A848, 0, 0, reveal_});
+        hit_.push_back({band0, ry, band1, ry + rh});
         values_.push_back({-1, 0});
         // Its description: fading in as it opens, sliding down a little; the
         // lines that do not fit the opening yet are left out
         float o = desc_open_[size_t(i)];
-        if (o > 0.02f && !desc[size_t(i)].empty()) {
-            float fade = sel ? o * o : o * o * o;   // a closing one goes quicker
-            int room = (i + 1 < n ? row_y[size_t(i) + 1] : y_end) - (ry + spacing);
-            int dy = ry + spacing + U(2) - int((1.0f - o) * U(10));
+        if (o > 0.02f && !desc[size_t(i)].empty() && reveal_ > 0) {
+            float fade = (sel ? o * o : o * o * o) * reveal_;   // a closing one goes quicker
+            int room = (i + 1 < n ? row_y[size_t(i) + 1] : y_end) - (ry + rh);
+            int dy = ry + rh + U(2) - int((1.0f - o) * U(10));
             for (const std::wstring& line : desc[size_t(i)]) {
-                if (dy + desc_line - (ry + spacing) > room + U(6)) break;
+                if (dy + desc_line - (ry + rh) > room + U(6)) break;
                 text(BODY, U(23), line, tx, dy, talign, {0xE8C890, 0xE8C890, 0, 0, fade});
                 dy += desc_line;
             }
@@ -2218,14 +2127,9 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
 
     vgrad(0, h - U(120), w, h, 0x000000, 0.0f, 0.85f);
     const wchar_t* back_what = screen_ == Screen::Main ? nullptr : screen_ == Screen::Pause ? L"RESUME" : L"BACK";
-    // MORE RECOMPS on one of the games: ENTER plays it (or opens its page), G its page
-    int on_rc = selected_recomp();
-    const wchar_t* enter_what = on_rc < 0 ? L"SELECT" : more_exe_[on_rc].empty() ? L"OPEN PAGE" : L"PLAY";
-    bool page_key = on_rc >= 0 && !more_exe_[on_rc].empty();
     int py = h - U(64), x = U(80);
     if (!over_game) {   // the key help at the bottom right; at the left, the credit to the makers of the game
-        x = w - U(80) + U(44) - prompt_width(L"A", L"ENTER", enter_what) - (back_what ? prompt_width(L"B", L"ESC", back_what) : 0) -
-            (page_key ? prompt_width(L"Y", L"G", L"GITHUB PAGE") : 0);
+        x = w - U(80) + U(44) - prompt_width(L"A", L"ENTER", L"SELECT") - (back_what ? prompt_width(L"B", L"ESC", back_what) : 0);
         if (sega_.w > 0) {   // their logo, its own transparency kept
             int lh = U(52), lw = lh * sega_.w / sega_.h, lx = U(80), ly = h - U(46) - lh;
             for (int j = 0; j < lh; j++)
@@ -2243,8 +2147,7 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
         sprite(credit_, (w - lw) / 2, ly, lw, lh);
         text(ITEM, U(18), L"PC REMASTER BY", w / 2, ly - U(28), 1, {FOOT, FOOT});
     }
-    prompt(x, py, L"A", L"ENTER", enter_what);
-    if (page_key) page_rect_ = prompt(x, py, L"Y", L"G", L"GITHUB PAGE");
+    prompt(x, py, L"A", L"ENTER", L"SELECT");
     if (back_what) back_rect_ = prompt(x, py, L"B", L"ESC", back_what);
 }
 
@@ -2473,6 +2376,16 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
         news_button_ = 0;
         news_hot_ = -1;
     }
+    // Now and then, while a side menu sits still, a faint strike far off
+    static const bool idle_off = getenv("LW_MENU_KEYS") || getenv("LW_MENU_SHOT") || getenv("LW_MENU_FILM");
+    if (side_menu(screen_) && !over_game() && has_backdrop() && !idle_off && !news_open_ && !locked_notice_) {
+        double now = menu_clock();
+        if (strike_from_ >= 0) next_idle_strike_ = -1;
+        else if (next_idle_strike_ < 0) next_idle_strike_ = now + 12.0 + 14.0 * (std::rand() % 1000) / 1000.0;
+        else if (now >= next_idle_strike_) start_strike(STRIKE_IDLE);
+    } else {
+        next_idle_strike_ = -1;
+    }
     if (!dirty_ && w == w_ && h == h_ && out.size() == size_t(w) * h) return false;
     if (w != w_ || h != h_) {
         w_ = w;
@@ -2480,9 +2393,10 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
         u_ = std::min(h / 1080.0f, w / 1440.0f);
         bg_.clear();
         bg_stone_.clear();
-        for (auto& b : bg_more_) b.clear();
+        bg_lit_.clear();
     }
     partial_ = false;
+    menu_frames_++;
     if (screen_ == Screen::Splash) {
         if (draw_splash(out)) {
             dirty_ = true;   // it fades: drawn again every refresh
@@ -2514,18 +2428,19 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
     }
     bool over_game = this->over_game();
     bool page = screen_ == Screen::Options || screen_ == Screen::Records || screen_ == Screen::GunTest;
+    float shade = 1, flash = 0;
+    const bool lit = strike_light(shade, flash);   // (also the entries' reveal_ and glare_)
+    if (lit) animating_ = true;   // drawn again every refresh while it lasts
     if (over_game) out.assign(size_t(w) * h, 0);
     else {
         if (bg_.empty()) background();
-        if (int rc = selected_recomp(); rc >= 0) more_art_ = rc;   // on BACK: the last one's art stays
-        out = has_poster() && page                                  ? bg_stone_
-              : screen_ == Screen::More && !bg_more_[more_art_].empty() ? bg_more_[more_art_]
-                                                                        : bg_;
+        if (lit && !page && bg_lit_.size() == bg_.size()) relight(out, shade, flash);
+        else out = has_poster() && page ? bg_stone_ : bg_;
     }
     px_ = out.data();
     hit_.clear();
     values_.clear();
-    more_up_ = more_down_ = back_rect_ = reset_rect_ = page_rect_ = RECT{};
+    more_up_ = more_down_ = back_rect_ = reset_rect_ = RECT{};
     auto list = items();
     if (screen_ == Screen::GunTest) {
         draw_gun_test(over_game);

@@ -30,7 +30,7 @@
 
 class Frontend : UiCanvas {
 public:
-    enum class Screen { None, Splash, Main, Play, Options, Pause, Boss, Records, Survival, Classic, GunTest, Weather, More };
+    enum class Screen { None, Splash, Main, Play, Options, Pause, Boss, Records, Survival, Classic, GunTest, Weather };
     enum class Action { None, StartArcade, Resume, Quit, ToggleFullscreen, SettingsChanged,
                         StartBoss, PrepareBosses, LeaveBossMode, StartSurvival, QuitToMenu,
                         CrosshairChanged };   // a new crosshair picture (crosshair_pick)
@@ -125,7 +125,6 @@ private:
     enum Id {
         PLAY, OPTIONS, QUIT, ARCADE, BOSS, BACK, RESUME, SETTINGS, QUIT_TO_MENU, TABS,
         BOSS_ENTRY, PREPARE, RETRY, BOSS_LIST, LEAVE_BOSS, RECORDS, SURVIVAL, SURVIVAL_ENTRY, CLASSIC, RANDOM, WEATHER_ENTRY,
-        MORE_GAMES, STAR_WARS, SEGA_RALLY_2, COFFEE,
         OPT_DISPLAY, OPT_VOLUME, OPT_SPEAKERS, OPT_REAR, OPT_SAMPLES, OPT_AA, OPT_HAZE, OPT_BLOOM, OPT_AO, OPT_SKY, OPT_SUN, OPT_SHADOWS, OPT_SHAFTS, OPT_SOFT, OPT_HDR, OPT_RIM, OPT_RELIEF, OPT_SHARPEN, OPT_LIGHTNING, OPT_RAIN, OPT_TEXT, OPT_CROSS, OPT_MICE, OPT_SUBS,
         OPT_SAT, OPT_GAMMA, OPT_MOTION, OPT_PAD_SPEED, OPT_GYRO, OPT_GYRO_SPEED, OPT_VIBRATION, OPT_ASSIST, OPT_TORCH, OPT_RT, OPT_CROSS_HIDE, OPT_FREE_PLAY,
         OPT_QUALITY, OPT_SCALE, OPT_HALF_RATE, OPT_VSYNC,
@@ -230,7 +229,6 @@ private:
     void news_choose(int button);
     void start_update();
 
-    void open_coffee();   // the donation link (an entry of MORE RECOMPS)
 
     Screen screen_ = Screen::None;
     bool options_from_pause_ = false;
@@ -242,7 +240,7 @@ private:
     // for each entry) and the highlight band gliding to it; while either
     // moves the menu is drawn again every refresh
     std::vector<float> desc_open_;
-    float band_y_ = -1;
+    float band_y_ = -1, band_h_ = -1;
     double anim_last_ = -1;
     Screen anim_screen_ = Screen::None;
     bool animating_ = false;
@@ -338,25 +336,23 @@ private:
     float video_level_ = 0;
     bool draw_splash_video(std::vector<uint32_t>& out);
     Picture logo_;   // third_party/menu/logo.png, else res/menu/logo.png: the title over the backdrop, its own transparency kept
-    // MORE RECOMPS: snicolast's other ports (Star Wars Trilogy, Sega Rally 2),
-    // in the order of RECOMPS in frontend.cpp. The selected one's art
-    // (res/menu/more/) on the left of the backdrop; ENTER plays it when it is
-    // on this PC, else opens its page
-    static constexpr int RECOMP_COUNT = 2;
-    Picture more_backdrop_[RECOMP_COUNT], more_logo_[RECOMP_COUNT];
-    std::vector<uint32_t> bg_more_[RECOMP_COUNT];   // their backdrops of MORE RECOMPS for the current size
-    std::wstring more_exe_[RECOMP_COUNT];           // its .exe found on this PC ("" = not found)
-    int more_art_ = 0;                              // whose art MORE RECOMPS shows (the selected one, or the last)
-    RECT page_rect_{};                              // its GITHUB PAGE prompt, clickable
-    static int recomp_of(Id id);                    // its index, -1 for an entry that is not one
-    int selected_recomp() const;                    // MORE RECOMPS: the selected one, -1 on BACK
-    std::string& recomp_path(int r);                // its settings key (folder or .exe)
-    void find_recomp(int r);
-    void open_recomp_page(int r);
-    void play_recomp(int r);
-    RECT more_logo_rect(int r) const;               // where its logo goes on the backdrop
-    void logo_shadow(const Picture& p, RECT r);   // darker round and under a logo about to be drawn there
     void shade_backdrop();            // darker at the right and the bottom, the logo: on px_
+    // Lightning, the side menus' entrance (frontend.cpp): a strike lights the
+    // backdrop and the entries come on with it
+    enum Strike { STRIKE_INTRO, STRIKE_SWAP, STRIKE_IDLE };
+    std::vector<uint32_t> bg_lit_;   // bg_ as a strike lights it, for the current size
+    double strike_from_ = -1;        // the strike going on (menu_clock), -1 none
+    Strike strike_kind_ = STRIKE_INTRO;
+    float strike_amp_ = 1;           // an idle one: how bright
+    double next_idle_strike_ = -1;   // when the next idle one comes (menu_clock), -1 not yet chosen
+    float reveal_ = 1, glare_ = 0;   // this picture: the entries' opacity, how white their letters
+    long menu_frames_ = 0;           // pictures drawn: the menu's clock with LW_MENU_FPS
+    double menu_clock() const;       // seconds (LW_MENU_FPS: pictures drawn / that rate, for films)
+    static bool side_menu(Screen s);  // the entries in a column on the backdrop (Main, Play and those under it)
+    void start_strike(Strike kind);
+    void end_strike();               // a key or a click: at once as it ends
+    bool strike_light(float& shade, float& flash);   // this picture's light, reveal_ and glare_; false: none
+    void relight(std::vector<uint32_t>& out, float shade, float flash) const;
     int index_of(Id id) const;        // where an entry is in the list on screen (0 if not there)
     bool has_logo() const { return logo_.w > 0 && has_backdrop(); }
     bool has_backdrop() const { return backdrop_.w > 0; }
