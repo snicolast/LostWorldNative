@@ -2118,13 +2118,20 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
         const Style st = !it.enabled ? Style{DIM, DIM, INK, U(2), 0.9f * reveal_, U(3)}
                          : sel       ? Style{lit(WHITE_TOP), lit(WHITE_BOTTOM), INK, U(2), reveal_, U(3)}
                                      : Style{lit(PALE_TOP), lit(PALE_BOTTOM), INK, U(2), 0.95f * reveal_, U(3)};
-        int ty = ry + rh / 2 - px * 55 / 100;
+        // The capitals' ink centred in the row (and so in the ribbon), whatever
+        // the font: every entry by the same capital, so they all sit alike
+        int cap0, cap1;
+        ink_rows(TITLE, px, L"H", cap0, cap1);
+        int ty = ry + rh / 2 - (cap0 + cap1) / 2;
         int tw = reveal_ > 0 ? text(TITLE, px, it.label, tx, ty, talign, st) : measure(TITLE, px, it.label);
         bool chevron = sel && right && it.enabled && settled;   // before the chosen one, once the ribbon is there
         if (chevron && reveal_ > 0) triangle(tx - tw - U(28), ry + rh / 2, U(22), +1, 0xFFE08A, 0.95f * reveal_);
-        if (!it.value.empty() && reveal_ > 0)   // e.g. the stage of a boss, "NOT READY" or a record
+        if (!it.value.empty() && reveal_ > 0) {   // e.g. the stage of a boss, "NOT READY" or a record
+            int v0, v1;
+            ink_rows(ITEM, U(24), L"H", v0, v1);
             text(ITEM, U(24), it.value, right ? tx - tw - U(chevron ? 70.0f : 30.0f) : left + col_w - U(60),
-                 ry + rh / 2 - U(14), 2, {0xF4D27A, 0xE0A848, 0, 0, reveal_});
+                 ry + rh / 2 - (v0 + v1) / 2, 2, {0xF4D27A, 0xE0A848, 0, 0, reveal_});
+        }
         hit_.push_back({band0, ry, band1, ry + rh});
         values_.push_back({-1, 0});
         // Its description: fading in as it opens, sliding down a little; the
