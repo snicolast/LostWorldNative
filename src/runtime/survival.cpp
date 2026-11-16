@@ -314,6 +314,26 @@ int encounter_enemies(int id) {
     return n;
 }
 
+// Where survival stops reading encounter h (the word after its fight): when,
+// after its enemies, the encounter changes the camera's path (op -24) and
+// then brings more of them, that is the way on to another scene (the Dark
+// forest's raptor fight ends taking the player to the compys), so the fight
+// ends at the wait (-1) before it. Otherwise the whole encounter
+uint32_t fight_end(uint32_t h) {
+    bool enemies = false, left = false;
+    uint32_t after_wait = 0, cut = script::WORDS;
+    script::walk(ram_word, h, [&](const script::Item& it) {
+        if (cut != script::WORDS) {
+            left |= it.enemy();
+            return;
+        }
+        enemies |= it.enemy();
+        if (it.op() == -1) after_wait = it.pc + 1;
+        if (it.op() == -24 && enemies && after_wait) cut = after_wait;
+    });
+    return left ? cut : script::WORDS;
+}
+
 // Best wave per stage and zone, with its score and lap (save/survival.ini:
 // "stage:zone wave score lap"; older files have no lap)
 struct Best {
@@ -456,8 +476,9 @@ struct Survival : Run {
         int32_t bad = 0;
         std::vector<int32_t> prelude;
         bool in_prelude = true;
+        uint32_t cut = fight_end(h);
         bool ok = script::walk(ram_word, h, [&](const script::Item& it) {
-            if (it.end()) return;
+            if (it.end() || it.pc >= cut) return;
             if (it.op() == -8 || it.fn() == FN_SKIP_IF_FLAG) return;   // the fork, as with the flag set
             if (in_prelude && (it.op() == -9 || it.enemy())) in_prelude = false;
             if (in_prelude && it.op() != -10 && it.op() != -21 && it.fn() != FN_DEAD_TRICERATOPS) {
@@ -533,6 +554,7 @@ struct Survival : Run {
         Encounter enc;
         uint32_t h = script::find(ram_word, id);
         if (h == script::NOT_FOUND) return enc;
+        uint32_t cut = fight_end(h);
         Section cur;
         auto close = [&] {
             if (!cur.calls.empty()) enc.sections.push_back(cur);
@@ -540,6 +562,7 @@ struct Survival : Run {
             cur.setup.clear();
         };
         enc.complete = script::walk(ram_word, h, [&](const script::Item& it) {
+            if (it.pc >= cut) return;
             if (it.call()) {
                 if (!it.enemy()) return;
                 std::vector<int32_t> item = as_run(it, id);
