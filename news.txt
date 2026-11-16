@@ -13,6 +13,12 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[16] 2026-11-16
+- New generic game icon
+- New main menu: MORE RECOMPS removed, lightning intro
+- Smaller logo with an unofficial fan-made notice
+- Menu ribbon restyled, labels now centred on it
+
 [15] 2026-11-15
 - Updating is more reliable: an update now always recompiles every file that changed, so it no longer fails to build when the game was updated more than once in a short time
 
