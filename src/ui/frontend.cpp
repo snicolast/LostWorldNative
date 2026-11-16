@@ -807,9 +807,13 @@ void Frontend::activate(const Item& it, int dir) {
         locked_notice_ = !any;
         break;
     }
-    case SURVIVAL_ENTRY:   // the weather first
+    case SURVIVAL_ENTRY:   // the weather first (not indoors: straight in)
         survival_choice = it.index;
         weather_for_survival_ = true;
+        if (SURVIVAL_ZONES[it.index].indoor) {
+            push(Action::StartSurvival);
+            break;
+        }
         open(Screen::Weather);
         selected_ = std::clamp(settings.run_weather, 0, WEATHER_CHOICE_COUNT - 1);
         break;

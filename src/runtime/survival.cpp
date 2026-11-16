@@ -61,6 +61,19 @@ constexpr uint32_t CAMERA_POS = 0x1A6F28;   // floats x, y, z: camera position
 constexpr uint32_t TASK_HEAD = 0x1C10B0;    // first task; node +8 next, +0xC function
 constexpr uint32_t FN_TASK_NEW = 0x00116A48;   // (size, fn) -> task
 constexpr uint32_t PLAYER_LIFE = 0x1A3720;  // player 1 object (0x1A36C8) + 0x58: lives left
+constexpr uint32_t PLAYER2_LIFE = 0x1A377C; // player 2 object + 0x58
+constexpr uint32_t PLAYER2_LIFE_COPY = 0x1C1264;
+constexpr uint32_t PLAYER2_SLOT = 0x1A37A1; // byte: 1 / 2 playing, 0 continue, 3 out (INSERT COIN)
+constexpr uint32_t PLAYER2_CONTINUE = 0x1C1234;   // its CONTINUE countdown (0x4B0 at the start)
+// Players in the game: bit 0x01000000 player 1, 0x02000000 player 2 (the
+// hit function fn_000463D4 picks its victim among them, op -14 checks both)
+constexpr uint32_t PLAYERS_IN = 0x7F4;
+constexpr uint32_t PLAYER2_IN = 0x02000000;
+// The text layer the game draws its HUD in: 0x1A6FEC points to it in RAM,
+// cell (x, y) at + y * 256 + x * 2, 0 blank (fn_0002E30C clears a box so).
+// Player 2's hearts are drawn from cell (0x29, 0x2A) on (fn_0000FEA0)
+constexpr uint32_t TEXT_LAYER = 0x1A6FEC;
+constexpr int P2_HEARTS_X = 0x29, P2_HEARTS_Y = 0x2A, P2_HEARTS_W = 20, P2_HEARTS_H = 3;
 constexpr uint32_t FN_PLAYER_HIT[2] = {0x000463D4, 0x00071460};   // hurt the player: lives - 1
 // Player 1's score, the score its counter shows (fn_0003E800 draws the digits
 // again when the two differ; the game writes -1 there to force it), then the score of each
@@ -106,6 +119,13 @@ constexpr uint32_t FN_DEAD_TRICERATOPS = 0x0005B758;
 // Its raptors (encounter 3, group 1) stand on it; without it they would stand
 // in the air, so they come from the next group of that stop, on the ground
 constexpr int TRICERATOPS_ENCOUNTER = 3, TRICERATOPS_GROUP = 1, GROUND_GROUP = 2;
+// The Dark forest's encounter (8) begins with a fork: fn_0005DB5C skips the
+// next item when 0x1C2980 is set (by something done earlier in the stage),
+// otherwise that item, op -8 9, jumps to encounter 9 in the game's script
+// (only a few compys, then the encounter ends). Survival runs the encounter
+// from its own copy and wants its dinosaurs, so both are left out: a jump
+// would leave the copy, the encounter would end and the hunt would stand still
+constexpr uint32_t FN_SKIP_IF_FLAG = 0x0005DB5C;
 constexpr float NEAR_LOOK = 120;            // another stop's section joins a wave if it looks this near one of this stop's
 constexpr int AMBUSH_CHANCE = 35;           // % of the walks with an ambush on the way
 constexpr int BONUS_CHANCE = 50;            // % of the walks with a golden BONUS target
@@ -155,6 +175,14 @@ void log(const char* fmt, ...) {
     va_end(ap);
 }
 
+// Blanks a box of cells of the HUD's text layer
+void clear_text(int x, int y, int w, int h) {
+    uint32_t base = rd32(TEXT_LAYER);
+    if (!base || base + 64 * 256 > RAM_SIZE) return;
+    for (int r = y; r < y + h && r < 64; r++)
+        for (int k = x; k < x + w && k < 128; k++) wr16(base + uint32_t(r) * 256 + uint32_t(k) * 2, 0);
+}
+
 // Live tasks: node -> function
 std::map<uint32_t, uint32_t> tasks() {
     std::map<uint32_t, uint32_t> m;
@@ -169,11 +197,11 @@ std::map<uint32_t, uint32_t> tasks() {
 // the encounter machine; stage 1 zone 7 is the T-Rex chase, where the game
 // loops the camera and loads the zone again and again
 const SurvivalZone SURVIVAL_ZONES[] = {
-    {1, 1, L"Jungle shack", false, 3},
-    {1, 5, L"Dark forest", false, 8},
-    {3, 0, L"Visitor center hall", false, 19},
-    {3, 1, L"Service corridor", false, 30},
-    {4, 1, L"Control room", true, 43},
+    {1, 1, L"Jungle shack", false, 3, false},
+    {1, 5, L"Dark forest", false, 8, false},
+    {3, 0, L"Visitor center hall", false, 19, true},
+    {3, 1, L"Service corridor", false, 30, true},
+    {4, 1, L"Control room", true, 43, true},
 };
 const int SURVIVAL_ZONE_COUNT = int(sizeof(SURVIVAL_ZONES) / sizeof(SURVIVAL_ZONES[0]));
 
@@ -299,6 +327,26 @@ int encounter_enemies(int id) {
     return n;
 }
 
+// Where survival stops reading encounter h (the word after its fight): when,
+// after its enemies, the encounter changes the camera's path (op -24) and
+// then brings more of them, that is the way on to another scene (the Dark
+// forest's raptor fight ends taking the player to the compys), so the fight
+// ends at the wait (-1) before it. Otherwise the whole encounter
+uint32_t fight_end(uint32_t h) {
+    bool enemies = false, left = false;
+    uint32_t after_wait = 0, cut = script::WORDS;
+    script::walk(ram_word, h, [&](const script::Item& it) {
+        if (cut != script::WORDS) {
+            left |= it.enemy();
+            return;
+        }
+        enemies |= it.enemy();
+        if (it.op() == -1) after_wait = it.pc + 1;
+        if (it.op() == -24 && enemies && after_wait) cut = after_wait;
+    });
+    return left ? cut : script::WORDS;
+}
+
 // Best wave per stage and zone, with its score and lap (save/survival.ini:
 // "stage:zone wave score lap"; older files have no lap)
 struct Best {
@@ -397,6 +445,7 @@ struct Run {
     int reward = 0;
     double reward_at = 0;
 
+    bool p2_hearts_left = false;  // player 2 was taken out of the kept game: its hearts are blanked as the run starts
     bool last_hit = false;        // a hit function ran with one life left
     uint64_t dying_until = 0;     // the last attack plays out until this frame, then the results
     Best best_before;
@@ -441,8 +490,10 @@ struct Survival : Run {
         int32_t bad = 0;
         std::vector<int32_t> prelude;
         bool in_prelude = true;
+        uint32_t cut = fight_end(h);
         bool ok = script::walk(ram_word, h, [&](const script::Item& it) {
-            if (it.end()) return;
+            if (it.end() || it.pc >= cut) return;
+            if (it.op() == -8 || it.fn() == FN_SKIP_IF_FLAG) return;   // the fork, as with the flag set
             if (in_prelude && (it.op() == -9 || it.enemy())) in_prelude = false;
             if (in_prelude && it.op() != -10 && it.op() != -21 && it.fn() != FN_DEAD_TRICERATOPS) {
                 std::vector<int32_t> item = it.w;
@@ -517,6 +568,7 @@ struct Survival : Run {
         Encounter enc;
         uint32_t h = script::find(ram_word, id);
         if (h == script::NOT_FOUND) return enc;
+        uint32_t cut = fight_end(h);
         Section cur;
         auto close = [&] {
             if (!cur.calls.empty()) enc.sections.push_back(cur);
@@ -524,6 +576,7 @@ struct Survival : Run {
             cur.setup.clear();
         };
         enc.complete = script::walk(ram_word, h, [&](const script::Item& it) {
+            if (it.pc >= cut) return;
             if (it.call()) {
                 if (!it.enemy()) return;
                 std::vector<int32_t> item = as_run(it, id);
@@ -1073,6 +1126,20 @@ struct Survival : Run {
         enemies.clear(), looks.clear(), setup.clear();
         if (!take_over(h)) return false;
         if (int l = unlock_lives(stage + 1, zone, rd8(SETTING_LIFE)); l > 0) wr32(PLAYER_LIFE, uint32_t(l));
+        // Survival is for player 1: a state kept while player 2 was in the game
+        // (some were) starts with player 2 out, as a new game does. It is put
+        // on its CONTINUE screen with no time left, so the game itself takes
+        // it out on the first frame (and clears its hearts); the dinosaurs
+        // attack only the players in the game
+        if (rd8(PLAYER2_SLOT) != 3 || (rd32(PLAYERS_IN) & PLAYER2_IN)) {
+            printf("[survival] player 2 was in the kept game: out\n");
+            wr32(PLAYERS_IN, rd32(PLAYERS_IN) & ~PLAYER2_IN);
+            wr32(PLAYER2_LIFE, 0);
+            wr32(PLAYER2_LIFE_COPY, 0);
+            if (rd8(PLAYER2_SLOT) != 3) wr8(PLAYER2_SLOT, 0), wr32(PLAYER2_CONTINUE, 1);
+            p2_hearts_left = true;   // (the game only clears the CONTINUE box below them)
+            clear_text(P2_HEARTS_X, P2_HEARTS_Y, P2_HEARTS_W, P2_HEARTS_H);
+        }
         at_arena();
         return true;
     }
@@ -1181,6 +1248,8 @@ bool survival_record(int stage, int zone, int& wave, int& score, int* lap) {
 void survival_begin(int stage, int zone) {
     g_begin_stage = stage, g_begin_zone = zone;
     g_begin = true;
+    for (const SurvivalZone& z : SURVIVAL_ZONES)   // indoors the game's own light, whatever the way in
+        if (z.stage == stage && z.zone == zone && z.indoor) weather_choose(WEATHER_NONE);
     weather_roll();   // each run its own weather (weather.h)
     std::lock_guard<std::mutex> lock(g_surv.view_mutex);   // the loading screen right away
     g_surv.view = SurvivalView{};
@@ -1391,6 +1460,7 @@ bool survival_frame(Ctx&) {
                 s.wave_started = s.lap_started = now_seconds();
                 for (uint32_t a : SCORE) wr32(a, 0);
                 wr32(SCORE[1], ~0u);   // the counter shows the 0 (it still showed the score of the way in)
+                if (s.p2_hearts_left) clear_text(P2_HEARTS_X, P2_HEARTS_Y, P2_HEARTS_W, P2_HEARTS_H);
                 game_state_mark();   // the first stop: every lap starts again from here
                 log("  survival wave 1 count %zu (the encounter itself)\n", s.enemies.size());
                 s.set_phase(Survival::FIGHT);
