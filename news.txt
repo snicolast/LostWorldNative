@@ -13,6 +13,9 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[18] 2026-11-17
+- Older gamepads that are not Xbox or PlayStation pads are now detected when the game is installed with NicoLauncher
+
 [17] 2026-11-17
 - SURVIVAL: Dark forest no longer gets stuck at the compys. The fight is now always at the hill and the fence
 - SURVIVAL: every arena starts with one player again, player 2 shows INSERT COIN and is never attacked
