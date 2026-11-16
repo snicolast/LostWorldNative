@@ -106,6 +106,13 @@ constexpr uint32_t FN_DEAD_TRICERATOPS = 0x0005B758;
 // Its raptors (encounter 3, group 1) stand on it; without it they would stand
 // in the air, so they come from the next group of that stop, on the ground
 constexpr int TRICERATOPS_ENCOUNTER = 3, TRICERATOPS_GROUP = 1, GROUND_GROUP = 2;
+// The Dark forest's encounter (8) begins with a fork: fn_0005DB5C skips the
+// next item when 0x1C2980 is set (by something done earlier in the stage),
+// otherwise that item, op -8 9, jumps to encounter 9 in the game's script
+// (only a few compys, then the encounter ends). Survival runs the encounter
+// from its own copy and wants its dinosaurs, so both are left out: a jump
+// would leave the copy, the encounter would end and the hunt would stand still
+constexpr uint32_t FN_SKIP_IF_FLAG = 0x0005DB5C;
 constexpr float NEAR_LOOK = 120;            // another stop's section joins a wave if it looks this near one of this stop's
 constexpr int AMBUSH_CHANCE = 35;           // % of the walks with an ambush on the way
 constexpr int BONUS_CHANCE = 50;            // % of the walks with a golden BONUS target
@@ -443,6 +450,7 @@ struct Survival : Run {
         bool in_prelude = true;
         bool ok = script::walk(ram_word, h, [&](const script::Item& it) {
             if (it.end()) return;
+            if (it.op() == -8 || it.fn() == FN_SKIP_IF_FLAG) return;   // the fork, as with the flag set
             if (in_prelude && (it.op() == -9 || it.enemy())) in_prelude = false;
             if (in_prelude && it.op() != -10 && it.op() != -21 && it.fn() != FN_DEAD_TRICERATOPS) {
                 std::vector<int32_t> item = it.w;
