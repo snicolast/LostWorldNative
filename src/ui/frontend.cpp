@@ -2081,8 +2081,8 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
     int y_end = y;
 
     // The highlight, gliding from the last entry to the chosen one: on the
-    // backdrop Sega Rally 2's slanted ribbon (in amber) with a thin stripe
-    // before it, over the game a band
+    // backdrop Star Wars Trilogy's band (in amber), fading in from the
+    // column's left with a bright blade at the right edge; over the game a band
     bool settled = true;
     if (selected_ < n) {
         float target = float(row_y[size_t(selected_)]), target_h = float(row_h(selected_));
@@ -2094,19 +2094,16 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
         int by = int(band_y_ + 0.5f), bh = int(band_h_ + 0.5f);
         bool en = list[size_t(selected_)].enabled;
         float a = (en ? 1.0f : 0.45f) * reveal_;
-        if (right) {
-            int slant = bh * 45 / 100, x0 = hero_menu ? tx - U(470) : band0 + U(120);
-            for (int yy = by; yy < by + bh; yy++) {
-                int xs = x0 + (by + bh - yy) * slant / std::max(1, bh);
-                fill(xs, yy, w, yy + 1, AMBER, a * 0.30f);
-                hgrad(xs, yy, w, yy + 1, AMBER, 0.0f, a * 0.28f);
-                fill(xs - U(30), yy, xs - U(18), yy + 1, AMBER, a * 0.8f);
-            }
+        if (right) {   // from nothing at the column's left to the right edge, a bright blade along it
+            hgrad(band0, by, band1, by + bh, AMBER, 0.0f, a * 0.42f);
+            int edge = std::max(3, U(7));
+            fill(w - edge - U(4), by, w, by + bh, AMBER, a * 0.6f);
+            fill(w - edge, by, w, by + bh, 0xFFE8B8, a);
         } else {
             hgrad(band0, by, band1, by + bh, AMBER, a * 0.34f, 0.0f);
+            int edge = std::max(3, U(8));
+            fill(0, by, edge, by + bh, AMBER, a);
         }
-        int edge = std::max(3, U(8));
-        fill(right ? w - edge : 0, by, right ? w : edge, by + bh, AMBER, a);
     } else band_y_ = band_h_ = -1;
 
     for (int i = 0; i < n; i++) {
