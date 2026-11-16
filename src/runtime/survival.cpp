@@ -69,6 +69,11 @@ constexpr uint32_t PLAYER2_CONTINUE = 0x1C1234;   // its CONTINUE countdown (0x4
 // hit function fn_000463D4 picks its victim among them, op -14 checks both)
 constexpr uint32_t PLAYERS_IN = 0x7F4;
 constexpr uint32_t PLAYER2_IN = 0x02000000;
+// The text layer the game draws its HUD in: 0x1A6FEC points to it in RAM,
+// cell (x, y) at + y * 256 + x * 2, 0 blank (fn_0002E30C clears a box so).
+// Player 2's hearts are drawn from cell (0x29, 0x2A) on (fn_0000FEA0)
+constexpr uint32_t TEXT_LAYER = 0x1A6FEC;
+constexpr int P2_HEARTS_X = 0x29, P2_HEARTS_Y = 0x2A, P2_HEARTS_W = 20, P2_HEARTS_H = 3;
 constexpr uint32_t FN_PLAYER_HIT[2] = {0x000463D4, 0x00071460};   // hurt the player: lives - 1
 // Player 1's score, the score its counter shows (fn_0003E800 draws the digits
 // again when the two differ; the game writes -1 there to force it), then the score of each
@@ -170,6 +175,14 @@ void log(const char* fmt, ...) {
     va_end(ap);
 }
 
+// Blanks a box of cells of the HUD's text layer
+void clear_text(int x, int y, int w, int h) {
+    uint32_t base = rd32(TEXT_LAYER);
+    if (!base || base + 64 * 256 > RAM_SIZE) return;
+    for (int r = y; r < y + h && r < 64; r++)
+        for (int k = x; k < x + w && k < 128; k++) wr16(base + uint32_t(r) * 256 + uint32_t(k) * 2, 0);
+}
+
 // Live tasks: node -> function
 std::map<uint32_t, uint32_t> tasks() {
     std::map<uint32_t, uint32_t> m;
@@ -184,11 +197,11 @@ std::map<uint32_t, uint32_t> tasks() {
 // the encounter machine; stage 1 zone 7 is the T-Rex chase, where the game
 // loops the camera and loads the zone again and again
 const SurvivalZone SURVIVAL_ZONES[] = {
-    {1, 1, L"Jungle shack", false, 3},
-    {1, 5, L"Dark forest", false, 8},
-    {3, 0, L"Visitor center hall", false, 19},
-    {3, 1, L"Service corridor", false, 30},
-    {4, 1, L"Control room", true, 43},
+    {1, 1, L"Jungle shack", false, 3, false},
+    {1, 5, L"Dark forest", false, 8, false},
+    {3, 0, L"Visitor center hall", false, 19, true},
+    {3, 1, L"Service corridor", false, 30, true},
+    {4, 1, L"Control room", true, 43, true},
 };
 const int SURVIVAL_ZONE_COUNT = int(sizeof(SURVIVAL_ZONES) / sizeof(SURVIVAL_ZONES[0]));
 
@@ -432,6 +445,7 @@ struct Run {
     int reward = 0;
     double reward_at = 0;
 
+    bool p2_hearts_left = false;  // player 2 was taken out of the kept game: its hearts are blanked as the run starts
     bool last_hit = false;        // a hit function ran with one life left
     uint64_t dying_until = 0;     // the last attack plays out until this frame, then the results
     Best best_before;
@@ -1123,6 +1137,8 @@ struct Survival : Run {
             wr32(PLAYER2_LIFE, 0);
             wr32(PLAYER2_LIFE_COPY, 0);
             if (rd8(PLAYER2_SLOT) != 3) wr8(PLAYER2_SLOT, 0), wr32(PLAYER2_CONTINUE, 1);
+            p2_hearts_left = true;   // (the game only clears the CONTINUE box below them)
+            clear_text(P2_HEARTS_X, P2_HEARTS_Y, P2_HEARTS_W, P2_HEARTS_H);
         }
         at_arena();
         return true;
@@ -1442,6 +1458,7 @@ bool survival_frame(Ctx&) {
                 s.wave_started = s.lap_started = now_seconds();
                 for (uint32_t a : SCORE) wr32(a, 0);
                 wr32(SCORE[1], ~0u);   // the counter shows the 0 (it still showed the score of the way in)
+                if (s.p2_hearts_left) clear_text(P2_HEARTS_X, P2_HEARTS_Y, P2_HEARTS_W, P2_HEARTS_H);
                 game_state_mark();   // the first stop: every lap starts again from here
                 log("  survival wave 1 count %zu (the encounter itself)\n", s.enemies.size());
                 s.set_phase(Survival::FIGHT);

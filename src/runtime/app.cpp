@@ -1646,7 +1646,7 @@ void App::handle_menu_actions() {
             boss_pending = -1;
             cancel_arcade_entry();
             random_spawns_set(false);
-            weather_choose(frontend.run_weather());
+            weather_choose(z.indoor ? WEATHER_NONE : frontend.run_weather());   // indoors: the game's own
             if (boss_fight >= 0 || frontend.boss_mode) {   // from boss mode: back to the arcade first
                 boss_fight = -1;
                 frontend.boss_mode = false;

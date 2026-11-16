@@ -20,6 +20,7 @@ struct SurvivalZone {
     const wchar_t* name;
     bool shoot_in;            // the way there waits for shots (the loading shoots, lives kept)
     int encounter;            // its first encounter (the start of the arena)
+    bool indoor;              // inside a building: no weather to choose (the game's own light)
 };
 extern const SurvivalZone SURVIVAL_ZONES[];
 extern const int SURVIVAL_ZONE_COUNT;
