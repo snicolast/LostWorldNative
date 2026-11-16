@@ -1514,6 +1514,7 @@ int Frontend::text(Family f, int px, const std::wstring& s, int x, int y, int al
 constexpr float POSTER_LOGO_TOP = 0.16f, POSTER_LOGO_END = 0.53f, POSTER_STONE_END = 0.88f;
 constexpr float LOGO_SCREEN_TOP = 0.08f, LOGO_SCREEN_H = 0.36f, LOGO_CENTER_X = 450;
 constexpr float LOGO_PICTURE_X = 350;   // logo.png's centre from the right edge: lined up with the menu's column
+constexpr float LOGO_W = 480;           // logo.png at most this wide (layout units), the tagline under it
 
 void Frontend::poster_layout(float& scale, float& x0, float& y0) const {
     scale = LOGO_SCREEN_H * h_ / ((POSTER_LOGO_END - POSTER_LOGO_TOP) * poster_h_);   // window px per poster px
@@ -1684,13 +1685,25 @@ void Frontend::shade_backdrop() {
     fill(int(w_ * 0.64f), 0, w_, h_, 0x040508, 0.6f);
     hgrad(int(w_ * 0.64f), 0, w_, h_, 0x040508, 0.0f, 0.6f);
     vgrad(0, int(h_ * 0.72f), w_, h_, 0x000000, 0.0f, 0.6f);
-    if (has_logo()) {   // the logo picture, area-averaged down to LOGO_SCREEN_H of the window
-        // no wider than the column it is centred on: a wide logo is set
-        // smaller, in the middle of the same band
-        int lh = int(LOGO_SCREEN_H * h_), lw = lh * logo_.w / logo_.h;
-        const int max_w = int(2 * (LOGO_PICTURE_X - 30) * u_);
-        if (lw > max_w) { lw = max_w; lh = lw * logo_.h / logo_.w; }
-        sprite(logo_, int(w_ - LOGO_PICTURE_X * u_) - lw / 2, int(LOGO_SCREEN_TOP * h_) + (int(LOGO_SCREEN_H * h_) - lh) / 2, lw, lh);
+    if (has_logo()) {
+        // The logo picture (area-averaged down), LOGO_W wide at most, and
+        // under it what this is, in two lines lined up with the entries at the
+        // right; the two together centred in the room above the column
+        auto U = [&](float v) { return int(v * u_ + 0.5f); };
+        static const wchar_t* const TAGLINE[] = {L"AN UNOFFICIAL, FAN-MADE RECOMPILATION OF THE",
+                                                 L"1997 ARCADE GAME THE LOST WORLD: JURASSIC PARK"};
+        const int tag_px = U(25), tag_line = U(30), gap = U(14);
+        const int band0 = int(0.05f * h_), band1 = int((LOGO_SCREEN_TOP + LOGO_SCREEN_H) * h_) + U(40) - U(50);
+        int lw = U(LOGO_W), lh = lw * logo_.h / logo_.w;
+        const int max_h = band1 - band0 - gap - 2 * tag_line;   // a tall logo: as high as fits
+        if (lh > max_h && max_h > 0) lh = max_h, lw = lh * logo_.w / logo_.h;
+        int top = band0 + std::max(0, (band1 - band0 - (lh + gap + 2 * tag_line)) / 2);
+        sprite(logo_, int(w_ - LOGO_PICTURE_X * u_) - lw / 2, top, lw, lh);
+        int ty = top + lh + gap;
+        for (const wchar_t* line : TAGLINE) {
+            text(ITEM, tag_px, line, w_ - U(110), ty, 2, {0xDCD0B4, 0xDCD0B4, 0, 0, 1, std::max(1, U(2))});
+            ty += tag_line;
+        }
     } else if (has_poster()) {   // the logo cut out of the poster: its disc and its banner (cover.png's shapes)
         float s, x0, y0;
         poster_layout(s, x0, y0);
