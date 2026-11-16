@@ -1248,6 +1248,8 @@ bool survival_record(int stage, int zone, int& wave, int& score, int* lap) {
 void survival_begin(int stage, int zone) {
     g_begin_stage = stage, g_begin_zone = zone;
     g_begin = true;
+    for (const SurvivalZone& z : SURVIVAL_ZONES)   // indoors the game's own light, whatever the way in
+        if (z.stage == stage && z.zone == zone && z.indoor) weather_choose(WEATHER_NONE);
     weather_roll();   // each run its own weather (weather.h)
     std::lock_guard<std::mutex> lock(g_surv.view_mutex);   // the loading screen right away
     g_surv.view = SurvivalView{};
