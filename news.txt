@@ -13,6 +13,11 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[17] 2026-11-17
+- SURVIVAL: Dark forest no longer gets stuck at the compys. The fight is now always at the hill and the fence
+- SURVIVAL: every arena starts with one player again, player 2 shows INSERT COIN and is never attacked
+- SURVIVAL: indoor arenas skip the weather screen and keep the game's own light
+
 [16] 2026-11-16
 - New generic game icon
 - New main menu: MORE RECOMPS removed, lightning intro
