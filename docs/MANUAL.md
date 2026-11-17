@@ -61,7 +61,8 @@ Second mouse or with `--one-mouse`. Settings > Game > FREE PLAY (`--free-play`) 
 game's own free play (as FREE PLAY in its test menu's coin settings would): 1 and 2 alone, or a
 light gun's start button, start and continue with no credit, and the screen says FREE PLAY;
 Settings > Controls > HIDE IDLE CROSSHAIR (`--crosshair-hide N`) hides a player's crosshair
-after 3, 5 or 10 seconds without moving or firing, until the gun moves again (a player 2 who joined by mistake leaves no crosshair standing on the screen). A `crosshair.png`
+after 3, 5 or 10 seconds without moving or firing, until the gun moves again (a player 2 who
+joined by mistake leaves no crosshair standing on the screen). A `crosshair.png`
 next to LostWorld.exe replaces the drawn crosshairs with that picture, centred on the gun and sized
 as pixels of a 1080-line screen; `crosshair_p2.png` gives player 2 their own (otherwise they use
 `crosshair.png` too). In `--auto`, a 2 at the end of a button belongs to player
