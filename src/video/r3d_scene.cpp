@@ -280,6 +280,7 @@ void R3DSceneBuilder::viewport(uint32_t addr, int depth) {
     if (!(w0 & 0x20)) {
         R3DViewport v;
         v.priority = (w0 >> 3) & 3;
+        v.node = addr;
         v.w = float(vp(0x14) & 0xFFFF) / 4.0f;
         v.h = float(vp(0x14) >> 16) / 4.0f;
         v.x = float(vp(0x1A) & 0xFFFF) / 16.0f;
@@ -361,6 +362,7 @@ void R3DSceneBuilder::viewport(uint32_t addr, int depth) {
         viewport_key_ = addr;
         instances_.clear();
         node_ptr(vp(0x02), base, Attribs{}, 0);
+        v.build_index = uint32_t(viewport_instances_.size());
         viewport_instances_.push_back(std::move(instances_));
         instances_.clear();
 
@@ -500,6 +502,7 @@ void R3DSceneBuilder::model(uint32_t addr, const Mat& m, const Attribs& a) {
     if (a.alpha <= 0) return;
     // Rotation part used for normals; normals are divided by the model scale
     float inv_scale = a.model_scale != 0 ? 1.0f / a.model_scale : 1.0f;
+    const uint32_t start_addr = addr;
     uint32_t end = (addr & 0xFFFFFF) < 0x100000 ? 0x100000 : 0x1000000;
     int tex_w = 32, tex_h = 32;
     float uv_scale = 1.0f / 8;
@@ -666,6 +669,7 @@ void R3DSceneBuilder::model(uint32_t addr, const Mat& m, const Attribs& a) {
             for (int i = 0; i < 3; i++) in.axes[c * 3 + i] = len > 0 ? col[i] / len : 0;
         }
         in.path = path;
+        in.start = start_addr;
         instances_.push_back(in);
     }
 }

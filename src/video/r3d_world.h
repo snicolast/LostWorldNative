@@ -28,6 +28,7 @@ struct R3DInstance {
     uint32_t polygons;
     uint32_t opaque[2], trans[2];   // its vertices in the viewport's lists (first, end)
     uint32_t path = 0;              // the same for every copy of the model in the viewport
+    uint32_t start = 0;             // the model's address (where its polygons start)
 };
 
 class R3DWorldTracker {
