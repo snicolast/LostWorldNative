@@ -22,7 +22,9 @@ a real game with `--trace-survival`, not just in the disassembly.
 | 0x1A6F28 | 3 × float | Camera position (x, y, z). Zones trigger by distance in x/z |
 | 0x1A3454 | 3 × float | Point the camera turns towards (changed by encounter operation -9) |
 | 0x1A36C8 | object | Player 1; player 2 follows (0x5C-byte objects, 0x1A3724) |
-| 0x1A3720 | int | Player 1 lives (object + 0x58). Starts at LIFE + 1 (fn_00010804). 0x1C1260 is a copy (the hearts don't read it) |
+| 0x1A3720 | int | Player 1 lives (object + 0x58). Starts at LIFE + 1 (fn_00010804, run when a player starts or joins) |
+| 0x1C1260 | int × 2 | Medkits drawn on the HUD, per player (player 2 at 0x1C1264). Every frame fn_0000F2F8 compares the lives with it and draws the new medkits (fn_0000FEA0, which then sets it to the lives) or erases the lost ones (fn_00010148). Not a copy of the lives: nothing copies it back |
+| 0x1A37A4 | int × 2 | Powerbar pieces, per player (player 2 at 0x1A37A8). A piece picked up (fn_000104A0, from the pickup handler fn_0004FEE8) adds one; 1 and 2 are drawn from text cell (0x17, 0x2A) (player 2: 0x22); the third clears them, sets the count to 0 and adds a life. A full medkit adds a life straight away (0x5043C). No cap on lives |
 | fn_000463D4, fn_00071460 | function | Player hit: sound, effect (task 0x46720) and lives - 1 |
 | 0x1A857C | int | Player 1 score (the stage score is at 0x1A858C + 4 × stage); a raptor is worth 500 |
 | 0x1C1D54 | int | The score shown by player 1's counter (+4 for player 2): fn_0003E800 redraws the digits when it doesn't match 0x1A857C, and the game sets -1 to force it |
@@ -238,9 +240,11 @@ screens in src/ui/survival_ui.cpp, startup in app.cpp):
   calls fn_00039428 with an arena's first encounter (SurvivalZone::encounter)
   in its stage and zone, the arena is unlocked (save/survival/unlocked.ini,
   `stage:zone lives life`: the most lives the player had in that game and
-  the LIFE setting then) with a notice, and the state is kept there if there
-  is none. Loading it, the encounter is taken over from its header and the
-  lives are set to that number, plus the change in the LIFE setting since. Reaching an arena in survival mode also unlocks it.
+  the LIFE setting then, kept only for the file's format) with a notice, and
+  the state is kept there if there is none. Loading it, the encounter is taken
+  over from its header and the lives are set to those of a new game (LIFE + 1,
+  as now set); the powerbar pieces (0x1A37A4) and their cells are cleared, so
+  every hunt starts with none. Reaching an arena in survival mode also unlocks it.
 - Hold: on the first encounter with enemies in that zone it copies its script to
   0x700000 (free RAM: the game never goes past 0x200000) replacing the end with
   `-21 0x3FFFFFFF` (endless wait), and the game stops on the start
@@ -248,7 +252,9 @@ screens in src/ui/survival_ui.cpp, startup in app.cpp):
   encounter starts (the call to fn_00039428 is skipped) and the camera doesn't move on
   by itself. On the first shot the game state is saved in memory
   (game_state_mark in runtime.cpp, like the "home" state): the start of
-  each lap.
+  each lap. Putting it back at a new lap, the lives, the score and the
+  powerbar pieces (0x1A37A4 and their text cells) are set again as they
+  were at the end of the lap; the medkits redraw themselves (0x1C1260).
 - Lap: when the machine reaches the endless wait, the stop is
   cleared; after a few seconds (4, fewer on each lap) the game's walker is
   released as at the end of an encounter (0x1A3960 = 1 and the gait

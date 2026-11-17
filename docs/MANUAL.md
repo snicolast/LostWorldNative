@@ -392,7 +392,9 @@ cleared) and sometimes a golden BONUS target appears for a few seconds: shooting
 extra life (or 5000 points with full hearts). After the zone's last stop
 the image fades to black and returns to the first for another lap (LAP),
 harder: more dinosaurs per wave, more at once and shorter pauses (only in
-RAM; the EEPROM is not touched). There is no CONTINUE: the hit that would take the last
+RAM; the EEPROM is not touched). Medkits and powerbar pieces carry over
+from lap to lap; every hunt starts with the medkits of a new game (as the
+LIFE setting gives) and no pieces. There is no CONTINUE: the hit that would take the last
 life ends the hunt (the attack is shown first) with a screen showing the lap and
 wave reached, score and record (save/survival.ini, per stage and zone);
 a shot starts again from the beginning of the arena and Esc returns to the
