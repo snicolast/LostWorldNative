@@ -13,6 +13,9 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[19] 2026-11-17
+- Save files are now written in the background, so saving no longer causes a hitch while playing
+
 [18] 2026-11-17
 - Older gamepads that are not Xbox or PlayStation pads are now detected when the game is installed with NicoLauncher
 
