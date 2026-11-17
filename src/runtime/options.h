@@ -64,7 +64,7 @@ struct Options {
     bool cubic_samples = true;       // --linear-samples: the SCSP's own linear interpolation instead of cubic
     std::string wav_path;            // --wav: record the sound output
     bool several_mice = true;        // a second mouse is player 2's gun (--one-mouse: all move player 1's)
-    bool free_play = false;          // --free-play: 1 / 2 insert the credit themselves (no coin key needed)
+    bool free_play = false;          // --free-play: the game's own free play (start and continue with no credit)
     // Debugging and tests
     uint64_t shot_frame = 0;         // --shot N: screenshot of frame N, then exit
     std::string replay;              // --replay: a debug snapshot (or a folder of them) instead of the game

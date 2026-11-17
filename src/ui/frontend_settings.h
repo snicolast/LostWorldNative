@@ -38,7 +38,7 @@ struct FrontendSettings {
     bool crosshair = true;
     int crosshair_style = 1; // 0 the drawn rings, 1 the crosshair.png pictures when there are any (ui/crosshair_file.h)
     int crosshair_hide = 0; // seconds without use before a crosshair hides: 0 never, 3, 5 or 10
-    bool free_play = false; // 1 / 2 (or a gun's start button) insert the credit themselves
+    bool free_play = false; // the game's own free play: start and continue with no credit
     bool smooth = true;     // the 3D drawn between game frames at the monitor's refresh rate
     bool second_mouse = true;   // a second mouse is player 2's gun
     int subtitles = 0;      // voice-line subtitles: 0 off, 1 English, 2 Japanese

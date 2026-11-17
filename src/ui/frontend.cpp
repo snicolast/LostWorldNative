@@ -369,7 +369,7 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
                  L"Fire each gun to make it player 1's or player 2's for good"},
         // GAME
         {.id = OPT_FREE_PLAY, .tab = GAME_TAB, .label = L"FREE PLAY", .key = "free_play", .flag = &FS::free_play,
-         .kind = TOGGLE, .hint = L"Start and continue with 1 / 2 or a light gun's start button, no coin needed"},
+         .kind = TOGGLE, .hint = L"The arcade's own free play: start and continue with 1 / 2 or a light gun's start button, no coins"},
         {.id = OPT_UPDATES, .tab = GAME_TAB, .label = L"CHECK FOR UPDATES", .key = "check_updates", .flag = &FS::check_updates,
          .kind = TOGGLE, .hint = L"At launch, look on GitHub for a new version and show what is new in it"},
         {.id = OPT_SUBS, .tab = GAME_TAB, .label = L"SUBTITLES", .key = "subtitles", .number = &FS::subtitles,
