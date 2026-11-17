@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "achievements_csv.h"
+#include "disk_writer.h"
 
 static int g_failed = 0;
 #define CHECK(cond)                                                     \
@@ -76,6 +77,7 @@ int main() {
 
     // The files: the icons and the csv that names them, in the current folder
     write_achievements_csv(list);
+    disk_flush();   // (the csv goes out from the disk writer's thread)
     std::string png = read_file("achievements/icons/unlocked.png");
     CHECK(png.size() > 8 && png.compare(1, 3, "PNG") == 0);
     CHECK(read_file("achievements/icons/locked.png").compare(1, 3, "PNG") == 0);
@@ -83,6 +85,7 @@ int main() {
     CHECK(written.rfind("\xEF\xBB\xBF" "ID,Title,", 0) == 0);
     CHECK(written.find("done,DONE,") != std::string::npos);
     write_achievements_csv({list[0]});   // rebuilt in full: the others are gone
+    disk_flush();
     written = read_file("achievements/achievements.csv");
     CHECK(written.find("done,DONE,") == std::string::npos && written.find("locked,LOCKED,") != std::string::npos);
 

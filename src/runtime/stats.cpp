@@ -15,6 +15,7 @@
 #include "stats.h"
 
 #include "achievements_csv.h"
+#include "disk_writer.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -26,12 +27,6 @@
 
 #include "ppc_rt.h"
 #include "survival.h"
-
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#endif
 
 namespace {
 
@@ -118,17 +113,10 @@ const std::vector<AchievementInfo> TABLE = {
 struct Ini {
     std::vector<std::pair<std::string, int64_t>> rows;
     void put(const std::string& k, int64_t v) { rows.push_back({k, v}); }
-    bool save(const char* path) const {
-        std::string tmp = std::string(path) + ".tmp";
-        FILE* f = fopen(tmp.c_str(), "w");
-        if (!f) return false;
-        for (auto& [k, v] : rows) fprintf(f, "%s = %lld\n", k.c_str(), (long long)v);
-        bool ok = fclose(f) == 0;
-#ifdef _WIN32
-        return ok && MoveFileExA(tmp.c_str(), path, MOVEFILE_REPLACE_EXISTING);
-#else
-        return ok && rename(tmp.c_str(), path) == 0;
-#endif
+    void save(const char* path) const {   // (by the disk writer's thread)
+        std::string text;
+        for (auto& [k, v] : rows) text += k + " = " + std::to_string(v) + "\n";
+        disk_replace(path, std::move(text));
     }
     static Ini load(const char* path) {
         Ini ini;
@@ -234,18 +222,7 @@ void write_achievements_json(const Stats& s, const std::vector<int64_t>& unlocke
         out += i + 1 < TABLE.size() ? ",\n" : "\n";
     }
     out += "  ]\n}\n";
-    const char* path = "save/achievements.json";
-    std::string tmp = std::string(path) + ".tmp";
-    FILE* f = fopen(tmp.c_str(), "wb");
-    if (!f) return;
-    bool ok = fwrite(out.data(), 1, out.size(), f) == out.size();
-    ok = fclose(f) == 0 && ok;
-#ifdef _WIN32
-    ok = ok && MoveFileExA(tmp.c_str(), path, MOVEFILE_REPLACE_EXISTING);
-#else
-    ok = ok && rename(tmp.c_str(), path) == 0;
-#endif
-    if (!ok) printf("[achievements] could not save %s\n", path);
+    disk_replace("save/achievements.json", std::move(out));
     write_achievements_csv(csv);
 }
 
@@ -276,7 +253,8 @@ struct Tracker {
     uint64_t boss_from = 0;
     int boss_lives_lost = 0;
     uint64_t saved_at = 0;
-    bool dirty = false;
+    bool dirty = false;    // a record, a count or an achievement changed: saved at once
+    bool played = false;   // only the running counters went up (time, shots, hits): saved every few minutes
 
     bool playing() const { return state == 1 || state == 2; }
 
@@ -299,10 +277,11 @@ struct Tracker {
         Ini a;
         for (size_t i = 0; i < TABLE.size(); i++)
             if (unlocked[i]) a.put(TABLE[i].key, unlocked[i]);
-        if (!ini.save(STATS_FILE) || !a.save(ACHIEVEMENTS_FILE)) printf("[achievements] could not save save/stats.ini\n");
+        ini.save(STATS_FILE);
+        a.save(ACHIEVEMENTS_FILE);
         write_achievements_json(stats, unlocked);
         saved_at = frame;
-        dirty = false;
+        dirty = played = false;
     }
 
     // With the mutex held
@@ -381,11 +360,13 @@ struct Tracker {
             if (in_game) {   // back from the CONTINUE screen
                 stats.continues++;
                 game_continues++;
+                dirty = true;
             } else if (boss < 0) {   // a new game
                 end_game(false);
                 in_game = true;
                 game_continues = 0;
                 stats.games++;
+                dirty = true;
                 begin_stage();
             }
             last = now, lives = lv;
@@ -410,15 +391,18 @@ struct Tracker {
                 if (in_game && stage >= 0) clear_stage(stage);
                 begin_stage();
             }
-            dirty = true;
+            played = true;
         }
         last = now, lives = lv, alive = al;
         hits_last_frame = hits_this_frame;
         hits_this_frame = 0;
         SurvivalView sv = survival_view();
-        if (sv.mode == SurvivalMode::Playing && sv.wave > stats.best_wave) stats.best_wave = sv.wave;
+        if (sv.mode == SurvivalMode::Playing && sv.wave > stats.best_wave) stats.best_wave = sv.wave, dirty = true;
         check_achievements();
-        if (dirty && frame - saved_at > uint64_t(frames_of(30))) save();
+        // The files go out from the disk writer's thread: the game thread only
+        // builds their text (a slow drive used to stop the game for a moment
+        // here, every 30 s of play)
+        if (dirty || (played && frame - saved_at > uint64_t(frames_of(300)))) save();
     }
 };
 
@@ -475,10 +459,14 @@ void stats_state_loaded() {
     g.rebase = true;
 }
 
+// (at exit: also waits for every file still being written, the EEPROM's and
+// survival's too)
 void stats_save() {
-    if (!g.on) return;
-    std::lock_guard<std::mutex> lock(g.mutex);
-    g.save();
+    if (g.on) {
+        std::lock_guard<std::mutex> lock(g.mutex);
+        g.save();
+    }
+    disk_flush();
 }
 
 StatsView stats_view() {

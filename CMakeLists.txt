@@ -163,6 +163,7 @@ add_executable(LostWorld WIN32
     src/runtime/runtime.cpp
     src/runtime/app.cpp
     src/runtime/eeprom.cpp
+    src/runtime/disk_writer.cpp
     src/runtime/inputs.cpp
     src/runtime/raw_mice.cpp
     src/runtime/gamepad.cpp
@@ -305,11 +306,12 @@ if(LW_TESTS)
     add_executable(news_test tests/news_test.cpp src/ui/news.cpp)
     add_executable(menu_music_test tests/menu_music_test.cpp src/ui/menu_music.cpp)
     target_include_directories(menu_music_test PRIVATE third_party/minimp3)
-    add_executable(achievements_csv_test tests/achievements_csv_test.cpp src/runtime/achievements_csv.cpp)
+    add_executable(achievements_csv_test tests/achievements_csv_test.cpp src/runtime/achievements_csv.cpp src/runtime/disk_writer.cpp)
     target_include_directories(achievements_csv_test PRIVATE ${ICONS_DIR})
+    add_executable(disk_writer_test tests/disk_writer_test.cpp src/runtime/disk_writer.cpp)
     foreach(t tilegen_test fnv_test options_test sky_motion_test audio_stream_test rom_zip_test encounter_script_test
               scsp_state_test weather_sound_test sky_procedural_test r3d_state_test worker_test settings_bridge_test
-              pack2d_test r3d_shelter_test news_test menu_music_test achievements_csv_test)
+              pack2d_test r3d_shelter_test news_test menu_music_test achievements_csv_test disk_writer_test)
         target_include_directories(${t} PRIVATE src/video src/common src/runtime src/audio src/ui ${MINIZ_DIR})
         if(MSVC)
             target_compile_options(${t} PRIVATE /W4 /utf-8)
@@ -334,6 +336,7 @@ if(LW_TESTS)
     add_test(NAME news COMMAND news_test)
     add_test(NAME menu_music COMMAND menu_music_test ${CMAKE_SOURCE_DIR}/res/menu/music.mp3)
     add_test(NAME achievements_csv COMMAND achievements_csv_test)
+    add_test(NAME disk_writer COMMAND disk_writer_test)
     # 3.10: the version the tools need, so an older Python in PATH is skipped (Star Wars Trilogy issue #51)
     find_package(Python3 3.10 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
