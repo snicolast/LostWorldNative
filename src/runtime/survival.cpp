@@ -75,6 +75,13 @@ constexpr uint32_t PLAYER2_IN = 0x02000000;
 // Player 2's hearts are drawn from cell (0x29, 0x2A) on (fn_0000FEA0)
 constexpr uint32_t TEXT_LAYER = 0x1A6FEC;
 constexpr int P2_HEARTS_X = 0x29, P2_HEARTS_Y = 0x2A, P2_HEARTS_W = 20, P2_HEARTS_H = 3;
+// Powerbar pieces: some things shot in a stage give a piece (fn_000104A0);
+// the third one makes a medkit (a life) and the count starts again. The count
+// is at 0x1A37A4 (+4 player 2); 1 or 2 pieces are drawn on the text layer
+// from cell (0x17, 0x2A) for player 1 and (0x22, 0x2A) for player 2
+constexpr uint32_t PIECES = 0x1A37A4;
+constexpr uint32_t PIECES2 = 0x1A37A8;
+constexpr int PIECES_X = 0x17, PIECES2_X = 0x22, PIECES_Y = 0x2A, PIECES_W = 6, PIECES_H = 3;
 constexpr uint32_t FN_PLAYER_HIT[2] = {0x000463D4, 0x00071460};   // hurt the player: lives - 1
 // Player 1's score, the score its counter shows (fn_0003E800 draws the digits
 // again when the two differ; the game writes -1 there to force it), then the score of each
@@ -184,6 +191,23 @@ void clear_text(int x, int y, int w, int h) {
         for (int k = x; k < x + w && k < 128; k++) wr16(base + uint32_t(r) * 256 + uint32_t(k) * 2, 0);
 }
 
+// The cells of a box of the HUD's text layer (copied out, written back)
+std::vector<uint16_t> read_text(int x, int y, int w, int h) {
+    std::vector<uint16_t> v;
+    uint32_t base = rd32(TEXT_LAYER);
+    if (!base || base + 64 * 256 > RAM_SIZE) return v;
+    for (int r = y; r < y + h; r++)
+        for (int k = x; k < x + w; k++) v.push_back(rd16(base + uint32_t(r) * 256 + uint32_t(k) * 2));
+    return v;
+}
+void write_text(int x, int y, int w, int h, const std::vector<uint16_t>& v) {
+    uint32_t base = rd32(TEXT_LAYER);
+    if (!base || base + 64 * 256 > RAM_SIZE || v.size() != size_t(w * h)) return;
+    size_t i = 0;
+    for (int r = y; r < y + h; r++)
+        for (int k = x; k < x + w; k++) wr16(base + uint32_t(r) * 256 + uint32_t(k) * 2, v[i++]);
+}
+
 // Live tasks: node -> function
 std::map<uint32_t, uint32_t> tasks() {
     std::map<uint32_t, uint32_t> m;
@@ -213,9 +237,10 @@ std::string arena_state_path(int stage, int zone) {
 }
 
 // Unlocked arenas (save/survival/unlocked.ini: "stage:zone lives life", the
-// lives a new game started with and the LIFE setting then: when the kept
-// state is loaded the player gets those, more or fewer as the setting is
-// now). Read by the window, written by the game thread
+// most lives the player had in that game and the LIFE setting then; a kept
+// state now always starts with the lives of a new game, LIFE + 1, so those
+// two are only kept for the file's format). Read by the window, written by
+// the game thread
 struct Unlock {
     int lives = 0, life = -1;
 };
@@ -256,16 +281,6 @@ void write_unlocks() {
         text += line;
     }
     disk_replace(UNLOCKS, std::move(text));
-}
-
-// The lives to start the kept state with, at LIFE setting `life` (0: unknown)
-int unlock_lives(int stage, int zone, int life) {
-    std::lock_guard<std::mutex> lock(g_unlock_mutex);
-    read_unlocks();
-    auto it = g_unlocks.find({stage, zone});
-    if (it == g_unlocks.end() || it->second.lives <= 0) return 0;
-    int lives = it->second.lives + (it->second.life >= 0 ? life - it->second.life : 0);
-    return std::clamp(lives, 1, 9);
 }
 
 // True if it was locked
@@ -459,6 +474,11 @@ struct Run {
     int reward = 0;
     double reward_at = 0;
 
+    // Powerbar pieces and how they were drawn at the end of the lap: kept over
+    // the state put back at a new lap, like the lives
+    int saved_pieces = 0;
+    std::vector<uint16_t> saved_piece_cells;
+    bool pieces_kept = false;
     bool p2_hearts_left = false;  // player 2 was taken out of the kept game: its hearts are blanked as the run starts
     bool last_hit = false;        // a hit function ran with one life left
     uint64_t dying_until = 0;     // the last attack plays out until this frame, then the results
@@ -877,6 +897,9 @@ struct Survival : Run {
     void start_lap_out() {
         saved_lives = int(rd32(PLAYER_LIFE));
         saved_score = score();
+        saved_pieces = int(rd32(PIECES));
+        saved_piece_cells = read_text(PIECES_X, PIECES_Y, PIECES_W, PIECES_H);
+        pieces_kept = true;
         bonus_on = false;
         bonus_at = 0;
         ambush_planned = false;
@@ -888,6 +911,10 @@ struct Survival : Run {
     void new_lap(bool back) {
         if (back) {
             wr32(PLAYER_LIFE, uint32_t(saved_lives));
+            if (pieces_kept) {   // (the game draws the medkits again by itself: it compares)
+                wr32(PIECES, uint32_t(saved_pieces));
+                write_text(PIECES_X, PIECES_Y, PIECES_W, PIECES_H, saved_piece_cells);
+            }
             for (uint32_t a : {SCORE[0], SCORE[2 + size_t(stage)]}) wr32(a, uint32_t(saved_score));
             wr32(SCORE[1], ~0u);   // the counter shows it
             enemies = first_enemies, looks = first_looks, setup = first_setup;
@@ -1056,6 +1083,7 @@ struct Survival : Run {
         lap = 0;
         saved_lives = start_lives;
         saved_score = 0;
+        pieces_kept = false;   // as at the first stop: none
         best_before = record_of(stage + 1, zone);
         new_record = false;
         mode = SurvivalMode::Playing;
@@ -1109,6 +1137,12 @@ struct Survival : Run {
         }
     }
 
+    // Player 2's medkits and powerbar pieces, off the HUD (it was taken out)
+    void clear_p2_hud() {
+        clear_text(P2_HEARTS_X, P2_HEARTS_Y, P2_HEARTS_W, P2_HEARTS_H);
+        clear_text(PIECES2_X, PIECES_Y, PIECES_W, PIECES_H);
+    }
+
     // The arena's first encounter is ours (take_over): the start screen
     void at_arena() {
         base_diff = rd8(SETTING_DIFF) >> 4;
@@ -1119,6 +1153,10 @@ struct Survival : Run {
         first_count = enemies.size();
         find_zone_encounters();
         start_lives = lives = std::max(1, int(rd32(PLAYER_LIFE)));
+        // No powerbar pieces to start with (a kept state may have some from
+        // the arcade game): every hunt starts with none
+        wr32(PIECES, 0);
+        clear_text(PIECES_X, PIECES_Y, PIECES_W, PIECES_H);
         wave_started = now_seconds();
         if (mode == SurvivalMode::Loading) mode = SurvivalMode::Ready, step = SurvivalStep::Arrived;
         unlock(stage + 1, zone, start_lives, false);
@@ -1139,7 +1177,9 @@ struct Survival : Run {
         encounter = id;
         enemies.clear(), looks.clear(), setup.clear();
         if (!take_over(h)) return false;
-        if (int l = unlock_lives(stage + 1, zone, rd8(SETTING_LIFE)); l > 0) wr32(PLAYER_LIFE, uint32_t(l));
+        // The lives of a new game (fn_00010804: LIFE + 1), not those of the
+        // arcade game the state was kept from (medkits picked up on the way)
+        wr32(PLAYER_LIFE, uint32_t(std::clamp(int(rd8(SETTING_LIFE)) + 1, 1, MAX_LIVES)));
         // Survival is for player 1: a state kept while player 2 was in the game
         // (some were) starts with player 2 out, as a new game does. It is put
         // on its CONTINUE screen with no time left, so the game itself takes
@@ -1151,8 +1191,9 @@ struct Survival : Run {
             wr32(PLAYER2_LIFE, 0);
             wr32(PLAYER2_LIFE_COPY, 0);
             if (rd8(PLAYER2_SLOT) != 3) wr8(PLAYER2_SLOT, 0), wr32(PLAYER2_CONTINUE, 1);
+            wr32(PIECES2, 0);
             p2_hearts_left = true;   // (the game only clears the CONTINUE box below them)
-            clear_text(P2_HEARTS_X, P2_HEARTS_Y, P2_HEARTS_W, P2_HEARTS_H);
+            clear_p2_hud();
         }
         at_arena();
         return true;
@@ -1474,7 +1515,7 @@ bool survival_frame(Ctx&) {
                 s.wave_started = s.lap_started = now_seconds();
                 for (uint32_t a : SCORE) wr32(a, 0);
                 wr32(SCORE[1], ~0u);   // the counter shows the 0 (it still showed the score of the way in)
-                if (s.p2_hearts_left) clear_text(P2_HEARTS_X, P2_HEARTS_Y, P2_HEARTS_W, P2_HEARTS_H);
+                if (s.p2_hearts_left) s.clear_p2_hud();
                 game_state_mark();   // the first stop: every lap starts again from here
                 log("  survival wave 1 count %zu (the encounter itself)\n", s.enemies.size());
                 s.set_phase(Survival::FIGHT);
