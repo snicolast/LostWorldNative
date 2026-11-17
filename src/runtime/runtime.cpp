@@ -1340,6 +1340,24 @@ void rt_event(Ctx& c) {
                 }
             }
             hide_stage_captions(g_subtitles == 0);
+            if (g_frame >= 1000) {   // FREE PLAY, past the boot (game_ram.md: no setting written there)
+                // The flag the game works out of its coin setting (0xFF when
+                // 0x1225 = 0x1A, FREE PLAY in the test menu's COIN ASSIGNMENTS):
+                // START alone starts and continues, a coin adds no credit and
+                // the screen says FREE PLAY. With it the game never goes back
+                // to its attract (a game over leads to the PUSH START screen,
+                // as with credits left), so with the main menu on it is only
+                // set while a player plays or is on the CONTINUE screen
+                // (slot 0-2, a game mode other than the attract's 0 and 1):
+                // a game over still ends in the attract, where the menu comes
+                // back, and PLAY's own credit starts the game. Not in
+                // survival or boss mode, which have no continue. Off, the
+                // test menu's own setting stands (also over a kept state)
+                uint32_t mode = rd32(0x1A6164);
+                bool in_game = mode != 0 && mode != 1 && (rd8(0x1A3791) <= 2 || rd8(0x1A37A1) <= 2);
+                bool forced = g_free_play && !survival_enabled() && g_boss_maker < 0 && (!g_skip_attract || in_game);
+                wr8(0x12F4, forced || rd8(0x1225) == 0x1A ? 0xFF : 0);
+            }
             for (int p = 0; p < 2; p++) {   // player slots (0x10 bytes each): +0xD = 1 or 2 while playing
                 uint8_t state = rd8(0x1A3791 + 0x10 * p);
                 g_inputs.p[p].playing = state == 1 || state == 2;

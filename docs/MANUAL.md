@@ -31,7 +31,7 @@ route selection (BEGINNER / EXPERT / SHUFFLE; the credit and start go in by
 themselves), and when a game ends (no continue, or the ending and its name
 entry) the main menu comes back: the arcade's attract (title, rankings,
 demo) never shows. Continues and player 2 still use 5 / 6 = coin and
-1 / 2 = start. During play Esc pauses the game and the sound (Resume,
+1 / 2 = start (1 / 2 alone with FREE PLAY). During play Esc pauses the game and the sound (Resume,
 Settings, Quit). Options are saved in save/settings.ini; command-line
 options take priority. `--no-menu` goes straight to the
 arcade game as before (Esc quits), and the tests (--replay, --auto, --shot,
@@ -57,11 +57,12 @@ over the whole 3D view, also the side bands of a 16:9 or 21:9 picture, and the e
 there can be shot (except on the stage select screen, which stays 4:3). A shot outside the 3D
 view (the black bars of a window wider than it) or on its very edge (where a light gun parks an
 off-screen shot) reloads, as on the cabinet. Disable it in Settings > Controls >
-Second mouse or with `--one-mouse`. Settings > Game > FREE PLAY (`--free-play`) makes 1 and 2
-insert the credit themselves, so a light gun's start button starts and continues without the
-coin key; Settings > Controls > HIDE IDLE CROSSHAIR (`--crosshair-hide N`) hides a player's
-crosshair after 3, 5 or 10 seconds without moving or firing, until the gun moves again (a
-player 2 who joined by mistake leaves no crosshair standing on the screen). A `crosshair.png`
+Second mouse or with `--one-mouse`. Settings > Game > FREE PLAY (`--free-play`) turns on the
+game's own free play (as FREE PLAY in its test menu's coin settings would): 1 and 2 alone, or a
+light gun's start button, start and continue with no credit, and the screen says FREE PLAY;
+Settings > Controls > HIDE IDLE CROSSHAIR (`--crosshair-hide N`) hides a player's crosshair
+after 3, 5 or 10 seconds without moving or firing, until the gun moves again (a player 2 who
+joined by mistake leaves no crosshair standing on the screen). A `crosshair.png`
 next to LostWorld.exe replaces the drawn crosshairs with that picture, centred on the gun and sized
 as pixels of a 1080-line screen; `crosshair_p2.png` gives player 2 their own (otherwise they use
 `crosshair.png` too). In `--auto`, a 2 at the end of a button belongs to player

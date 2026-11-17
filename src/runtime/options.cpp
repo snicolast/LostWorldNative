@@ -143,7 +143,7 @@ const std::vector<Entry>& table() {
         text("--wav", "FILE", &Options::wav_path, "record the sound to a WAV"),
         section("Players"),
         off("--one-mouse", &Options::several_mice, "every mouse moves player 1's gun (no second mouse)"),
-        flag("--free-play", &Options::free_play, "start and continue with 1 / 2 alone, no coin needed"),
+        flag("--free-play", &Options::free_play, "the arcade's own free play: start and continue with 1 / 2 alone"),
         num("--crosshair-hide", &Options::crosshair_hide, "hide a crosshair after N seconds unused (0 = never)"),
         section("Debugging and tests"),
         custom("--shot", "N", "save frame N to out/capture.bmp and the scene to out/scene.txt, then exit", true,

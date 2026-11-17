@@ -100,6 +100,8 @@ Don't write during boot (the game hangs): from frame ~1000 on.
 | 0x122D | Difficulty = high nibble (7 by default). Read live by about 10 enemy routines |
 | 0x1230 | BOSS ACTION |
 | 0x1226 | COUNTRY |
+| 0x1225 | Coin setting (test menu COIN ASSIGNMENTS): 0x1A = FREE PLAY |
+| 0x12F4 | FREE PLAY flag the game works out of 0x1225 (0xFF when free play, 0 otherwise) as the settings are loaded or changed; read by the coin handler (no credit added) and the credit display. FREE PLAY in the menu sets it each frame (runtime.cpp) |
 
 ## Tasks
 

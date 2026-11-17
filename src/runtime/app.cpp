@@ -124,7 +124,7 @@ static void apply_sound_options(const Options& o) {
 // Keyboard and mouse (only while the window is active):
 //   5 = coin, 1 = start, mouse = gun (left button fires, right reloads),
 //   6 / 2 = player 2's coin and start, F2 = test, F3 = service.
-// With free play, 1 / 2 insert the credit themselves (player_join)
+// With FREE PLAY the game itself needs no credit (g_free_play)
 static bool g_menu_open = false;     // a menu has the controls
 static bool g_block_buttons = false; // after a menu closes: buttons ignored until released
 static int g_p1_pad = -1;            // the gamepad aiming for player 1; -1: the mouse (whichever moved last)
@@ -195,13 +195,8 @@ static void poll_keyboard_mouse(HWND hwnd) {
     PlayerInputs& p1 = g_inputs.p[0];
     p1.coin = down('5');
     g_inputs.p[1].coin = down('6');
-    static bool start_was[2] = {};
-    for (int p = 0; p < 2; p++) {
-        bool start = down(p ? '2' : '1');
-        if (!g_opt.free_play) g_inputs.p[p].start = start;
-        else if (start && !start_was[p] && !g_inputs.p[p].playing) player_join(p);   // also continues
-        start_was[p] = start;
-    }
+    g_inputs.p[0].start = down('1');
+    g_inputs.p[1].start = down('2');
     g_inputs.test = down(VK_F2);
     g_inputs.service = down(VK_F3);
     POINT cursor;
@@ -1703,6 +1698,7 @@ void App::handle_menu_actions() {
             if (!g_opt.several_mice) raw_mice::reset();
             else raw_mice::set_saved(s.gun_p1, s.gun_p2);
             g_subtitles = g_opt.subtitles;
+            g_free_play = g_opt.free_play;
             g_pad_settings = {s.pad_speed, s.gyro, s.gyro_speed, s.vibration, s.aim_assist};
             s.save("save/settings.ini");
             break;
@@ -2487,6 +2483,7 @@ int main(int argc, char** argv) {
     g_frame_limit = g_opt.frame_limit;
     g_boss_maker = g_opt.boss_maker;
     g_subtitles = g_opt.subtitles;
+    g_free_play = g_opt.free_play;
     for (const std::string& script : g_opt.auto_scripts) g_auto.parse(script);
     g_fixed_aim = g_opt.fixed_aim;
     if (g_opt.fixed_aim) {   // fixed raw gun ADC values (calibration tests)

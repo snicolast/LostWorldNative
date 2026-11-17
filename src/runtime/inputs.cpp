@@ -7,7 +7,7 @@
 #include <cstdlib>
 
 Inputs g_inputs;
-std::atomic<bool> g_select_aim{false}, g_fixed_aim{false};
+std::atomic<bool> g_select_aim{false}, g_fixed_aim{false}, g_free_play{false};
 
 std::atomic<float> g_aim_reach{0.0f};
 
@@ -84,11 +84,11 @@ void join_update() {
     for (int p = 0; p < 2; p++) {
         if (g_join_at[p] < 0) continue;
         double t = now - g_join_at[p];
-        // Credits are shared: the coin goes in slot 1, as the "5" key does.
-        // Start is released here too: with free play nothing else lets go of
-        // it, and a start held since the last join is no press for the game
-        // (the CONTINUE screen took the coin and kept waiting)
-        if (t < 0.1) g_inputs.p[0].coin = true;
+        // Credits are shared: the coin goes in slot 1, as the "5" key does
+        // (none with FREE PLAY: the game needs no credit then). Start is
+        // released here too: a start held since the last join is no press
+        // for the game
+        if (t < 0.1 && !g_free_play) g_inputs.p[0].coin = true;
         g_inputs.p[p].start = t >= 0.25 && t < 0.35;
         if (t >= 0.45) g_join_at[p] = -1;
     }

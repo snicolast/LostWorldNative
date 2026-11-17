@@ -83,6 +83,9 @@ float gun_reach();
 bool gun_aim_exact(int player, float& out_x, float& out_y);
 extern std::atomic<bool> g_select_aim;   // the stage select screen is up (its gun mapping differs)
 extern std::atomic<bool> g_fixed_aim;    // --aim: the ADC values stay fixed
+// FREE PLAY (settings, --free-play): the game's own free play, as its test
+// menu sets it (runtime.cpp, each frame): START alone starts and continues
+extern std::atomic<bool> g_free_play;
 
 // Which player a pad controls (0 or 1), given the connected pads as a bit
 // mask: the first connected pad shares player 1 with the mouse, whenever it
@@ -90,8 +93,9 @@ extern std::atomic<bool> g_fixed_aim;    // --aim: the ADC values stay fixed
 int pad_player(int pad_index, uint32_t connected);
 
 // Joining a game in progress: a credit and then that player's start, as the
-// arcade asks for. Driven by the clock, so whoever polls the controls (the
-// window at the monitor's rate) calls join_update() each time.
+// arcade asks for (with FREE PLAY the start alone). Driven by the clock, so
+// whoever polls the controls (the window at the monitor's rate) calls
+// join_update() each time.
 void player_join(int player);
 void join_update();
 
