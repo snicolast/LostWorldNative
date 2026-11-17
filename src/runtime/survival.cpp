@@ -47,6 +47,7 @@
 #include "../common/clock.h"
 #include "../common/random_seed.h"
 #include "bosses.h"
+#include "disk_writer.h"
 #include "encounter_script.h"
 #include "inputs.h"
 #include "ppc_rt.h"
@@ -239,13 +240,22 @@ void read_unlocks() {   // (mutex held)
     }
 }
 
-void write_unlocks() {   // (mutex held)
-    CreateDirectoryA("save", nullptr);
-    CreateDirectoryA("save/survival", nullptr);
-    if (FILE* f = fopen(UNLOCKS, "w")) {
-        for (auto& [k, v] : g_unlocks) fprintf(f, "%d:%d %d %d\n", k.first, k.second, v.lives, v.life);
-        fclose(f);
+// (mutex held) The file goes out from the disk writer's thread: an arena is
+// unlocked from the game thread, in the middle of a stage
+void write_unlocks() {
+    static const bool folders = [] {
+        CreateDirectoryA("save", nullptr);
+        CreateDirectoryA("save/survival", nullptr);
+        return true;
+    }();
+    (void)folders;
+    std::string text;
+    char line[64];
+    for (auto& [k, v] : g_unlocks) {
+        snprintf(line, sizeof line, "%d:%d %d %d\n", k.first, k.second, v.lives, v.life);
+        text += line;
     }
+    disk_replace(UNLOCKS, std::move(text));
 }
 
 // The lives to start the kept state with, at LIFE setting `life` (0: unknown)
@@ -383,10 +393,14 @@ void keep_record(int stage, int zone, const Best& b) {
     std::lock_guard<std::mutex> lock(g_records_mutex);
     read_records();
     g_records[{stage, zone}] = b;
-    if (FILE* f = fopen(RECORDS, "w")) {
-        for (auto& [k, v] : g_records) fprintf(f, "%d:%d %d %d %d\n", k.first, k.second, v.wave, v.score, v.lap);
-        fclose(f);
+    // (from the game thread, as a wave ends: written by the disk writer's)
+    std::string text;
+    char line[96];
+    for (auto& [k, v] : g_records) {
+        snprintf(line, sizeof line, "%d:%d %d %d %d\n", k.first, k.second, v.wave, v.score, v.lap);
+        text += line;
     }
+    disk_replace(RECORDS, std::move(text));
 }
 
 // One run of the mode, from the menu's choice to its results: reset() starts

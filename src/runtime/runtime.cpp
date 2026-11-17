@@ -21,6 +21,7 @@
 #include <thread>
 
 #include "bosses.h"
+#include "disk_writer.h"
 #include "eeprom.h"
 #include "inputs.h"
 #include "fns.h"
@@ -815,6 +816,7 @@ double g_boot_s = now_seconds();   // when the process started (the boot skip re
 [[noreturn]] void exit_from_game_thread(int code) {
     fflush(stdout);
     if (g_state_writer.joinable()) g_state_writer.join();   // a state still being written
+    disk_flush();                                            // and the saves (EEPROM, records)
     g_audio.stop();
     console_prompt();
     ExitProcess(code);

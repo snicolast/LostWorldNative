@@ -1,5 +1,7 @@
 #include "eeprom.h"
 
+#include "disk_writer.h"
+
 #include <cstdio>
 #include <cstring>
 
@@ -12,12 +14,11 @@ void Eeprom93C46::load(const std::string& path, bool read_only) {
     }
 }
 
+// Every word the game writes: the file goes out from the disk writer's thread
+// (the game writes several words in a row, from the game thread)
 void Eeprom93C46::save() {
     if (path_.empty()) return;
-    if (FILE* f = fopen(path_.c_str(), "wb")) {
-        fwrite(mem_, 1, sizeof(mem_), f);
-        fclose(f);
-    }
+    disk_replace(path_, std::string(reinterpret_cast<const char*>(mem_), sizeof(mem_)));
 }
 
 uint8_t Eeprom93C46::read_do() {

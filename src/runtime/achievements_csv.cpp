@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <ctime>
 
+#include "disk_writer.h"
 #include "achievement_icons.h"   // ICON_unlocked, ICON_locked: res/achievements/*.png, by CMakeLists.txt
 
 #ifdef _WIN32
@@ -149,11 +150,15 @@ std::string achievements_csv(const std::vector<CsvAchievement>& list, bool icons
 }
 
 void write_achievements_csv(const std::vector<CsvAchievement>& list) {
-    make_dir(DIR);
-    make_dir(ICONS_DIR);
-    bool icons = write_icon(std::string(DIR) + "/" + UNLOCKED_ICON, ICON_unlocked, sizeof ICON_unlocked) &&
-                 write_icon(std::string(DIR) + "/" + LOCKED_ICON, ICON_locked, sizeof ICON_locked);
-    if (!icons) printf("[achievements] could not write the icons in %s\n", ICONS_DIR);
-    std::string text = achievements_csv(list, icons, int64_t(time(nullptr)));
-    if (!replace_file(CSV_FILE, text.data(), text.size())) printf("[achievements] could not save %s\n", CSV_FILE);
+    // The folders and icons once a run, here and now (the first call is at
+    // launch); the csv itself from the disk writer's thread, as the game runs
+    static const bool icons = [] {
+        make_dir(DIR);
+        make_dir(ICONS_DIR);
+        bool ok = write_icon(std::string(DIR) + "/" + UNLOCKED_ICON, ICON_unlocked, sizeof ICON_unlocked) &&
+                  write_icon(std::string(DIR) + "/" + LOCKED_ICON, ICON_locked, sizeof ICON_locked);
+        if (!ok) printf("[achievements] could not write the icons in %s\n", ICONS_DIR);
+        return ok;
+    }();
+    disk_replace(CSV_FILE, achievements_csv(list, icons, int64_t(time(nullptr))));
 }
