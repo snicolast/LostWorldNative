@@ -13,6 +13,10 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[20] 2026-11-17
+- True free play: uses the arcade's own free play, START alone starts and continues, no coins
+- SURVIVAL: powerbar pieces now carry over between laps, and every hunt starts clean
+
 [19] 2026-11-17
 - Save files are now written in the background, so saving no longer causes a hitch while playing
 
