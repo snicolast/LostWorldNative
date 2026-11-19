@@ -13,6 +13,9 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[21] 2026-11-20
+- NVIDIA RTX: DLAA now works in installs made with NicoLauncher, which until now quietly used MSAA instead. Press Update in the launcher to get it (it downloads about 60 MB from NVIDIA)
+
 [20] 2026-11-18
 - True free play: uses the arcade's own free play, START alone starts and continues, no coins
 - SURVIVAL: powerbar pieces now carry over between laps, and every hunt starts clean

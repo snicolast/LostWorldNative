@@ -8,6 +8,8 @@ on:
     paths:
       - src/video/dlss*
       - tools/dlss_bridge/**
+      - tools/check_dlss_bridge.py
+      - hub.toml
       - .github/workflows/dlss-bridge.yml
   workflow_dispatch:
 
@@ -39,3 +41,15 @@ jobs:
         with:
           name: dlss_bridge
           path: build/dlss_bridge/dlss_bridge.dll
+
+  # Launcher builds (llvm-mingw) download dlss_bridge.dll from NicoLauncher-Hub
+  # as hub.toml says: it must be there, be of this code's ABI, and come from
+  # this code (a warning when the bridge changed since it was built)
+  hub-toml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The DLSS bridge in hub.toml
+        run: python3 tools/check_dlss_bridge.py
