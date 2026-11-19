@@ -32,6 +32,26 @@ url = "https://github.com/richgel999/miniz/releases/download/3.0.2/miniz-3.0.2.z
 sha256 = "ada38db0b703a56d3dd6d57bf84a9c5d664921d870d8fea4db153979fb5332c5"
 to = "third_party/downloads/miniz-3.0.2.zip"
 
+# DLAA/DLSS: built with a compiler other than MSVC, the game reaches DLSS
+# through dlss_bridge.dll (tools/dlss_bridge), which only MSVC can build. It is
+# built from this repository in NicoLauncher-Hub (dlss/, with NVIDIA's license
+# and notice), named after its ABI and the commit it comes from:
+# tools/check_dlss_bridge.py checks it matches this code. A new one is needed
+# whenever src/video/dlss* or tools/dlss_bridge change.
+[[fetch]]
+name = "DLSS bridge"
+url = "https://raw.githubusercontent.com/snicolast/NicoLauncher-Hub/main/dlss/lostworld/dlss_bridge-abi1-7c9310059b1d.dll"
+sha256 = "940af295123d11a62c2ec8993f9b8e7b7969b719ce433939a752540e7af27d54"
+to = "dlss_bridge.dll"
+
+# NVIDIA's DLSS runtime, from NVIDIA's own repository (the same as
+# tools/get_dlss.bat). About 60 MB.
+[[fetch]]
+name = "NVIDIA DLSS"
+url = "https://raw.githubusercontent.com/NVIDIA/DLSS/v310.9.16/lib/Windows_x86_64/rel/nvngx_dlss.dll"
+sha256 = "d00b5b0ab29c3ca101b70c3a5ecb3a01b7ef33766a3383a28a18623083e6123e"
+to = "nvngx_dlss.dll"
+
 [[step]]
 name = "Extracting the ROM"
 run = ["{python}", "tools/romtool.py", "{input}", "data"]
