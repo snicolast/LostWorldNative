@@ -1,6 +1,8 @@
 #include "vk_presenter.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -94,6 +96,9 @@ LRESULT CALLBACK VkPresenter::wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_SIZE:
         if (self) self->resized_ = true;
         return 0;
+    case WM_ACTIVATEAPP:
+        if (self) self->on_activate(wp != 0);
+        break;
     case WM_KEYDOWN:
         if (wp == VK_ESCAPE && self) self->quit_ = true;
         if (wp == VK_F11 && self) self->toggle_fullscreen();
@@ -122,22 +127,145 @@ void VkPresenter::set_cursor_visible(bool visible) {
 }
 
 void VkPresenter::toggle_fullscreen() {
+    if (fullscreen_) set_mode(0, 0, 0);
+    else set_mode(full_mode_, full_w_, full_h_);
+}
+
+// Exclusive full screen and Alt+Tab (or another window taking the focus):
+// the desktop's mode back and the game minimised; back to the game: its mode again
+void VkPresenter::on_activate(bool active) {
+    if (mode_ != 2 || full_w_ <= 0 || full_h_ <= 0) return;
+    if (!active && changed_display_) {
+        restore_display();
+        ShowWindow(hwnd_, SW_MINIMIZE);
+        lost_display_ = true;
+    } else if (active && lost_display_) {
+        lost_display_ = false;
+        ShowWindow(hwnd_, SW_RESTORE);
+        set_mode(2, full_w_, full_h_);
+    }
+}
+
+void VkPresenter::restore_display() {   // the monitor back to the desktop's mode
+    if (!changed_display_) return;
+    MONITORINFOEXA mi{};
+    mi.cbSize = sizeof(mi);
+    GetMonitorInfoA(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY), &mi);
+    ChangeDisplaySettingsExA(mi.szDevice, nullptr, nullptr, 0, nullptr);
+    changed_display_ = false;
+}
+
+void VkPresenter::set_mode(int mode, int w, int h) {
+    static const bool dry_run = getenv("LW_DISPLAY_DRYRUN") != nullptr;
+    mode = std::clamp(mode, 0, 2);
+    MONITORINFOEXA mi{};
+    mi.cbSize = sizeof(mi);
+    GetMonitorInfoA(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY), &mi);
+    if (mode) full_mode_ = mode, full_w_ = w, full_h_ = h;
+    if (dry_run) {   // tests: nothing changes on the screen
+        LONG test = DISP_CHANGE_SUCCESSFUL;
+        if (mode == 2 && w > 0 && h > 0) {
+            DEVMODEA dm{};
+            dm.dmSize = sizeof(dm);
+            dm.dmPelsWidth = DWORD(w), dm.dmPelsHeight = DWORD(h);
+            dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
+            test = ChangeDisplaySettingsExA(mi.szDevice, &dm, nullptr, CDS_FULLSCREEN | CDS_TEST, nullptr);
+        }
+        printf("[display] dry run: mode %d, %dx%d%s\n", mode, w, h,
+               mode == 2 && w > 0 ? (test == DISP_CHANGE_SUCCESSFUL ? " (Windows: the monitor can take it)" : " (Windows: refused)") : "");
+        mode_ = mode;
+        fullscreen_ = mode != 0;
+        return;
+    }
     DWORD style = GetWindowLongA(hwnd_, GWL_STYLE);
-    if (!fullscreen_) {
-        MONITORINFO mi{sizeof(mi)};
-        GetWindowPlacement(hwnd_, &placement_);
-        GetMonitorInfoA(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY), &mi);
+    if (mode != 2) restore_display();
+    if (mode == 0) {
+        if (fullscreen_) {
+            SetWindowLongA(hwnd_, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
+            SetWindowPlacement(hwnd_, &placement_);
+            SetWindowPos(hwnd_, nullptr, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+        }
+        if (w > 0 && h > 0) {   // RESOLUTION: the window's inside; smaller (same shape) where it does not fit, centred
+            if (IsZoomed(hwnd_)) ShowWindow(hwnd_, SW_RESTORE);
+            RECT frame{0, 0, 100, 100};
+            AdjustWindowRect(&frame, WS_OVERLAPPEDWINDOW, FALSE);
+            int bw = frame.right - frame.left - 100, bh = frame.bottom - frame.top - 100;   // the borders and the title bar
+            RECT work = mi.rcWork;
+            int ww = work.right - work.left, wh = work.bottom - work.top;
+            double k = std::min({1.0, double(ww - bw) / w, double(wh - bh) / h});
+            int cw = std::max(320, int(w * k + 0.5)), ch = std::max(240, int(h * k + 0.5));
+            int x = work.left + (ww - cw - bw) / 2, y = work.top + (wh - ch - bh) / 2;
+            SetWindowPos(hwnd_, nullptr, x, y, cw + bw, ch + bh, SWP_NOZORDER | SWP_NOOWNERZORDER);
+        }
+        RECT got;
+        GetClientRect(hwnd_, &got);
+        printf("[display] window: asked %dx%d, inside now %ldx%ld\n", w, h, got.right, got.bottom);
+    } else {
+        if (!fullscreen_) GetWindowPlacement(hwnd_, &placement_);
+        if (mode == 2 && w > 0 && h > 0) {   // the monitor to that mode, for as long as the game runs (CDS_FULLSCREEN)
+            DEVMODEA dm{};
+            dm.dmSize = sizeof(dm);
+            dm.dmPelsWidth = DWORD(w), dm.dmPelsHeight = DWORD(h);
+            dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
+            LONG r = ChangeDisplaySettingsExA(mi.szDevice, &dm, nullptr, CDS_FULLSCREEN, nullptr);
+            if (r == DISP_CHANGE_SUCCESSFUL) changed_display_ = true;
+            else {   // BORDERLESS instead (the menu shows it)
+                printf("[display] the monitor did not take %dx%d (%ld): BORDERLESS instead\n", w, h, r);
+                mode = 1;
+            }
+            GetMonitorInfoA(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY), &mi);
+        }
         SetWindowLongA(hwnd_, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
         SetWindowPos(hwnd_, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
                      mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
-    } else {
-        SetWindowLongA(hwnd_, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
-        SetWindowPlacement(hwnd_, &placement_);
-        SetWindowPos(hwnd_, nullptr, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+        DEVMODEA cur{};
+        cur.dmSize = sizeof(cur);
+        EnumDisplaySettingsA(mi.szDevice, ENUM_CURRENT_SETTINGS, &cur);
+        printf("[display] %s %ldx%ld @%lu Hz\n", mode == 2 ? "fullscreen" : "borderless", mi.rcMonitor.right - mi.rcMonitor.left,
+               mi.rcMonitor.bottom - mi.rcMonitor.top, cur.dmDisplayFrequency);
     }
-    fullscreen_ = !fullscreen_;
+    mode_ = mode;
+    fullscreen_ = mode != 0;
     resized_ = true;
+}
+
+RECT VkPresenter::monitor_rect() const {
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoA(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY), &mi);
+    return mi.rcMonitor;
+}
+
+std::vector<std::pair<int, int>> VkPresenter::display_modes() const {
+    std::vector<std::pair<int, int>> modes;
+    MONITORINFOEXA mi{};
+    mi.cbSize = sizeof(mi);
+    GetMonitorInfoA(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY), &mi);
+    DEVMODEA dm{};
+    dm.dmSize = sizeof(dm);
+    for (DWORD i = 0; EnumDisplaySettingsA(mi.szDevice, i, &dm); i++)
+        if (dm.dmBitsPerPel >= 24 && dm.dmPelsWidth >= 800 && dm.dmPelsHeight >= 600)
+            modes.push_back({int(dm.dmPelsWidth), int(dm.dmPelsHeight)});
+    std::sort(modes.begin(), modes.end());
+    modes.erase(std::unique(modes.begin(), modes.end()), modes.end());
+    if (getenv("LW_ALL_MODES")) return modes;   // debugging aid: the list before the filter below
+    // Only the usual shapes (4:3, 5:4, 16:10, 16:9, the 21:9 ones, 32:9; within 0.2 %,
+    // even sizes), plus the desktop's mode and the largest (the monitor's own)
+    DEVMODEA cur{};
+    cur.dmSize = sizeof(cur);
+    EnumDisplaySettingsA(mi.szDevice, ENUM_CURRENT_SETTINGS, &cur);
+    std::pair<int, int> desktop{int(cur.dmPelsWidth), int(cur.dmPelsHeight)}, largest = modes.empty() ? desktop : modes.back();
+    for (const auto& m : modes)
+        if (m.first * m.second > largest.first * largest.second) largest = m;
+    static const double SHAPES[] = {4.0 / 3, 5.0 / 4, 16.0 / 10, 16.0 / 9, 64.0 / 27, 43.0 / 18, 12.0 / 5, 32.0 / 9};
+    std::vector<std::pair<int, int>> usual;
+    for (const auto& m : modes) {
+        double a = double(m.first) / m.second;
+        bool shape = false;
+        for (double s : SHAPES) shape = shape || std::abs(a / s - 1) < 0.002;
+        if ((shape && m.first % 2 == 0 && m.second % 2 == 0) || m == desktop || m == largest) usual.push_back(m);
+    }
+    return usual;
 }
 
 bool VkPresenter::init(const char* title, int width, int height, bool with_ngx) {
@@ -669,5 +797,6 @@ void VkPresenter::shutdown() {
     }
     if (surface_) vkDestroySurfaceKHR(instance_, surface_, nullptr);
     if (instance_) vkDestroyInstance(instance_, nullptr);
+    restore_display();   // the desktop's resolution back (exclusive full screen)
     if (hwnd_) DestroyWindow(hwnd_);
 }

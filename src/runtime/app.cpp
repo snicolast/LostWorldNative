@@ -1352,7 +1352,23 @@ bool App::init(bool aa_auto) {
         settings_from_options(g_opt, s);
         frontend.aa_at_launch = s.aa;
         frontend.rt_available = renderer.ray_tracing_available();
-        if (s.fullscreen && !presenter.fullscreen()) presenter.toggle_fullscreen();
+        frontend.resolutions = presenter.display_modes();
+        if (s.res_w > 0 && !frontend.resolutions.empty()) {   // a size that is not one of the monitor's modes: the nearest
+            auto best = frontend.resolutions[0];
+            for (const auto& m : frontend.resolutions)
+                if (std::abs(m.first - s.res_w) + std::abs(m.second - s.res_h) <
+                    std::abs(best.first - s.res_w) + std::abs(best.second - s.res_h))
+                    best = m;
+            if (best.first != s.res_w || best.second != s.res_h) {
+                printf("[display] resolution %dx%d is not a mode of the monitor: %dx%d\n", s.res_w, s.res_h, best.first, best.second);
+                s.res_w = best.first, s.res_h = best.second;
+            }
+        }
+        printf("[display] %zu resolutions\n", frontend.resolutions.size());
+        if (s.display_mode != 0 || (s.res_w > 0 && s.res_h > 0)) {
+            presenter.set_mode(s.display_mode, s.res_w, s.res_h);
+            s.display_mode = presenter.mode();   // (a FULLSCREEN the monitor refused: BORDERLESS)
+        }
         if (!survival_cli) {   // survival mode goes straight into the game
             // the logos first (not when a debugging aid drives the menu)
             if (getenv("LW_MENU_KEYS") || getenv("LW_MENU_SHOT") || getenv("LW_MENU_FILM") || getenv("LW_RESTARTED"))
@@ -1705,7 +1721,12 @@ void App::handle_menu_actions() {
             g_restart = true;
             presenter.close();
             break;
-        case Frontend::Action::ToggleFullscreen: presenter.toggle_fullscreen(); break;
+        case Frontend::Action::DisplayChanged:   // MODE, RESOLUTION: at once
+            presenter.set_mode(s.display_mode, s.res_w, s.res_h);
+            s.display_mode = presenter.mode();   // (a FULLSCREEN the monitor refused: BORDERLESS)
+            s.save("save/settings.ini");
+            frontend.invalidate();
+            break;
         case Frontend::Action::CrosshairChanged: load_crosshairs(renderer); break;
         case Frontend::Action::SettingsChanged: {
             const Options was = g_opt;
@@ -1841,10 +1862,20 @@ void App::update_boss_mode() {
 // The menus: the window mode, their debugging aids, the records, GUN TEST, the
 // music, the pointer and the menu picture
 void App::update_menus() {
-    if (frontend.settings.fullscreen != presenter.fullscreen()) {   // also F11 / Alt+Enter
-        frontend.settings.fullscreen = presenter.fullscreen();
+    if (frontend.settings.display_mode != presenter.mode()) {   // F11 / Alt+Enter
+        frontend.settings.display_mode = presenter.mode();
         frontend.settings.save("save/settings.ini");
         frontend.invalidate();
+    }
+    {   // the window's inside and the desktop, for RESOLUTION
+        RECT c{}, m = presenter.monitor_rect();
+        GetClientRect(presenter.hwnd(), &c);
+        if (c.right != frontend.client_w || c.bottom != frontend.client_h || m.right - m.left != frontend.desktop_w ||
+            m.bottom - m.top != frontend.desktop_h) {
+            frontend.client_w = c.right, frontend.client_h = c.bottom;
+            frontend.desktop_w = m.right - m.left, frontend.desktop_h = m.bottom - m.top;
+            frontend.invalidate();
+        }
     }
     // Debugging aid: LW_MENU_KEYS="40,13,27" presses those keys (one
     // every 10 presents; Esc in the game pauses; "cX/Y" clicks at window

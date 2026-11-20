@@ -92,7 +92,8 @@ Got the game before the updater existed? Download the repository once more as a 
 | Coin + start | 5, then 1 | START |
 | Pause | Esc | BACK |
 
-F11 or Alt+Enter toggles fullscreen. Everything else is in **Options**.
+F11 or Alt+Enter toggles fullscreen; **Options > Display** has window, borderless or exclusive
+fullscreen and the resolution. Everything else is in **Options**.
 
 Light guns that Windows sees as a mouse (Sinden, Gun4IR and the like) work as is; for a Sinden, keep
 its software running for the white border. The guns aim over the whole widescreen picture, side

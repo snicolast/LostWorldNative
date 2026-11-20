@@ -10,6 +10,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifndef VK_USE_PLATFORM_WIN32_KHR
@@ -43,8 +44,19 @@ public:
     bool anisotropy() const { return anisotropy_; }
     const VkPhysicalDeviceLimits& limits() const { return limits_; }
     HWND hwnd() const { return hwnd_; }
-    void toggle_fullscreen();
+    void toggle_fullscreen();   // F11 / Alt+Enter: the window, or the last full-screen mode
     bool fullscreen() const { return fullscreen_; }
+    // MODE: 0 a window (w x h inside, 0: as it is), 1 borderless at the
+    // desktop's resolution, 2 exclusive full screen: the monitor set to w x h
+    // (0: the desktop's) while the game runs; if the monitor refuses it,
+    // borderless instead (mode() says so). LW_DISPLAY_DRYRUN=1 (tests): the
+    // window stays as it is, a mode is only checked with Windows (CDS_TEST)
+    void set_mode(int mode, int w, int h);
+    int mode() const { return mode_; }
+    // The monitor's whole area (the desktop's resolution)
+    RECT monitor_rect() const;
+    // The monitor's resolutions (its modes, each size once, smallest first)
+    std::vector<std::pair<int, int>> display_modes() const;
     void close() { quit_ = true; }
     // Vsync off: each image goes out as soon as it is drawn, without waiting
     // for the monitor's refresh (tearing; mailbox if the driver has no
@@ -119,6 +131,11 @@ private:
     HWND hwnd_ = nullptr;
     bool quit_ = false, resized_ = false, fullscreen_ = false, show_cursor_ = false, vsync_ = true;
     WINDOWPLACEMENT placement_{sizeof(WINDOWPLACEMENT)};
+    int mode_ = 0, full_mode_ = 1, full_w_ = 0, full_h_ = 0;   // the mode on; the last full-screen one (F11)
+    bool changed_display_ = false;   // the monitor is in another mode (exclusive full screen)
+    bool lost_display_ = false;      // ...given back while the game lost the focus
+    void restore_display();
+    void on_activate(bool active);   // exclusive full screen: the desktop's mode while another window has the focus
 
     VkInstance instance_ = VK_NULL_HANDLE;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;

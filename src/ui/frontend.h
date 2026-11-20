@@ -20,6 +20,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../runtime/stats.h"
@@ -31,7 +32,8 @@
 class Frontend : UiCanvas {
 public:
     enum class Screen { None, Splash, Main, Play, Options, Pause, Boss, Records, Survival, Classic, GunTest, Weather };
-    enum class Action { None, StartArcade, Resume, Quit, ToggleFullscreen, SettingsChanged,
+    enum class Action { None, StartArcade, Resume, Quit, SettingsChanged,
+                        DisplayChanged,     // MODE or RESOLUTION: applied at once (app.cpp)
                         StartBoss, PrepareBosses, LeaveBossMode, StartSurvival, QuitToMenu,
                         CrosshairChanged,   // a new crosshair picture (crosshair_pick)
                         Restart };          // RESTART NOW: saved, closed and started again (app.cpp)
@@ -69,6 +71,10 @@ public:
     std::wstring gamepads;  // the pads connected, for the CONTROLS tab ("" = none)
     bool gyro_pad = false;  // one of them has a gyroscope
     bool pad_prompts = false;   // a gamepad drives the menu: its buttons in the key help, not the keyboard's
+    // RESOLUTION: the monitor's modes (VkPresenter::display_modes, smallest
+    // first), the window's inside and the desktop's size (app.cpp keeps them up to date)
+    std::vector<std::pair<int, int>> resolutions;
+    int client_w = 0, client_h = 0, desktop_w = 0, desktop_h = 0;
 
     // Boss mode (runtime/bosses.h): the runtime says which fights are ready
     // and reads the one picked (StartBoss; also "retry" from the pause menu)
@@ -130,7 +136,7 @@ private:
         OPT_SAT, OPT_GAMMA, OPT_MOTION, OPT_PAD_SPEED, OPT_GYRO, OPT_GYRO_SPEED, OPT_VIBRATION, OPT_ASSIST, OPT_TORCH, OPT_RT, OPT_CROSS_HIDE, OPT_FREE_PLAY,
         OPT_SCALE, OPT_HALF_RATE, OPT_VSYNC,
         OPT_CROSS_STYLE, OPT_CROSS_P1, OPT_CROSS_P2, OPT_MUSIC, OPT_ASPECT, OPT_GUN_TEST, OPT_WEATHER_SOUND,
-        OPT_MSAA, OPT_ANISO, OPT_FILTER_2D, OPT_UPDATES,
+        OPT_MSAA, OPT_ANISO, OPT_FILTER_2D, OPT_UPDATES, OPT_RESOLUTION,
         NO_ROW,   // a setting only kept in the file
     };
     // How an option row shows its value: a switch, a choice with a dot per
@@ -240,6 +246,16 @@ private:
     bool restart_key(int vk);
     void restart_choose(int button);
     void draw_restart();
+    // RESOLUTION's list: a card over the settings with the monitor's modes,
+    // largest first; Enter (or a click) applies one at once
+    bool drop_open_ = false;
+    int drop_sel_ = 0, drop_top_ = 0;   // the one lit and the first shown, counted from the top (largest)
+    std::vector<RECT> drop_rects_;
+    int resolution_index() const;   // the mode in use (nearest), into resolutions
+    void open_drop();
+    void drop_pick(int i);          // i: into resolutions
+    bool drop_key(int vk);
+    void draw_drop();
 
 
     Screen screen_ = Screen::None;

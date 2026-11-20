@@ -4,7 +4,10 @@
 #include <string>
 
 struct FrontendSettings {
-    bool fullscreen = false;
+    int display_mode = 0;      // MODE: 0 window, 1 borderless (the desktop's resolution), 2 exclusive full screen
+    bool fullscreen = false;   // older versions' key (written as display_mode != window): when display_mode is missing, borderless
+    bool display_mode_saved = false;   // load() found display_mode
+    int res_w = 0, res_h = 0;  // RESOLUTION: the window's inside, or the full-screen mode (0: the window as it opens / the desktop's)
     int volume = 5;    // 0..10 (output gain)
     int speakers = 0;  // 0 stereo, 1 surround 4.0, 2 headphones (AudioStream::Speakers)
     int rear_boost = 0;  // dB on the rear pair: -6, -3, 0, 3, 6, 9, 12
@@ -20,7 +23,7 @@ struct FrontendSettings {
     int msaa = 4;      // MSAA samples per pixel with aa = 0: 2, 4 or 8
     int aniso = 8;     // anisotropic taps of the texture filtering: 0 (no mipmaps, original look), 2, 4, 8, 16
     bool smooth_2d = true;   // HUD and 2D layers upscaled with xBR (false: square pixels, cheaper)
-    int scale = 100;   // 3D resolution in % of the window's (SCALES)
+    int scale = 100;   // RENDER SCALE: the 3D's resolution in % of the window's (SCALES)
     bool half_rate = false;   // above 100 Hz the 3D is drawn every other refresh
     bool vsync = true;        // off: images go out without waiting for the monitor's refresh
     int aspect = 1;    // widest 3D view: 0 4:3 (original), 1 16:9, 2 21:9 (ultrawide, up to 2.4:1)
@@ -66,5 +69,5 @@ struct FrontendSettings {
     void load(const char* path);
     void save(const char* path) const;
 
-    static constexpr int SCALES[5] = {50, 67, 75, 85, 100};   // RENDER RESOLUTION's steps
+    static constexpr int SCALES[5] = {50, 67, 75, 85, 100};   // RENDER SCALE's steps
 };

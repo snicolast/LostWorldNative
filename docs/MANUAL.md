@@ -71,6 +71,14 @@ as pixels of a 1080-line screen; `crosshair_p2.png` gives player 2 their own (ot
 4:3 screen (below 0 or above 1 in the side bands).
 F11 or Alt+Enter toggles fullscreen.
 
+Settings > Display > MODE picks WINDOW, BORDERLESS (full screen at the desktop's resolution,
+the monitor left as it is) or FULLSCREEN (exclusive: the monitor switches to the chosen
+RESOLUTION while the game runs, back to the desktop's on Alt+Tab and on quitting; if the
+monitor refuses the mode, BORDERLESS instead). RESOLUTION (Enter: the list of the monitor's
+modes) is the window's inside in WINDOW (smaller, the same shape, where it does not fit on the
+desktop) and the monitor's mode in FULLSCREEN. Both apply at once and are kept in
+save/settings.ini (display_mode, resolution).
+
 With a gamepad (Xbox, DualSense, DualShock 4, Switch Pro and the others SDL3
 knows): both sticks move the crosshair (soft curve near the centre for fine aim and
 more speed after a moment at full tilt), R2 / R1 / bottom button fire and
@@ -190,7 +198,7 @@ saved games and are not versioned.
   NVIDIA DLSS. The 3D is drawn smaller (67%, 58%, 50% or 33% of the size each
   way, NVIDIA's ratios), with 8 jitter phases per output pixel (18, 24, 32, 72),
   the textures filtered for the size shown, and DLSS rebuilds it at full size.
-  RENDER RESOLUTION applies on top. The model: K for DLAA, QUALITY and
+  RENDER SCALE applies on top. The model: K for DLAA, QUALITY and
   BALANCED, M for PERFORMANCE and L for ULTRA PERFORMANCE on RTX 40 and newer,
   K for all on RTX 20 and 30 (no FP8); dlss_model = k / m / l in
   save/settings.ini (or --dlss-model k|m|l) forces one.
@@ -201,7 +209,7 @@ saved games and are not versioned.
   Real3D's, no hardware sampler can take them), so each one costs: 2X or 4X on
   slower cards.
 - --scale F: internal 3D resolution (2 = 2x2 supersampling; 0.75 = 75%, faster).
-  In the settings: RENDER RESOLUTION (50-100%, DISPLAY tab), applied at once.
+  In the settings: RENDER SCALE (50-100%, DISPLAY tab), applied at once.
 - --half-rate (or FRAME RATE: HALF in the settings): on monitors above 100 Hz
   the 3D is drawn every other refresh (72 images per second at 144 Hz) and the
   refresh in between shows the same picture with only the crosshairs redrawn.
