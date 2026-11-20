@@ -19,7 +19,7 @@ static int g_failed = 0;
 // gamepad and the menu music, stay in FrontendSettings)
 #define BRIDGED(X)                                                                                            \
     X(volume) X(speakers) X(rear_boost) X(weather_sound) X(cubic_samples) X(aa) X(dlss_model) X(msaa) X(aniso) X(smooth_2d)  \
-    X(scale) X(half_rate) X(vsync) X(aspect) X(haze) X(bloom) X(ao) X(sky) X(sun) X(shadows) X(ray_tracing)  \
+    X(scale) X(max_fps) X(vsync) X(aspect) X(haze) X(bloom) X(ao) X(sky) X(sun) X(shadows) X(ray_tracing)  \
     X(shafts) X(soft) X(hdr) X(rim) X(relief) X(sharpen) X(torch) X(lightning) X(rain) X(hd_text)           \
     X(crosshair) X(crosshair_style) X(crosshair_hide) X(free_play) X(smooth) X(second_mouse) X(subtitles)    \
     X(saturation) X(gamma)
@@ -61,6 +61,8 @@ static void test_round_trip() {
         {"msaa", &FrontendSettings::msaa, {2, 4, 8}},
         {"aniso", &FrontendSettings::aniso, {0, 2, 4, 8, 16}},
         {"scale", &FrontendSettings::scale, {50, 67, 75, 85, 100}},
+        {"max_fps", &FrontendSettings::max_fps, {-1, 0, 30, 60, 117, 144, 240}},
+        {"vsync", &FrontendSettings::vsync, {0, 1, 2}},
         {"aspect", &FrontendSettings::aspect, {0, 1, 2}},
         {"bloom", &FrontendSettings::bloom, {0, 1, 2, 3}},
         {"ray_tracing", &FrontendSettings::ray_tracing, {0, 1, 2}},
@@ -86,7 +88,6 @@ static void test_round_trip() {
     };
     static const Flag flags[] = {
         {"cubic_samples", &FrontendSettings::cubic_samples}, {"smooth_2d", &FrontendSettings::smooth_2d},
-        {"half_rate", &FrontendSettings::half_rate},         {"vsync", &FrontendSettings::vsync},
         {"haze", &FrontendSettings::haze},                   {"ao", &FrontendSettings::ao},
         {"sky", &FrontendSettings::sky},                     {"sun", &FrontendSettings::sun},
         {"shadows", &FrontendSettings::shadows},             {"shafts", &FrontendSettings::shafts},

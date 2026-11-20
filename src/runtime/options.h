@@ -32,8 +32,11 @@ struct Options {
     bool letterbox = false;          // --letterbox: keep the black cutscene bars
     bool classic_text = false;       // --classic-text: original pixel-art letters instead of vector fonts
     bool interp = true;              // --no-interp: show game frames as they are
-    bool half_rate = false;          // --half-rate: above 100 Hz the 3D is drawn every other refresh
-    bool vsync = true;               // --no-vsync: images go out without waiting for the refresh (tearing)
+    // --max-fps N|monitor|unlimited: images a second at most with MOTION SMOOTH. 0 the
+    // monitor's refresh rate, -1 unlimited (only without vsync), else N (with vsync
+    // in whole refreshes: 60 on a 120 Hz monitor draws every other one)
+    int max_fps = 0;
+    int vsync = 1;                   // --vsync on|off|adaptive (--no-vsync): 0 off (tearing), 1 on, 2 adaptive
     bool dump_textures = false;      // --dump-textures: write new textures to out/textures
     float light_gain = 1.0f;         // --light-gain: light multiplier on the sun and the ambient
     float bloom = 1;                 // --bloom [N] / --no-bloom: glow around bright things

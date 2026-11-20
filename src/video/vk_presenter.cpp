@@ -585,20 +585,27 @@ bool VkPresenter::create_swapchain() {
     ci.preTransform = caps.currentTransform;
     ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     ci.presentMode = VK_PRESENT_MODE_FIFO_KHR;   // vsync at the monitor's refresh rate
-    if (!vsync_) {   // the first one the driver has: immediate (tearing), mailbox, or vsync after all
+    if (vsync_ != 1) {
         uint32_t mn = 0;
         vkGetPhysicalDeviceSurfacePresentModesKHR(gpu_, surface_, &mn, nullptr);
         std::vector<VkPresentModeKHR> modes(mn);
         vkGetPhysicalDeviceSurfacePresentModesKHR(gpu_, surface_, &mn, modes.data());
-        for (VkPresentModeKHR m : {VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR})
-            if (ci.presentMode == VK_PRESENT_MODE_FIFO_KHR && std::find(modes.begin(), modes.end(), m) != modes.end())
-                ci.presentMode = m;
+        auto offered = [&](VkPresentModeKHR m) { return std::find(modes.begin(), modes.end(), m) != modes.end(); };
+        if (vsync_ == 2) {   // adaptive: relaxed FIFO, or vsync after all
+            if (offered(VK_PRESENT_MODE_FIFO_RELAXED_KHR)) ci.presentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+            else if (present_mode_ != VK_PRESENT_MODE_FIFO_KHR)
+                printf("[video] VSYNC ADAPTIVE: not offered by the driver, VSYNC ON instead\n");
+        } else {   // off: the first one the driver has: immediate (tearing), mailbox, or vsync after all
+            for (VkPresentModeKHR m : {VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR})
+                if (ci.presentMode == VK_PRESENT_MODE_FIFO_KHR && offered(m)) ci.presentMode = m;
+        }
     }
     if (ci.presentMode != present_mode_) {
         present_mode_ = ci.presentMode;
-        printf("[video] vsync %s\n", present_mode_ == VK_PRESENT_MODE_FIFO_KHR ? "on"
-                                    : present_mode_ == VK_PRESENT_MODE_IMMEDIATE_KHR ? "off (immediate)"
-                                                                                     : "off (mailbox)");
+        printf("[video] vsync %s\n", present_mode_ == VK_PRESENT_MODE_FIFO_KHR           ? "on"
+                                    : present_mode_ == VK_PRESENT_MODE_FIFO_RELAXED_KHR ? "adaptive (fifo relaxed)"
+                                    : present_mode_ == VK_PRESENT_MODE_IMMEDIATE_KHR    ? "off (immediate)"
+                                                                                        : "off (mailbox)");
     }
     ci.clipped = VK_TRUE;
     std::unique_lock<std::shared_mutex> lock(swapchain_mutex_);

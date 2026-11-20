@@ -81,6 +81,12 @@ int main() {
         CHECK(parse(d, {"--aa", "dlss_performance", "--dlss-model", "l"}) && d.dlss == 3 && d.dlss_model == 3);
         CHECK(parse(d, {"--aa", "dlss_ultra", "--dlss-model", "auto"}) && d.dlss == 4 && d.dlss_model == 0);
         CHECK(parse(d, {"--aa", "dlaa", "--dlss-model", "k"}) && d.dlaa && d.dlss == 0 && d.dlss_model == 1);
+        Options f;   // MAX FPS and VSYNC
+        CHECK(f.max_fps == 0 && f.vsync == 1);
+        CHECK(parse(f, {"--max-fps", "117", "--vsync", "adaptive"}) && f.max_fps == 117 && f.vsync == 2);
+        CHECK(parse(f, {"--max-fps", "unlimited", "--no-vsync"}) && f.max_fps == -1 && f.vsync == 0);
+        CHECK(parse(f, {"--max-fps", "monitor", "--vsync", "on"}) && f.max_fps == 0 && f.vsync == 1);
+        CHECK(parse(f, {"--half-rate"}) && f.max_fps == 60);
         CHECK(q.auto_scripts[1] == "start@20");
         CHECK(q.traces.size() == 1 && q.diff == "10F650@300" && q.replay == "out/snap/snap_1.bin");
     }

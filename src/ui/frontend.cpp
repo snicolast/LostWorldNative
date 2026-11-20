@@ -241,11 +241,14 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         {.id = OPT_SCALE, .tab = DISPLAY_TAB, .label = L"RENDER SCALE", .key = "resolution_3d", .number = &FS::scale,
          .lo = FS::SCALES[0], .hi = 100, .kind = SLIDER, .steps = {std::begin(FS::SCALES), std::end(FS::SCALES)},
          .text = percent, .hint = L"Resolution of the 3D picture: lower is faster.  The HUD and the text stay sharp"},
-        {.id = OPT_HALF_RATE, .tab = DISPLAY_TAB, .label = L"FRAME RATE", .key = "half_rate", .flag = &FS::half_rate,
-         .kind = CHOICE, .shown = {L"FULL", L"HALF"},
-         .hint = L"Half: above 100 Hz the 3D is drawn every other refresh (72 at 144 Hz); the crosshair keeps up"},
-        {.id = OPT_VSYNC, .tab = DISPLAY_TAB, .label = L"VSYNC", .key = "vsync", .flag = &FS::vsync, .kind = TOGGLE,
-         .hint = L"Off: each image goes out as soon as it is drawn, without waiting for the monitor (may tear)"},
+        {.id = OPT_VSYNC, .tab = DISPLAY_TAB, .label = L"VSYNC", .key = "vsync", .number = &FS::vsync,
+         .words = {"off", "on", "adaptive"}, .other = 1, .also = {{"0", 0}, {"1", 1}, {"false", 0}, {"true", 1}},
+         .kind = CHOICE, .shown = {L"OFF", L"ON", L"ADAPTIVE"},
+         .hints = {L"Each image goes out as soon as it is drawn, without waiting for the monitor: less latency, it may tear without G-SYNC or FreeSync",
+                   L"Images in step with the monitor's refreshes: no tearing",
+                   L"In step with the refreshes while the game keeps up; a late image goes out at once (less stutter, it may tear then)"}},
+        // (settings.ini: "max_fps = monitor / unlimited / N", read and written apart, below; the row: option_items)
+        {.id = OPT_MAX_FPS, .tab = DISPLAY_TAB, .label = L"MAX FPS"},
         {.id = OPT_MOTION, .tab = DISPLAY_TAB, .label = L"MOTION", .key = "motion", .flag = &FS::smooth,
          .words = {"original", "smooth"}, .other = 1, .kind = CHOICE, .shown = {L"ORIGINAL", L"SMOOTH"},
          .hint = L"Smooth: the 3D is also drawn between the game's 57.5 frames, at your monitor's refresh rate"},
@@ -419,11 +422,17 @@ void FrontendSettings::load(const char* path) {
             if (d.key && strcmp(d.key, key) == 0) d.read(*this, value);
         if (strcmp(key, "aa") == 0) aa_saved = true;   // (the first start chooses it, app.cpp)
         if (strcmp(key, "display_mode") == 0) display_mode_saved = true;
+        if (strcmp(key, "max_fps") == 0) {
+            max_fps = strcmp(value, "unlimited") == 0 ? -1 : strcmp(value, "monitor") == 0 ? 0 : std::clamp(atoi(value), 0, 1000);
+            max_fps_saved = true;
+        }
+        if (strcmp(key, "half_rate") == 0) half_rate = strcmp(value, "1") == 0 || strcmp(value, "on") == 0;
         if (strcmp(key, "resolution") == 0 && (sscanf(value, "%dx%d", &res_w, &res_h) != 2 || res_w <= 0 || res_h <= 0))
             res_w = res_h = 0;
     }
     fclose(f);
     if (!display_mode_saved) display_mode = fullscreen ? 1 : 0;   // an older version's file: its full screen was borderless
+    if (!max_fps_saved && half_rate) max_fps = 60;   // ...its FRAME RATE: HALF (every other refresh above 100 Hz)
 }
 
 void FrontendSettings::save(const char* path) const {
@@ -434,6 +443,9 @@ void FrontendSettings::save(const char* path) const {
     for (const Frontend::Setting& d : Frontend::setting_table())
         if (d.key) fprintf(f, "%s = %s\n", d.key, d.write(s).c_str());
     fprintf(f, "resolution = %dx%d\n", res_w, res_h);
+    if (max_fps < 0) fprintf(f, "max_fps = unlimited\n");
+    else if (max_fps == 0) fprintf(f, "max_fps = monitor\n");
+    else fprintf(f, "max_fps = %d\n", max_fps);
     fclose(f);
 }
 
@@ -580,6 +592,17 @@ std::vector<Frontend::Item> Frontend::option_items(const FrontendSettings& s) co
     auto size_text = [](int w, int h) { return std::to_wstring(w) + L" x " + std::to_wstring(h); };
     const int mode = std::clamp(s.display_mode, 0, 2);
     for (Item& it : all) switch (it.id) {
+        case OPT_MAX_FPS:
+            it.value = s.max_fps < 0    ? std::wstring(L"UNLIMITED")
+                       : s.max_fps == 0 ? L"MONITOR" + (refresh_hz > 0 ? L" (" + std::to_wstring(refresh_hz) + L")" : std::wstring())
+                                        : std::to_wstring(s.max_fps);
+            it.enabled = s.smooth;
+            it.hint = !s.smooth ? L"With MOTION ORIGINAL the game's own 57.5 frames are shown: nothing to set"
+                      : s.vsync ? L"Images a second at most; with VSYNC in whole refreshes (60 on a 120 Hz monitor: every other one, "
+                                  L"the crosshair still at each).  Lower: less work for the GPU"
+                                : L"Images a second at most (UNLIMITED: as many as the GPU can).  Any number can go in settings.ini, "
+                                  L"e.g. max_fps = 117 for G-SYNC";
+            break;
         case OPT_RESOLUTION:   // the size chosen (none yet: the window's inside, or the desktop's)
             it.value = mode == 1 ? size_text(desktop_w, desktop_h)
                        : s.res_w > 0 ? size_text(s.res_w, s.res_h)
@@ -634,8 +657,10 @@ const std::wstring& Frontend::default_value(int id) {
 void Frontend::reset_tab() {
     const FrontendSettings d;
     for (const Item& it : items())
-        if (const Setting* row = setting_of(it.id); row && it.id != OPT_DISPLAY)   // the window stays as it is
+        if (const Setting* row = setting_of(it.id); row && it.id != OPT_DISPLAY) {   // the window stays as it is
             row->set(settings, row->get(d));
+            if (it.id == OPT_MAX_FPS) settings.max_fps = d.max_fps;   // (kept apart from the table)
+        }
     push(Action::SettingsChanged);
     dirty_ = true;
 }
@@ -864,6 +889,18 @@ void Frontend::activate(const Item& it, int dir) {
         settings.display_mode = (std::clamp(settings.display_mode, 0, 2) + dir + 3) % 3;
         push(Action::DisplayChanged);
         break;
+    case OPT_MAX_FPS: {   // MONITOR first, UNLIMITED last
+        if (!settings.smooth) break;
+        static const int STEPS[] = {0, 30, 60, 90, 120, 144, 165, 240, -1};
+        int n = int(std::size(STEPS)), i = -1;
+        for (int k = 0; k < n; k++)
+            if (STEPS[k] == settings.max_fps) i = k;
+        if (i < 0)   // a number set in settings.ini: from the step above it
+            for (i = 1; i < n - 1 && STEPS[i] < settings.max_fps; i++) {}
+        settings.max_fps = STEPS[(i + dir + n) % n];
+        push(Action::SettingsChanged);
+        break;
+    }
     case OPT_RESOLUTION: {   // a click on the label: the list; else the monitor's next mode from the chosen one
         if (settings.display_mode == 1 || resolutions.empty()) break;
         if (wrap_) {

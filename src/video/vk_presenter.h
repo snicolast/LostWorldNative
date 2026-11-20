@@ -58,11 +58,12 @@ public:
     // The monitor's resolutions (its modes, each size once, smallest first)
     std::vector<std::pair<int, int>> display_modes() const;
     void close() { quit_ = true; }
-    // Vsync off: each image goes out as soon as it is drawn, without waiting
-    // for the monitor's refresh (tearing; mailbox if the driver has no
-    // immediate mode). Takes effect with the next frame (a new swapchain)
-    void set_vsync(bool on) {
-        if (on != vsync_) vsync_ = on, resized_ = true;
+    // 1 on (FIFO). 0 off: each image goes out as soon as it is drawn, without
+    // waiting for the monitor's refresh (tearing; mailbox if the driver has no
+    // immediate mode). 2 adaptive: FIFO_RELAXED, a late image goes out at once
+    // (FIFO if the driver lacks it). Takes effect with the next frame (a new swapchain)
+    void set_vsync(int mode) {
+        if (mode != vsync_) vsync_ = mode, resized_ = true;
     }
 
     // Sees key presses and mouse messages first; returning true swallows
@@ -129,7 +130,8 @@ private:
     static LRESULT CALLBACK wndproc(HWND, UINT, WPARAM, LPARAM);
 
     HWND hwnd_ = nullptr;
-    bool quit_ = false, resized_ = false, fullscreen_ = false, show_cursor_ = false, vsync_ = true;
+    bool quit_ = false, resized_ = false, fullscreen_ = false, show_cursor_ = false;
+    int vsync_ = 1;
     WINDOWPLACEMENT placement_{sizeof(WINDOWPLACEMENT)};
     int mode_ = 0, full_mode_ = 1, full_w_ = 0, full_h_ = 0;   // the mode on; the last full-screen one (F11)
     bool changed_display_ = false;   // the monitor is in another mode (exclusive full screen)

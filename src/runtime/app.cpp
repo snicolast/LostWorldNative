@@ -895,7 +895,8 @@ struct App {
     int queue_depth = 2;
     int queue_extra = 0;
     double went_out = 0, last_miss = -100;
-    bool repeat_image = false;   // HALF FRAME RATE: this refresh shows the last image again
+    bool repeat_image = false;   // MAX FPS below the refresh rate (vsync): this refresh shows the last image again
+    int repeat_count = 0;        // refreshes since the last image drawn
     // VSYNC: OFF still draws no more images than the monitor's refreshes:
     // without a limit the GPU draws thousands a second for nothing and the
     // game thread falls behind (uneven game frames). Measured with
@@ -1489,8 +1490,12 @@ void App::wait_for_refresh() {
         out = 0;   // the next wait skips a refresh: not a miss
     }
     went_out = out;
-    if (!g_opt.vsync) {   // the next image a refresh after the last (from now after a slow one)
-        double period = display_clock.period, now = now_seconds();
+    // MAX FPS with MOTION SMOOTH: UNLIMITED, nothing waited for; a number, its interval
+    double period = !g_opt.interp || g_opt.max_fps == 0 ? display_clock.period
+                    : g_opt.max_fps > 0                 ? std::max(1.0 / g_opt.max_fps, 1.0 / 1000)
+                                                        : 0;
+    if (!g_opt.vsync && period > 0) {   // the next image an interval after the last (from now after a slow one)
+        double now = now_seconds();
         if (now - next_image > period) next_image = now;
         if (image_timer && next_image - now > 0.001) {   // to ~0.5 ms before, then a spin
             LARGE_INTEGER due;
@@ -1867,11 +1872,13 @@ void App::update_menus() {
         frontend.settings.save("save/settings.ini");
         frontend.invalidate();
     }
-    {   // the window's inside and the desktop, for RESOLUTION
+    {   // the window's inside and the desktop, for RESOLUTION; the refresh rate, for MAX FPS
         RECT c{}, m = presenter.monitor_rect();
         GetClientRect(presenter.hwnd(), &c);
+        int hz = int(std::lround(display_clock.monitor_hz > 0 ? display_clock.monitor_hz : 1.0 / std::max(display_clock.period, 1e-3)));
         if (c.right != frontend.client_w || c.bottom != frontend.client_h || m.right - m.left != frontend.desktop_w ||
-            m.bottom - m.top != frontend.desktop_h) {
+            m.bottom - m.top != frontend.desktop_h || hz != frontend.refresh_hz) {
+            frontend.refresh_hz = hz;
             frontend.client_w = c.right, frontend.client_h = c.bottom;
             frontend.desktop_w = m.right - m.left, frontend.desktop_h = m.bottom - m.top;
             frontend.invalidate();
@@ -2099,12 +2106,15 @@ bool App::present_frame(double loop_from) {
         ready_frames.clear();
     }
     double display = display_clock.tick(presenter.hwnd());
-    // HALF FRAME RATE: above 100 Hz every other refresh shows the image
-    // before again (only the crosshairs move), half the work of the GPU
-    // (with vsync: without it the images are not tied to refreshes)
-    bool half = g_opt.half_rate && g_opt.vsync && display_clock.period < 1.0 / 100 && g_opt.replay.empty() && !g_opt.shot_frame &&
-                film.empty();
-    repeat_image = half && !repeat_image;
+    // MAX FPS below the refresh rate with vsync: in whole refreshes, the ones
+    // in between show the image before again (only the crosshairs move), less
+    // work for the GPU (60 at 120 Hz: every other refresh; without vsync the
+    // images are not tied to refreshes, wait_for_refresh spaces them)
+    int refreshes = 1;   // per image drawn
+    if (g_opt.vsync && g_opt.interp && g_opt.max_fps > 0 && g_opt.replay.empty() && !g_opt.shot_frame && film.empty())
+        refreshes = std::max(1, int(std::lround(1.0 / (g_opt.max_fps * display_clock.period))));
+    repeat_count = refreshes > 1 ? (repeat_count + 1) % refreshes : 0;
+    repeat_image = repeat_count != 0;
     if (repeat_image) {
         presenter.frame([&](VkCommandBuffer cmd, VkImageView view, VkExtent2D extent) {
             renderer.record_repeat(cmd, view, extent);

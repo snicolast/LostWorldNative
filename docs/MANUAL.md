@@ -210,17 +210,26 @@ saved games and are not versioned.
   slower cards.
 - --scale F: internal 3D resolution (2 = 2x2 supersampling; 0.75 = 75%, faster).
   In the settings: RENDER SCALE (50-100%, DISPLAY tab), applied at once.
-- --half-rate (or FRAME RATE: HALF in the settings): on monitors above 100 Hz
-  the 3D is drawn every other refresh (72 images per second at 144 Hz) and the
-  refresh in between shows the same picture with only the crosshairs redrawn.
-  About half the GPU work, with the motion still even.
-- --no-vsync (or VSYNC: OFF in the settings, DISPLAY tab): each image goes out
-  as soon as it is drawn instead of at the monitor's next refresh (Vulkan
-  immediate mode, or mailbox if the driver has no immediate mode), still no
-  more images than the monitor's refreshes. About 14 ms less latency (measured
-  at 120 Hz), but tearing and less even motion on monitors without
-  G-Sync/FreeSync: keep it on there. FRAME RATE: HALF does nothing with vsync
-  off. The console prints `[video] vsync on/off` when it changes.
+- --max-fps N|monitor|unlimited (or MAX FPS in the settings, DISPLAY tab; with
+  MOTION: SMOOTH): images a second at most. MONITOR (the default) draws one per
+  refresh. With vsync a number goes in whole refreshes and the refreshes in
+  between show the same picture with only the crosshairs redrawn (60 at 120 Hz:
+  every other refresh, about half the GPU work, the motion still even). Without
+  vsync the images are spaced by 1/N s, and UNLIMITED draws as many as the GPU
+  can. Any number can go in settings.ini (`max_fps = 117` for G-Sync below a
+  144 Hz monitor's rate). --half-rate (and an older settings.ini's
+  `half_rate = 1`) is `--max-fps 60`.
+- --vsync on|off|adaptive (--no-vsync is off; VSYNC in the settings, DISPLAY
+  tab). OFF: each image goes out as soon as it is drawn instead of at the
+  monitor's next refresh (Vulkan immediate mode, or mailbox if the driver has
+  no immediate mode), still no more images than the monitor's refreshes unless
+  MAX FPS says otherwise. About 14 ms less latency (measured at 120 Hz), but
+  tearing and less even motion on monitors without G-Sync/FreeSync: keep it on
+  there. ADAPTIVE (Vulkan relaxed FIFO): in step with the refreshes, but an
+  image that misses its refresh goes out at once instead of waiting for the
+  next one (less stutter when the GPU falls behind, a tear then); vsync on if
+  the driver lacks it. The console prints `[video] vsync on/adaptive/off` when
+  it changes.
 - What costs the most: measured on an RTX 5070 Ti at 1440p, the ambient
   occlusion, the render resolution, the procedural sky and the sun shadows; on
   integrated graphics, limited by memory bandwidth, also the MSAA samples, the
