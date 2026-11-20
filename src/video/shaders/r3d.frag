@@ -356,8 +356,14 @@ void main() {
         return;
     }
     // Texture alpha (spec 7.2): solid texels belong to the opaque pass, the
-    // see-through ones to the translucent pass
-    if ((flags & TEX_ALPHA) != 0u && (vp.quality.x > 0.0 ? c.a < 1.0 : c.a >= 1.0)) discard;
+    // see-through ones to the translucent pass. Not the world's self-lit
+    // sprites (fire, the halos of lights and lamps): they go whole to the translucent pass. Their solid part
+    // took the ambient occlusion, applied between the two passes (a grain over
+    // the sprite), and wrote depth that the soft particles faded the rest of
+    // the same sprite against (a noisy edge). The sun's shadow pass keeps the split
+    bool effect = vp.fog_color.w >= 0.0 &&
+                  (flags & (WORLD | TEXTURED | LUMINOUS | TEX_ALPHA | SPECULAR | ACTOR)) == (WORLD | TEXTURED | LUMINOUS | TEX_ALPHA);
+    if ((flags & TEX_ALPHA) != 0u && (vp.quality.x > 0.0 ? c.a < 1.0 || effect : c.a >= 1.0 && !effect)) discard;
 
     // Our rain (r3d_rain.cpp): a streak lit like the fog around it, brightest
     // along its middle and towards its head; lightning makes it flash
