@@ -60,7 +60,7 @@ static void test_round_trip() {
         {"dlss_model", &FrontendSettings::dlss_model, {0, 1, 2, 3}},
         {"msaa", &FrontendSettings::msaa, {2, 4, 8}},
         {"aniso", &FrontendSettings::aniso, {0, 2, 4, 8, 16}},
-        {"scale", &FrontendSettings::scale, {50, 67, 75, 85, 100}},
+        {"scale", &FrontendSettings::scale, {50, 67, 75, 85, 100, 125, 150, 175, 200}},
         {"max_fps", &FrontendSettings::max_fps, {-1, 0, 30, 60, 117, 144, 240}},
         {"vsync", &FrontendSettings::vsync, {0, 1, 2}},
         {"aspect", &FrontendSettings::aspect, {0, 1, 2}},

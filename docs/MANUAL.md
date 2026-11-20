@@ -214,7 +214,8 @@ saved games and are not versioned.
   Real3D's, no hardware sampler can take them), so each one costs: 2X or 4X on
   slower cards.
 - --scale F: internal 3D resolution (2 = 2x2 supersampling; 0.75 = 75%, faster).
-  In the settings: RENDER SCALE (50-100%, DISPLAY tab), applied at once.
+  In the settings: RENDER SCALE (50-200%, DISPLAY tab), applied at once;
+  above 100% the 3D is drawn bigger and scaled down to the window (supersampling).
 - --max-fps N|monitor|unlimited (or MAX FPS in the settings, DISPLAY tab; with
   MOTION: SMOOTH): images a second at most. MONITOR (the default) draws one per
   refresh. With vsync a number goes in whole refreshes and the refreshes in
