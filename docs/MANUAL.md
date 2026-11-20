@@ -566,6 +566,8 @@ normal behaviour when unset):
 | LW_FRAMELOG=path | Writes a line per present (timings, frames shown) and per game frame, and when each image reached the screen (VK_KHR_present_wait); `python tools/frame_log.py path` reports missed refreshes, uneven motion and latency |
 | LW_SKYLOG=path | Writes the back layers' scroll of each 2D frame, the world camera of each 3D frame and, per present, the pairing and the sub-pixel position drawn; `python tools/sky_log.py path` compares how the sky scrolls with how the camera turns (pixels per radian, how many frames apart) and how smoothly the sky is drawn between frames |
 | LW_QUEUE=N | At most N images waiting for the screen (2 by default; 0 = the whole swapchain) |
+| LW_BACKGROUND=1 | The window opens behind all the others and never takes the keyboard (test runs while the computer is in use) |
+| LW_WINDOW_POS=x,y | Puts the window there (-30000,0: out of sight) |
 | LW_MENU_KEYS=40,13,27 | Presses those keys in the menu (one every 10 presents; `cX/Y` clicks pixel X,Y), saves out/menu.bmp and exits |
 | LW_MENU_SHOT=path.bmp | Saves the menu image each time it is redrawn |
 | LW_MENU_PAD=1 | The menus show the gamepad's buttons in the key help, as if a gamepad drove them |

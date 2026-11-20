@@ -279,9 +279,20 @@ bool VkPresenter::init(const char* title, int width, int height, bool with_ngx) 
     RegisterClassA(&wc);
     RECT r{0, 0, width, height};
     AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
-    hwnd_ = CreateWindowA(wc.lpszClassName, title, WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
-                          r.right - r.left, r.bottom - r.top, nullptr, nullptr, inst, nullptr);
+    // Debugging aids for test runs while somebody is using the computer:
+    // LW_BACKGROUND, the window behind all the others, never taking the
+    // keyboard; LW_WINDOW_POS="x,y" puts it there (-30000,0: out of sight)
+    static const bool background = getenv("LW_BACKGROUND") != nullptr;
+    hwnd_ = CreateWindowExA(background ? WS_EX_NOACTIVATE : 0, wc.lpszClassName, title,
+                            WS_OVERLAPPEDWINDOW | (background ? 0 : WS_VISIBLE), CW_USEDEFAULT, CW_USEDEFAULT,
+                            r.right - r.left, r.bottom - r.top, nullptr, nullptr, inst, nullptr);
     if (!hwnd_) return false;
+    if (const char* at = getenv("LW_WINDOW_POS")) {
+        int x = 0, y = 0;
+        if (sscanf(at, "%d,%d", &x, &y) == 2) SetWindowPos(hwnd_, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    if (background)
+        SetWindowPos(hwnd_, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     SetWindowLongPtrA(hwnd_, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
 
     if (!check(volkInitialize(), "volkInitialize (is the Vulkan driver missing?)")) return false;
