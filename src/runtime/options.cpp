@@ -66,6 +66,8 @@ const std::vector<Entry>& table() {
         text("--rom", "ZIP", &Options::rom_zip, "path to lostwsga.zip (or LW_ROM_ZIP; by default next to the exe)"),
         text("--data", "DIR", &Options::data_dir, "folder with the ROM already extracted by tools/romtool.py (data)"),
         flag("--boot", &Options::show_boot, "show the power-on screens before the SEGA logo"),
+        off("--no-trigger-rumble", &Options::trigger_rumble,
+            "no rumble in the triggers of Xbox One / Series pads (they are then read through XInput)"),
         custom("--make-boss-state", "N", "play without a window up to boss N (1-4) and save its state", true,
                [](Options& o, const char* v) {
                    o.boss_maker = atoi(v) - 1;   // see boss_maker_frame

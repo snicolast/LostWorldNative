@@ -36,6 +36,7 @@ struct Options {
     // monitor's refresh rate, -1 unlimited (only without vsync), else N (with vsync
     // in whole refreshes: 60 on a 120 Hz monitor draws every other one)
     int max_fps = 0;
+    bool trigger_rumble = true;      // --no-trigger-rumble: Xbox pads through XInput, no motors in the triggers
     int vsync = 1;                   // --vsync on|off|adaptive (--no-vsync): 0 off (tearing), 1 on, 2 adaptive
     bool dump_textures = false;      // --dump-textures: write new textures to out/textures
     float light_gain = 1.0f;         // --light-gain: light multiplier on the sun and the ambient

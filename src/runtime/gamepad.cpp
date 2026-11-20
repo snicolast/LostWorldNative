@@ -37,6 +37,11 @@ bool Gamepads::init() {
     // The focus is the window's business (poll's `focused`); SDL has no window
     // of its own to judge it by
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    // XInput has no way to the motors in an Xbox One / Series pad's triggers;
+    // SDL's raw input driver reaches them through Windows.Gaming.Input (its
+    // default correlation). Bluetooth pads go through SDL's HIDAPI driver,
+    // which drives them on its own when their firmware allows
+    if (trigger_rumble) SDL_SetHint(SDL_HINT_JOYSTICK_RAWINPUT, "1");
     if (!SDL_Init(SDL_INIT_GAMEPAD)) {
         printf("[gamepad] SDL could not initialize gamepads: %s\n", SDL_GetError());
         return false;
@@ -87,8 +92,10 @@ void Gamepads::open(uint32_t id) {
     st.name = name ? name : "Gamepad";
     st.has_gyro = SDL_GamepadHasSensor(p, SDL_SENSOR_GYRO) && SDL_SetGamepadSensorEnabled(p, SDL_SENSOR_GYRO, true);
     if (st.has_gyro && SDL_GamepadHasSensor(p, SDL_SENSOR_ACCEL)) SDL_SetGamepadSensorEnabled(p, SDL_SENSOR_ACCEL, true);
+    s.trigger_motors = SDL_GetBooleanProperty(SDL_GetGamepadProperties(p), SDL_PROP_GAMEPAD_CAP_TRIGGER_RUMBLE_BOOLEAN, false);
     changed_ = true;
-    printf("[gamepad] %d: %s%s\n", i + 1, st.name.c_str(), st.has_gyro ? " (with gyroscope)" : "");
+    printf("[gamepad] %d: %s%s%s\n", i + 1, st.name.c_str(), st.has_gyro ? " (with gyroscope)" : "",
+           s.trigger_motors ? " (trigger rumble)" : "");
 }
 
 void Gamepads::close(uint32_t id) {
@@ -326,8 +333,16 @@ void Gamepads::rumble(int i, float low, float high, int ms) {
 }
 
 void Gamepads::rumble_triggers(int i, float left, float right, int ms) {
-    if (!slot_[i].pad) return;
-    float k = RUMBLE_STRENGTH[std::clamp(set_.rumble, 0, 3)] * 65535.0f;
-    SDL_RumbleGamepadTriggers(slot_[i].pad, Uint16(std::clamp(left, 0.0f, 1.0f) * k),
-                              Uint16(std::clamp(right, 0.0f, 1.0f) * k), Uint32(ms));
+    Slot& s = slot_[i];
+    if (!s.pad || set_.rumble <= 0 || set_.trigger_rumble <= 0) return;
+    // (raw input knows a pad's trigger motors only once it has matched the
+    // pad with Windows.Gaming.Input, after its first input: asked again then)
+    if (!s.trigger_motors) {
+        s.trigger_motors = SDL_GetBooleanProperty(SDL_GetGamepadProperties(s.pad), SDL_PROP_GAMEPAD_CAP_TRIGGER_RUMBLE_BOOLEAN, false);
+        if (!s.trigger_motors) return;
+        printf("[gamepad] %d: trigger rumble\n", i + 1);
+    }
+    float k = RUMBLE_STRENGTH[std::clamp(set_.rumble, 0, 3)] * std::clamp(set_.trigger_rumble, 0, 100) / 100.0f * 65535.0f;
+    SDL_RumbleGamepadTriggers(s.pad, Uint16(std::clamp(left, 0.0f, 1.0f) * k), Uint16(std::clamp(right, 0.0f, 1.0f) * k),
+                              Uint32(ms));
 }
