@@ -38,10 +38,12 @@ to = "third_party/downloads/miniz-3.0.2.zip"
 # and notice), named after its ABI and the commit it comes from:
 # tools/check_dlss_bridge.py checks it matches this code. A new one is needed
 # whenever src/video/dlss* or tools/dlss_bridge change.
+# For now the Sega Rally 2 one (ABI 3): src/video/dlss*.{h,cpp} and
+# tools/dlss_bridge are the same code as in SegaRally2Native at 22ba0265971a.
 [[fetch]]
 name = "DLSS bridge"
-url = "https://raw.githubusercontent.com/snicolast/NicoLauncher-Hub/main/dlss/lostworld/dlss_bridge-abi1-7c9310059b1d.dll"
-sha256 = "940af295123d11a62c2ec8993f9b8e7b7969b719ce433939a752540e7af27d54"
+url = "https://raw.githubusercontent.com/snicolast/NicoLauncher-Hub/main/dlss/segarally2/dlss_bridge-abi3-22ba0265971a.dll"
+sha256 = "19fb48ce1701e40ddcd93cf306efbd821ccd10f2308915385a9568c02b978df9"
 to = "dlss_bridge.dll"
 
 # NVIDIA's DLSS runtime, from NVIDIA's own repository (the same as

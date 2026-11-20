@@ -148,14 +148,16 @@ call chain it was saved in (the main loop), so loads happen at `IDLE` points.
 
 ## Settings
 
-The menu (`src/ui/frontend.cpp`) owns `FrontendSettings` (`frontend_settings.h`,
-with the QUALITY levels in `frontend_settings.cpp`) and `save/settings.ini`.
+The menu (`src/ui/frontend.cpp`) owns `FrontendSettings` (`frontend_settings.h`)
+and `save/settings.ini`.
 `settings_bridge.cpp` turns them into the command-line `Options` (`options.cpp`,
 one table for the parser and `--help`) and back; `app.cpp` hands the options to
 the renderer (`App::apply_video_options`, at the start and after each change in
-the menu) and to the sound (`apply_sound_options`). The first start picks a
-QUALITY level from the GPU's name (`suggest_quality`, in `settings_bridge.cpp`) and takes only the
-options that level sets (`quality_options`), so the command line keeps the rest.
+the menu) and to the sound (`apply_sound_options`). The first start (no `aa`
+in the file) picks the anti-aliasing on an NVIDIA card: DLAA, or DLSS QUALITY on a
+screen above 1440p (`nvidia_card`, `screen_height` in `app.cpp`). DLAA and DLSS start
+with the renderer: leaving the settings with them changed offers RESTART NOW, which
+saves, closes and starts the same exe again (`LW_RESTARTED`: no logo).
 
 ## Tests
 
@@ -165,8 +167,7 @@ queue, the ROM layout from the zip, the encounter script reader (against
 `tools/encounters.py`), the SCSP's part of the saved states, the weather sound,
 the procedural sky (CPU against GLSL), the scene builder's cached frame reads
 (`R3DStateReader`), the helper thread (`Worker`), the menu settings to options
-and back with the QUALITY levels and the first start's guess from the GPU's
-name (`settings_bridge`) and the 2D replacement matching (`Pack2D`, on
+and back (`settings_bridge`) and the 2D replacement matching (`Pack2D`, on
 synthetic screens). Full-game checks are headless runs
 (`--headless --frames N`, deterministic: `out/ram.bin` and `out/real3d/*` can be
 compared by hash) and `--shot N` captures.

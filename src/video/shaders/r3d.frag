@@ -313,7 +313,10 @@ vec2 spotlight() {
 }
 
 void main() {
-    vec2 duv_dx = dFdx(uv), duv_dy = dFdy(uv);
+    // (night.z: with DLSS upscaling, the size of the 3D image over that of the
+    // picture it makes: the textures are filtered for the latter)
+    float lod_scale = atm.night.z > 0.0 ? atm.night.z : 1.0;
+    vec2 duv_dx = dFdx(uv) * lod_scale, duv_dy = dFdy(uv) * lod_scale;
     vec3 dpx = dFdx(view_pos), dpy = dFdy(view_pos);   // the surface's frame, for the surface detail
     // World position (rain on the world), and its size of a pixel
     vec3 world_pos = atm.camera.xyz + vec3(dot(atm.axes[0].xyz, view_pos), dot(atm.axes[1].xyz, view_pos),

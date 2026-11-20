@@ -228,13 +228,6 @@ constexpr int WEATHER_CHOICE_COUNT = int(std::size(WEATHER_CHOICES));
 const std::vector<Frontend::Setting>& Frontend::setting_table() {
     static const std::vector<Setting> table = {
         // DISPLAY
-        {.id = OPT_QUALITY, .tab = DISPLAY_TAB, .label = L"QUALITY", .kind = CHOICE,   // FrontendSettings::quality()
-         .shown = {L"LOW", L"MEDIUM", L"HIGH", L"ULTRA", L"CUSTOM"},
-         .hints = {L"Laptops and integrated graphics: 75% resolution, half rate, no MSAA, 2x anisotropic, square 2D pixels, original sky, no shadows, AO or surface detail",
-                   L"Mid-range cards (RTX 3060, RX 6600): no ray tracing, half rate on fast monitors, MSAA 2x, 4x anisotropic",
-                   L"Fast cards: ray traced sun shadows and every effect",
-                   L"Everything on: ray traced sun shadows and ambient occlusion",
-                   L"Your own mix of the options.  Pick a level to set the costly ones at once"}},
         {.id = OPT_DISPLAY, .tab = DISPLAY_TAB, .label = L"DISPLAY", .key = "fullscreen", .flag = &FS::fullscreen,
          .kind = CHOICE, .shown = {L"WINDOW", L"FULLSCREEN"}, .hint = L"Window or full screen (also F11 or Alt+Enter)"},
         {.id = OPT_ASPECT, .tab = DISPLAY_TAB, .label = L"WIDESCREEN", .key = "aspect", .number = &FS::aspect,
@@ -251,9 +244,19 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         {.id = OPT_MOTION, .tab = DISPLAY_TAB, .label = L"MOTION", .key = "motion", .flag = &FS::smooth,
          .words = {"original", "smooth"}, .other = 1, .kind = CHOICE, .shown = {L"ORIGINAL", L"SMOOTH"},
          .hint = L"Smooth: the 3D is also drawn between the game's 57.5 frames, at your monitor's refresh rate"},
+        // (settings.ini keeps "dlss" as DLSS QUALITY, as in Sega Rally 2; shown and hints in the order of steps)
         {.id = OPT_AA, .tab = DISPLAY_TAB, .label = L"ANTI-ALIASING", .key = "aa", .number = &FS::aa,
-         .words = {"msaa", "dlaa", "none"}, .also = {{"off", 2}}, .kind = CHOICE, .shown = {L"MSAA", L"DLAA", L"OFF"},
-         .hint = L"Edge smoothing: MSAA (the samples below), NVIDIA DLAA or none.  DLAA applies on the next start"},
+         .words = {"msaa", "dlaa", "none", "dlss", "dlss_balanced", "dlss_performance", "dlss_ultra"},
+         .also = {{"off", 2}, {"dlss_quality", 3}}, .kind = CHOICE,
+         .shown = {L"OFF", L"MSAA", L"DLAA", L"DLSS QUALITY", L"DLSS BALANCED", L"DLSS PERFORMANCE", L"DLSS ULTRA PERFORMANCE"},
+         .steps = {2, 0, 1, 3, 4, 5, 6},
+         .hints = {L"No edge smoothing: the fastest, with jagged edges",
+                   L"Classic edge smoothing, with the samples below",
+                   L"NVIDIA DLAA: the cleanest edges, at full size",
+                   L"NVIDIA DLSS: draws the 3D smaller and sharpens it back; much faster, nearly as sharp",
+                   L"NVIDIA DLSS: draws the 3D smaller still and sharpens it back; faster, slightly softer",
+                   L"NVIDIA DLSS: draws the 3D at half size and sharpens it back; for 4K or slower cards",
+                   L"NVIDIA DLSS: draws the 3D at a third of the size; the fastest, the softest"}},
         {.id = OPT_MSAA, .tab = DISPLAY_TAB, .label = L"MSAA SAMPLES", .key = "msaa", .number = &FS::msaa, .lo = 2, .hi = 8,
          .kind = CHOICE, .shown = {L"2X", L"4X", L"8X"}, .steps = {2, 4, 8}, .levels = true,
          .hint = L"Samples per pixel of the edge smoothing: more is smoother and costs more, above all on integrated graphics"},
@@ -383,6 +386,8 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         {.id = NO_ROW, .key = "gun_p2", .path = &FS::gun_p2},
         // and the logos at launch (splash_screens = 0: straight to the menu)
         {.id = NO_ROW, .key = "splash_screens", .flag = &FS::splash},
+        // and the model DLAA and DLSS use, for advanced users (auto: dlss::preset_for)
+        {.id = NO_ROW, .key = "dlss_model", .number = &FS::dlss_model, .words = {"auto", "k", "m", "l"}},
         // and the newest news.txt entry closed with LATER (UPDATE AVAILABLE)
         {.id = NO_ROW, .key = "news_seen", .number = &FS::news_seen, .lo = 0, .hi = 100000000},
     };
@@ -406,6 +411,7 @@ void FrontendSettings::load(const char* path) {
         if (sscanf(line, " %63[^= ] = %399s", key, value) != 2) continue;
         for (const Frontend::Setting& d : Frontend::setting_table())
             if (d.key && strcmp(d.key, key) == 0) d.read(*this, value);
+        if (strcmp(key, "aa") == 0) aa_saved = true;   // (the first start chooses it, app.cpp)
     }
     fclose(f);
 }
@@ -559,15 +565,10 @@ std::vector<Frontend::Item> Frontend::option_items(const FrontendSettings& s) co
     }
     // What also depends on the rest of the settings and on this computer
     for (Item& it : all) switch (it.id) {
-        case OPT_QUALITY: {   // a dot per level, none lit for a mix of them
-            int q = s.quality();
-            const Setting& d = *setting_of(OPT_QUALITY);
-            it.value = d.shown[q], it.hint = d.hints[q];
-            it.pos = q == FrontendSettings::CUSTOM ? -1 : q, it.count = 4;
-            break;
-        }
-        case OPT_AA:   // MSAA and off change at once; DLAA starts (or stops) with the game
-            if ((s.aa == 1) != (aa_at_launch == 1)) it.hint = L"Edge smoothing.  DLAA takes effect the next time the game starts";
+        case OPT_AA:   // MSAA and off change at once; DLAA and DLSS start (stop, change) with the game
+            if (s.aa == 1 || s.aa >= 3 || aa_at_launch == 1 || aa_at_launch >= 3)
+                it.hint += s.aa != aa_at_launch ? L".  Applies after a restart (offered when you leave the settings)"
+                                                : L".  Applies after a restart";
             break;
         case OPT_MSAA:
             if (s.aa != 0) {
@@ -606,7 +607,7 @@ void Frontend::reset_tab() {
     const FrontendSettings d;
     for (const Item& it : items())
         if (const Setting* row = setting_of(it.id); row && it.id != OPT_DISPLAY)   // the window stays as it is
-            row->set(settings, row->get(d));                                     // (QUALITY follows the others)
+            row->set(settings, row->get(d));
     push(Action::SettingsChanged);
     dirty_ = true;
 }
@@ -831,13 +832,6 @@ void Frontend::activate(const Item& it, int dir) {
     case RESUME: push(Action::Resume); break;
     case SETTINGS: options_from_pause_ = true; tab_ = 0; open(Screen::Options); selected_ = 1; break;
     case OPT_DISPLAY: push(Action::ToggleFullscreen); break;
-    case OPT_QUALITY: {
-        int q = settings.quality();
-        settings.set_quality(q == FrontendSettings::CUSTOM ? (dir > 0 ? FrontendSettings::LOW : FrontendSettings::ULTRA)
-                                                           : (q + dir + 4) % 4);
-        push(Action::SettingsChanged);
-        break;
-    }
     case OPT_CROSS_P1:
     case OPT_CROSS_P2:   // the Windows file dialog; a picture picked is also shown from then on
         if (crosshair_pick(it.id == OPT_CROSS_P2 ? 1 : 0)) {
@@ -863,6 +857,13 @@ void Frontend::back() {
     switch (screen_) {
     case Screen::Play: open(Screen::Main); break;
     case Screen::Options:
+        if (!restart_open_ && !restart_list().empty()) {   // RESTART NEEDED first (LATER: back as here)
+            restart_open_ = dirty_ = true;
+            restart_button_ = 0;
+            restart_hot_ = -1;
+            return;
+        }
+        restart_open_ = false;
         open(options_from_pause_ ? Screen::Pause : Screen::Main);
         selected_ = options_from_pause_ && boss_mode ? 3 : 1;   // where the options were opened from
         break;
@@ -909,6 +910,7 @@ bool Frontend::key(int vk) {
     }
     end_strike();
     if (news_open_ && screen_ == Screen::Main) return news_key(vk);
+    if (restart_open_ && screen_ == Screen::Options) return restart_key(vk);
     if (locked_notice_) {   // any of these closes it
         if (vk != VK_RETURN && vk != VK_SPACE && vk != VK_ESCAPE && vk != VK_BACK) return true;
         locked_notice_ = false;
@@ -1071,6 +1073,45 @@ void Frontend::start_update() {
     ShellExecuteW(nullptr, L"open", GAME_URL, nullptr, nullptr, SW_SHOWNORMAL);
 }
 
+// ---- RESTART NEEDED ----
+
+namespace {
+bool nvidia_aa(int aa) { return aa == 1 || aa >= 3; }   // DLAA or DLSS: chosen when the renderer starts
+}  // namespace
+
+bool Frontend::aa_waits() const {
+    return settings.aa != aa_at_launch && (nvidia_aa(settings.aa) || nvidia_aa(aa_at_launch));
+}
+
+std::wstring Frontend::restart_list() const {
+    if (!aa_waits()) return L"";
+    const Setting& d = *setting_of(OPT_AA);
+    return L"ANTI-ALIASING " + std::wstring(d.shown[d.pos(settings)]);
+}
+
+bool Frontend::restart_key(int vk) {
+    switch (vk) {
+    case VK_LEFT: case VK_RIGHT: case VK_UP: case VK_DOWN: case VK_TAB:
+    case 'A': case 'D': case 'W': case 'S':
+        restart_button_ ^= 1;
+        dirty_ = true;
+        return true;
+    case VK_RETURN: case VK_SPACE: restart_choose(restart_button_); return true;
+    case VK_ESCAPE: case VK_BACK: restart_choose(1); return true;   // LATER
+    }
+    return true;   // nothing else while it is open
+}
+
+void Frontend::restart_choose(int button) {
+    dirty_ = true;
+    if (button == 0) {   // RESTART NOW: app.cpp saves, closes and starts the game again
+        restart_open_ = false;
+        push(Action::Restart);
+        return;
+    }
+    back();   // LATER: on, as BACK would (not asked again)
+}
+
 void Frontend::mouse_move(int x, int y) {
     if (screen_ == Screen::Splash) return;
     mouse_x_ = x;
@@ -1082,6 +1123,15 @@ void Frontend::mouse_move(int x, int y) {
         if (hot != news_hot_ || (hot >= 0 && hot != news_button_)) dirty_ = true;
         news_hot_ = hot;
         if (hot >= 0) news_button_ = hot;
+        return;
+    }
+    if (restart_open_ && screen_ == Screen::Options) {   // only its two buttons
+        int hot = -1;
+        for (int b = 0; b < 2; b++)
+            if (PtInRect(&restart_buttons_[b], POINT{x, y})) hot = b;
+        if (hot != restart_hot_ || (hot >= 0 && hot != restart_button_)) dirty_ = true;
+        restart_hot_ = hot;
+        if (hot >= 0) restart_button_ = hot;
         return;
     }
     int hit = -1;
@@ -1103,6 +1153,11 @@ void Frontend::click(int x, int y) {
     if (news_open_ && screen_ == Screen::Main) {
         for (int b = 0; b < 2; b++)
             if (PtInRect(&news_buttons_[b], p)) news_choose(b);
+        return;
+    }
+    if (restart_open_ && screen_ == Screen::Options) {
+        for (int b = 0; b < 2; b++)
+            if (PtInRect(&restart_buttons_[b], p)) restart_choose(b);
         return;
     }
     if (locked_notice_) {
@@ -1151,7 +1206,9 @@ void Frontend::click(int x, int y) {
 }
 
 void Frontend::wheel(int x, int y, int delta) {
-    if (screen_ == Screen::GunTest || screen_ == Screen::Splash || (news_open_ && screen_ == Screen::Main)) return;
+    if (screen_ == Screen::GunTest || screen_ == Screen::Splash || (news_open_ && screen_ == Screen::Main) ||
+        (restart_open_ && screen_ == Screen::Options))
+        return;
     mouse_move(x, y);
     if (screen_ == Screen::Records) {
         scroll_records(delta > 0 ? -1 : 1);
@@ -2477,6 +2534,7 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
     else draw_menu(over_game, list);
     if (locked_notice_ && screen_ == Screen::Survival) draw_locked_notice();
     if (news_open_ && screen_ == Screen::Main) draw_news();
+    if (restart_open_ && screen_ == Screen::Options) draw_restart();
     dirty_ = animating_ && !page && screen_ != Screen::GunTest;   // still moving: again next refresh
     animating_ = false;
     return true;
@@ -2708,6 +2766,52 @@ void Frontend::draw_news() {
     const wchar_t* about = news_button_ == 0
                                ? L"Closes the game, downloads the new version, builds it again (update.bat) and starts it"
                                : L"Back to the menu.  This news will not show again; update.bat updates any time";
+    text(ITEM, U(22), about, cx, by + bh + U(26), 1, {HINT, HINT});
+}
+
+// RESTART NEEDED: a card over the darkened settings naming what waits for
+// a new start, the two buttons and what each does
+void Frontend::draw_restart() {
+    auto U = [&](float v) { return int(v * u_ + 0.5f); };
+    int w = w_, h = h_, cx = w / 2;
+    fill(0, 0, w, h, 0x000000, 0.62f);
+    int half = std::min(U(520), w / 2 - U(16));
+    std::wstring what = restart_list() + L" needs a restart";
+    std::vector<std::wstring> lines = wrap(BODY, U(28), what, 2 * half - U(120));
+    if (over_game()) lines.push_back(L"");   // (the warning below)
+    int bh = U(66);
+    int card_h = U(150) + int(lines.size()) * U(40) + U(30) + bh + U(26) + U(30) + U(34);
+    int top = std::max(U(16), (h - card_h) / 2), bottom = top + card_h;
+    fill(cx - half, top, cx + half, bottom, PANEL, 0.96f);
+    frame(cx - half, top, cx + half, bottom, std::max(1, U(2)), AMBER, 0.9f);
+    text(display(), U(64), L"RESTART NEEDED", cx, top + U(36), 1, {GOLD_TOP, GOLD_BOTTOM, EDGE, U(3), 1, U(4)});
+    int y = top + U(150);
+    for (size_t i = 0; i < lines.size(); i++, y += U(40)) {
+        if (over_game() && i + 1 == lines.size())
+            text(ITEM, U(24), L"THE GAME IN PROGRESS WILL BE LOST.  LATER KEEPS IT", cx, y + U(4), 1, {0xFF9A8E, 0xFF9A8E});
+        else text(BODY, U(28), lines[i], cx, y, 1, {0xE8C890, 0xE8C890});
+    }
+    // The buttons side by side, the chosen one lit (as UPDATE AVAILABLE's)
+    static const wchar_t* const LABELS[2] = {L"RESTART NOW", L"LATER"};
+    int bw = std::min(U(340), half - U(40)), gap = U(40), by = y + U(30);
+    int ink0 = INT_MAX, ink1 = INT_MIN;   // both labels' letters, centred in the boxes whatever the font
+    for (const wchar_t* l : LABELS) {
+        int t, b;
+        ink_rows(display(), U(40), l, t, b);
+        ink0 = std::min(ink0, t), ink1 = std::max(ink1, b);
+    }
+    int label_y = by + bh / 2 - (ink0 + ink1) / 2;
+    for (int b = 0; b < 2; b++) {
+        int x0 = b == 0 ? cx - gap / 2 - bw : cx + gap / 2;
+        restart_buttons_[b] = {x0, by, x0 + bw, by + bh};
+        bool sel = b == restart_button_;
+        fill(x0, by, x0 + bw, by + bh, sel ? AMBER : 0x000000, sel ? 0.28f : 0.45f);
+        frame(x0, by, x0 + bw, by + bh, std::max(1, U(sel ? 3.0f : 1.5f)), sel ? WHITE_TOP : AMBER, sel ? 1.0f : 0.55f);
+        const Style st = sel ? Style{GOLD_TOP, GOLD_BOTTOM, EDGE, U(2), 1, U(2)} : Style{PALE_TOP, PALE_BOTTOM, INK, U(2), 0.95f};
+        text(display(), U(40), LABELS[b], x0 + bw / 2, label_y, 1, st);
+    }
+    const wchar_t* about = restart_button_ == 0 ? L"Saves the settings, closes the game and starts it again"
+                                                : L"Back as before.  The change applies the next time the game starts";
     text(ITEM, U(22), about, cx, by + bh + U(26), 1, {HINT, HINT});
 }
 

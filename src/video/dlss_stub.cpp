@@ -1,6 +1,6 @@
 // Built instead of dlss.cpp when the NVIDIA DLSS SDK is not in third_party/ngx
-// (its download failed, or it was left out on purpose): DLAA is never
-// available, and the renderer keeps MSAA, as on a GPU without DLSS.
+// (its download failed, or it was left out on purpose): DLAA and DLSS are
+// never available, and the renderer keeps MSAA, as on a GPU without DLSS.
 #include "dlss.h"
 
 #include <cstdio>
@@ -17,11 +17,16 @@ bool Dlaa::init(VkInstance, VkPhysicalDevice, VkDevice) {
     return false;
 }
 
-bool Dlaa::ensure_feature(VkCommandBuffer, uint32_t, uint32_t, int) { return false; }
+bool Dlaa::ensure_feature(VkCommandBuffer, uint32_t, uint32_t, uint32_t, uint32_t, int) { return false; }
 
-bool Dlaa::evaluate(VkCommandBuffer, const Image&, const Image&, const Image&, const Image&, uint32_t, uint32_t, float,
-                    float, bool, int) {
+bool Dlaa::evaluate(VkCommandBuffer, const Image&, const Image&, const Image&, const Image&, uint32_t, uint32_t,
+                    uint32_t, uint32_t, float, float, bool, int) {
     return false;
+}
+
+void Dlaa::configure(int mode, int preset) {
+    mode_ = mode;
+    preset_ = preset;
 }
 
 void Dlaa::shutdown() {}

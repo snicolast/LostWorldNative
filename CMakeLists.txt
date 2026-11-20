@@ -197,7 +197,6 @@ add_executable(LostWorld WIN32
     src/ui/splash_video.cpp
     src/ui/frontend.cpp
     src/ui/news.cpp
-    src/ui/frontend_settings.cpp
     src/video/r3d_state.cpp
     src/video/r3d_scene.cpp
     src/video/r3d_screen.cpp
@@ -299,8 +298,7 @@ if(LW_TESTS)
     add_executable(sky_procedural_test tests/sky_procedural_test.cpp src/video/sky_procedural.cpp)
     add_executable(r3d_state_test tests/r3d_state_test.cpp)
     add_executable(worker_test tests/worker_test.cpp)
-    add_executable(settings_bridge_test tests/settings_bridge_test.cpp src/runtime/settings_bridge.cpp
-                   src/ui/frontend_settings.cpp)
+    add_executable(settings_bridge_test tests/settings_bridge_test.cpp src/runtime/settings_bridge.cpp)
     add_executable(pack2d_test tests/pack2d_test.cpp src/video/pack2d.cpp)
     add_executable(r3d_shelter_test tests/r3d_shelter_test.cpp src/video/r3d_shelter.cpp)
     add_executable(news_test tests/news_test.cpp src/ui/news.cpp)
