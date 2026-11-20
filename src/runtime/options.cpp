@@ -1,5 +1,6 @@
 #include "options.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 
@@ -129,8 +130,18 @@ const std::vector<Entry>& table() {
         custom("--torch", "modern|original", "torch in the night stages: modern (default) or original", false,
                [](Options& o, const char* v) { o.modern_torch = strcmp(v, "original") != 0; }),
         off("--no-interp", &Options::interp, "game frames as they are, not interpolated"),
-        flag("--half-rate", &Options::half_rate, "above 100 Hz, draw the 3D every other refresh (faster)"),
-        off("--no-vsync", &Options::vsync, "images go out as soon as they are drawn, not at the refresh (tearing)"),
+        custom("--max-fps", "N|monitor|unlimited", "images a second at most (monitor: its refresh rate, the default; "
+               "unlimited: as many as the GPU can, without vsync)", false,
+               [](Options& o, const char* v) {
+                   o.max_fps = strcmp(v, "unlimited") == 0 ? -1 : strcmp(v, "monitor") == 0 ? 0 : std::clamp(atoi(v), 0, 1000);
+               }),
+        custom("--half-rate", nullptr, "draw the 3D every other refresh above 100 Hz (as --max-fps 60)", false,
+               [](Options& o, const char*) { o.max_fps = 60; }),
+        custom("--vsync", "on|off|adaptive", "images at the refresh (on, the default), as soon as they are drawn (off, "
+               "tearing) or at the refresh unless late (adaptive)", false,
+               [](Options& o, const char* v) { o.vsync = strcmp(v, "off") == 0 ? 0 : strcmp(v, "adaptive") == 0 ? 2 : 1; }),
+        custom("--no-vsync", nullptr, "images go out as soon as they are drawn, not at the refresh (tearing)", false,
+               [](Options& o, const char*) { o.vsync = 0; }),
         flag("--letterbox", &Options::letterbox, "keep the black bars of the cutscenes"),
         flag("--pixel2d", &Options::pixel_2d, "2D layers without xBR upscaling"),
         flag("--classic-text", &Options::classic_text, "original pixel letters instead of vector fonts"),

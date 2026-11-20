@@ -24,8 +24,12 @@ struct FrontendSettings {
     int aniso = 8;     // anisotropic taps of the texture filtering: 0 (no mipmaps, original look), 2, 4, 8, 16
     bool smooth_2d = true;   // HUD and 2D layers upscaled with xBR (false: square pixels, cheaper)
     int scale = 100;   // RENDER SCALE: the 3D's resolution in % of the window's (SCALES)
-    bool half_rate = false;   // above 100 Hz the 3D is drawn every other refresh
-    bool vsync = true;        // off: images go out without waiting for the monitor's refresh
+    // MAX FPS (MOTION SMOOTH): 0 the monitor's refresh rate, -1 UNLIMITED (without vsync), else images a
+    // second at most (with vsync in whole refreshes). settings.ini: max_fps = monitor / unlimited / N
+    int max_fps = 0;
+    bool max_fps_saved = false;   // load() found it (else an older file's half_rate = 1: 60)
+    bool half_rate = false;       // older versions' key (above 100 Hz every other refresh), read only
+    int vsync = 1;            // 0 off (images go out without waiting for the refresh), 1 on, 2 adaptive (on unless late)
     int aspect = 1;    // widest 3D view: 0 4:3 (original), 1 16:9, 2 21:9 (ultrawide, up to 2.4:1)
     bool haze = true;  // distance haze
     int bloom = 2;     // glow around bright things: 0 off, 1 low, 2 medium, 3 high

@@ -13,7 +13,7 @@ int aspect_level(float max_aspect) { return max_aspect < 1.5f ? 0 : max_aspect <
 
 void options_from_settings(const FrontendSettings& s, Options& o) {
     o.supersample = s.scale / 100.0f;
-    o.half_rate = s.half_rate;
+    o.max_fps = s.max_fps;
     o.ray_tracing = s.ray_tracing;
     o.ao = s.ao ? 1.0f : 0.0f;
     o.shadows = s.shadows;
@@ -33,7 +33,7 @@ void options_from_settings(const FrontendSettings& s, Options& o) {
     o.dlaa = s.aa == 1 || s.aa >= 3;
     o.dlss = s.aa >= 3 ? std::min(s.aa - 2, 4) : 0;   // 3 QUALITY .. 6 ULTRA PERFORMANCE
     o.dlss_model = s.dlss_model;
-    o.vsync = s.vsync;
+    o.vsync = std::clamp(s.vsync, 0, 2);
     int aspect = std::clamp(s.aspect, 0, 2);
     if (aspect != aspect_level(o.max_aspect)) o.max_aspect = MAX_ASPECT[aspect];   // --aspect 2.6 stays as 21:9
     o.haze = s.haze ? 1.0f : 0.0f;
@@ -70,8 +70,8 @@ void settings_from_options(const Options& o, FrontendSettings& s) {
     s.scale = FrontendSettings::SCALES[0];   // the nearest step at or below
     for (int sc : FrontendSettings::SCALES)
         if (sc <= int(o.supersample * 100 + 0.5f)) s.scale = sc;
-    s.half_rate = o.half_rate;
-    s.vsync = o.vsync;
+    s.max_fps = std::max(o.max_fps, -1);
+    s.vsync = std::clamp(o.vsync, 0, 2);
     s.aspect = aspect_level(o.max_aspect);   // --aspect 2.6 shows as 21:9 and is kept until changed
     s.haze = o.haze > 0;
     s.bloom = o.bloom <= 0 ? 0 : o.bloom < 0.8f ? 1 : o.bloom < 1.3f ? 2 : 3;

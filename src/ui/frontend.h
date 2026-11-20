@@ -75,6 +75,7 @@ public:
     // first), the window's inside and the desktop's size (app.cpp keeps them up to date)
     std::vector<std::pair<int, int>> resolutions;
     int client_w = 0, client_h = 0, desktop_w = 0, desktop_h = 0;
+    int refresh_hz = 0;   // the window's monitor (MAX FPS: MONITOR)
 
     // Boss mode (runtime/bosses.h): the runtime says which fights are ready
     // and reads the one picked (StartBoss; also "retry" from the pause menu)
@@ -134,7 +135,7 @@ private:
         BOSS_ENTRY, PREPARE, RETRY, BOSS_LIST, LEAVE_BOSS, RECORDS, SURVIVAL, SURVIVAL_ENTRY, CLASSIC, RANDOM, WEATHER_ENTRY,
         OPT_DISPLAY, OPT_VOLUME, OPT_SPEAKERS, OPT_REAR, OPT_SAMPLES, OPT_AA, OPT_HAZE, OPT_BLOOM, OPT_AO, OPT_SKY, OPT_SUN, OPT_SHADOWS, OPT_SHAFTS, OPT_SOFT, OPT_HDR, OPT_RIM, OPT_RELIEF, OPT_SHARPEN, OPT_LIGHTNING, OPT_RAIN, OPT_TEXT, OPT_CROSS, OPT_MICE, OPT_SUBS,
         OPT_SAT, OPT_GAMMA, OPT_MOTION, OPT_PAD_SPEED, OPT_GYRO, OPT_GYRO_SPEED, OPT_VIBRATION, OPT_ASSIST, OPT_TORCH, OPT_RT, OPT_CROSS_HIDE, OPT_FREE_PLAY,
-        OPT_SCALE, OPT_HALF_RATE, OPT_VSYNC,
+        OPT_SCALE, OPT_MAX_FPS, OPT_VSYNC,
         OPT_CROSS_STYLE, OPT_CROSS_P1, OPT_CROSS_P2, OPT_MUSIC, OPT_ASPECT, OPT_GUN_TEST, OPT_WEATHER_SOUND,
         OPT_MSAA, OPT_ANISO, OPT_FILTER_2D, OPT_UPDATES, OPT_RESOLUTION,
         NO_ROW,   // a setting only kept in the file
