@@ -219,6 +219,11 @@ void VkPresenter::set_mode(int mode, int w, int h) {
         SetWindowLongA(hwnd_, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
         SetWindowPos(hwnd_, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
                      mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+        DEVMODEA cur{};
+        cur.dmSize = sizeof(cur);
+        EnumDisplaySettingsA(mi.szDevice, ENUM_CURRENT_SETTINGS, &cur);
+        printf("[display] %s %ldx%ld @%lu Hz\n", mode == 2 ? "fullscreen" : "borderless", mi.rcMonitor.right - mi.rcMonitor.left,
+               mi.rcMonitor.bottom - mi.rcMonitor.top, cur.dmDisplayFrequency);
     }
     mode_ = mode;
     fullscreen_ = mode != 0;
