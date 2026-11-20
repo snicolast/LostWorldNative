@@ -2110,10 +2110,10 @@ bool App::present_frame(double loop_from) {
     // in between show the image before again (only the crosshairs move), less
     // work for the GPU (60 at 120 Hz: every other refresh; without vsync the
     // images are not tied to refreshes, wait_for_refresh spaces them)
-    int every = 1;
+    int refreshes = 1;   // per image drawn
     if (g_opt.vsync && g_opt.interp && g_opt.max_fps > 0 && g_opt.replay.empty() && !g_opt.shot_frame && film.empty())
-        every = std::max(1, int(std::lround(1.0 / (g_opt.max_fps * display_clock.period))));
-    repeat_count = every > 1 ? (repeat_count + 1) % every : 0;
+        refreshes = std::max(1, int(std::lround(1.0 / (g_opt.max_fps * display_clock.period))));
+    repeat_count = refreshes > 1 ? (repeat_count + 1) % refreshes : 0;
     repeat_image = repeat_count != 0;
     if (repeat_image) {
         presenter.frame([&](VkCommandBuffer cmd, VkImageView view, VkExtent2D extent) {
