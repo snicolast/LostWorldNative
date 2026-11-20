@@ -228,12 +228,17 @@ constexpr int WEATHER_CHOICE_COUNT = int(std::size(WEATHER_CHOICES));
 const std::vector<Frontend::Setting>& Frontend::setting_table() {
     static const std::vector<Setting> table = {
         // DISPLAY
-        {.id = OPT_DISPLAY, .tab = DISPLAY_TAB, .label = L"DISPLAY", .key = "fullscreen", .flag = &FS::fullscreen,
-         .kind = CHOICE, .shown = {L"WINDOW", L"FULLSCREEN"}, .hint = L"Window or full screen (also F11 or Alt+Enter)"},
+        {.id = OPT_DISPLAY, .tab = DISPLAY_TAB, .label = L"MODE", .key = "display_mode", .number = &FS::display_mode,
+         .words = {"window", "borderless", "fullscreen"}, .kind = CHOICE, .shown = {L"WINDOW", L"BORDERLESS", L"FULLSCREEN"},
+         .hints = {L"A window you can move and resize (F11 or Alt+Enter: full screen)",
+                   L"Full screen at the desktop's resolution, the monitor left as it is: quick to switch to other windows",
+                   L"Exclusive full screen: the monitor switches to the RESOLUTION below while the game runs"}},
+        // (settings.ini: "resolution = 1920x1080", read and written apart, below; the row's value: option_items)
+        {.id = OPT_RESOLUTION, .tab = DISPLAY_TAB, .label = L"RESOLUTION"},
         {.id = OPT_ASPECT, .tab = DISPLAY_TAB, .label = L"WIDESCREEN", .key = "aspect", .number = &FS::aspect,
          .words = {"4:3", "16:9", "21:9"}, .other = 1, .kind = CHOICE, .shown = {L"4:3 (ORIGINAL)", L"16:9", L"21:9"},
          .hint = L"Widest 3D view: 21:9 fills ultrawide monitors (2560x1080, 3440x1440); 4:3 is the arcade's own"},
-        {.id = OPT_SCALE, .tab = DISPLAY_TAB, .label = L"RENDER RESOLUTION", .key = "resolution_3d", .number = &FS::scale,
+        {.id = OPT_SCALE, .tab = DISPLAY_TAB, .label = L"RENDER SCALE", .key = "resolution_3d", .number = &FS::scale,
          .lo = FS::SCALES[0], .hi = 100, .kind = SLIDER, .steps = {std::begin(FS::SCALES), std::end(FS::SCALES)},
          .text = percent, .hint = L"Resolution of the 3D picture: lower is faster.  The HUD and the text stay sharp"},
         {.id = OPT_HALF_RATE, .tab = DISPLAY_TAB, .label = L"FRAME RATE", .key = "half_rate", .flag = &FS::half_rate,
@@ -387,6 +392,7 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         // and the logos at launch (splash_screens = 0: straight to the menu)
         {.id = NO_ROW, .key = "splash_screens", .flag = &FS::splash},
         // and the model DLAA and DLSS use, for advanced users (auto: dlss::preset_for)
+        {.id = NO_ROW, .key = "fullscreen", .flag = &FS::fullscreen},   // (older versions: display_mode then)
         {.id = NO_ROW, .key = "dlss_model", .number = &FS::dlss_model, .words = {"auto", "k", "m", "l"}},
         // and the newest news.txt entry closed with LATER (UPDATE AVAILABLE)
         {.id = NO_ROW, .key = "news_seen", .number = &FS::news_seen, .lo = 0, .hi = 100000000},
@@ -412,15 +418,22 @@ void FrontendSettings::load(const char* path) {
         for (const Frontend::Setting& d : Frontend::setting_table())
             if (d.key && strcmp(d.key, key) == 0) d.read(*this, value);
         if (strcmp(key, "aa") == 0) aa_saved = true;   // (the first start chooses it, app.cpp)
+        if (strcmp(key, "display_mode") == 0) display_mode_saved = true;
+        if (strcmp(key, "resolution") == 0 && (sscanf(value, "%dx%d", &res_w, &res_h) != 2 || res_w <= 0 || res_h <= 0))
+            res_w = res_h = 0;
     }
     fclose(f);
+    if (!display_mode_saved) display_mode = fullscreen ? 1 : 0;   // an older version's file: its full screen was borderless
 }
 
 void FrontendSettings::save(const char* path) const {
     FILE* f = fopen(path, "w");
     if (!f) return;
+    FrontendSettings s = *this;
+    s.fullscreen = display_mode != 0;   // (for older versions)
     for (const Frontend::Setting& d : Frontend::setting_table())
-        if (d.key) fprintf(f, "%s = %s\n", d.key, d.write(*this).c_str());
+        if (d.key) fprintf(f, "%s = %s\n", d.key, d.write(s).c_str());
+    fprintf(f, "resolution = %dx%d\n", res_w, res_h);
     fclose(f);
 }
 
@@ -564,7 +577,22 @@ std::vector<Frontend::Item> Frontend::option_items(const FrontendSettings& s) co
         all.push_back(it);
     }
     // What also depends on the rest of the settings and on this computer
+    auto size_text = [](int w, int h) { return std::to_wstring(w) + L" x " + std::to_wstring(h); };
+    const int mode = std::clamp(s.display_mode, 0, 2);
     for (Item& it : all) switch (it.id) {
+        case OPT_RESOLUTION:   // the size chosen (none yet: the window's inside, or the desktop's)
+            it.value = mode == 1 ? size_text(desktop_w, desktop_h)
+                       : s.res_w > 0 ? size_text(s.res_w, s.res_h)
+                       : mode == 0 ? size_text(client_w, client_h) : size_text(desktop_w, desktop_h);
+            it.enabled = mode != 1 && !resolutions.empty();
+            if (mode == 1) it.hint = L"BORDERLESS always uses the desktop's resolution";
+            else if (resolutions.empty()) it.hint = L"The monitor's resolutions could not be read";
+            else if (mode == 2) it.hint = L"The mode the monitor switches to.  Enter: the list";
+            else if (s.res_w > 0 && (std::abs(client_w - s.res_w) > 2 || std::abs(client_h - s.res_h) > 2))
+                it.hint = L"The size of the window's picture: shown at " + size_text(client_w, client_h) +
+                          L", the same shape, to fit on the desktop.  Enter: the list";
+            else it.hint = L"The size of the window's picture.  Enter: the list";
+            break;
         case OPT_AA:   // MSAA and off change at once; DLAA and DLSS start (stop, change) with the game
             if (s.aa == 1 || s.aa >= 3 || aa_at_launch == 1 || aa_at_launch >= 3)
                 it.hint += s.aa != aa_at_launch ? L".  Applies after a restart (offered when you leave the settings)"
@@ -749,6 +777,7 @@ void Frontend::open(Screen s) {
         video_px_ = {};
     }
     locked_notice_ = false;
+    drop_open_ = false;
     screen_ = s;
     selected_ = 0;
     scroll_ = 0;
@@ -831,7 +860,20 @@ void Frontend::activate(const Item& it, int dir) {
     case BACK: back(); break;
     case RESUME: push(Action::Resume); break;
     case SETTINGS: options_from_pause_ = true; tab_ = 0; open(Screen::Options); selected_ = 1; break;
-    case OPT_DISPLAY: push(Action::ToggleFullscreen); break;
+    case OPT_DISPLAY:   // applied at once (app.cpp)
+        settings.display_mode = (std::clamp(settings.display_mode, 0, 2) + dir + 3) % 3;
+        push(Action::DisplayChanged);
+        break;
+    case OPT_RESOLUTION: {   // a click on the label: the list; else the monitor's next mode from the chosen one
+        if (settings.display_mode == 1 || resolutions.empty()) break;
+        if (wrap_) {
+            open_drop();
+            break;
+        }
+        int n = int(resolutions.size());
+        drop_pick((resolution_index() + dir + n) % n);
+        break;
+    }
     case OPT_CROSS_P1:
     case OPT_CROSS_P2:   // the Windows file dialog; a picture picked is also shown from then on
         if (crosshair_pick(it.id == OPT_CROSS_P2 ? 1 : 0)) {
@@ -911,6 +953,7 @@ bool Frontend::key(int vk) {
     end_strike();
     if (news_open_ && screen_ == Screen::Main) return news_key(vk);
     if (restart_open_ && screen_ == Screen::Options) return restart_key(vk);
+    if (drop_open_ && screen_ == Screen::Options) return drop_key(vk);
     if (locked_notice_) {   // any of these closes it
         if (vk != VK_RETURN && vk != VK_SPACE && vk != VK_ESCAPE && vk != VK_BACK) return true;
         locked_notice_ = false;
@@ -968,6 +1011,10 @@ bool Frontend::key(int vk) {
         return true;
     case VK_RETURN: case VK_SPACE:
         hovered_ = -1;
+        if (selected_ < n && list[selected_].id == OPT_RESOLUTION) {   // its list
+            if (list[selected_].enabled) open_drop();
+            return true;
+        }
         if (selected_ < n && list[selected_].enabled) activate(list[selected_], +1);
         return true;
     case VK_ESCAPE: case VK_BACK: back(); return true;
@@ -1112,6 +1159,55 @@ void Frontend::restart_choose(int button) {
     back();   // LATER: on, as BACK would (not asked again)
 }
 
+// ---- RESOLUTION's list ----
+
+int Frontend::resolution_index() const {
+    int n = int(resolutions.size());
+    int cw = settings.res_w > 0 ? settings.res_w : settings.display_mode == 0 ? client_w : desktop_w;
+    int ch = settings.res_w > 0 ? settings.res_h : settings.display_mode == 0 ? client_h : desktop_h;
+    int best = 0;
+    for (int k = 1; k < n; k++)
+        if (std::abs(resolutions[size_t(k)].first - cw) + std::abs(resolutions[size_t(k)].second - ch) <
+            std::abs(resolutions[size_t(best)].first - cw) + std::abs(resolutions[size_t(best)].second - ch))
+            best = k;
+    return best;
+}
+
+void Frontend::open_drop() {
+    if (resolutions.empty()) return;
+    drop_sel_ = int(resolutions.size()) - 1 - resolution_index();   // (the list is largest first)
+    drop_top_ = 0;
+    drop_open_ = dirty_ = true;
+}
+
+void Frontend::drop_pick(int i) {
+    drop_open_ = false;
+    dirty_ = true;
+    if (i < 0 || i >= int(resolutions.size())) return;
+    settings.res_w = resolutions[size_t(i)].first;   // applied at once
+    settings.res_h = resolutions[size_t(i)].second;
+    push(Action::DisplayChanged);
+}
+
+bool Frontend::drop_key(int vk) {
+    int n = int(resolutions.size());
+    if (n == 0) {
+        drop_open_ = false;
+        return true;
+    }
+    switch (vk) {
+    case VK_UP: case 'W': drop_sel_ = (drop_sel_ + n - 1) % n; break;
+    case VK_DOWN: case 'S': drop_sel_ = (drop_sel_ + 1) % n; break;
+    case VK_PRIOR: case 'Q': drop_sel_ = std::max(0, drop_sel_ - 8); break;
+    case VK_NEXT: case 'E': drop_sel_ = std::min(n - 1, drop_sel_ + 8); break;
+    case VK_RETURN: case VK_SPACE: drop_pick(n - 1 - drop_sel_); return true;
+    case VK_ESCAPE: case VK_BACK: drop_open_ = false; break;
+    default: return true;   // nothing else while it is open
+    }
+    dirty_ = true;
+    return true;
+}
+
 void Frontend::mouse_move(int x, int y) {
     if (screen_ == Screen::Splash) return;
     mouse_x_ = x;
@@ -1123,6 +1219,14 @@ void Frontend::mouse_move(int x, int y) {
         if (hot != news_hot_ || (hot >= 0 && hot != news_button_)) dirty_ = true;
         news_hot_ = hot;
         if (hot >= 0) news_button_ = hot;
+        return;
+    }
+    if (drop_open_ && screen_ == Screen::Options) {   // the resolution under the pointer lit
+        for (int k = 0; k < int(drop_rects_.size()); k++)
+            if (PtInRect(&drop_rects_[k], POINT{x, y}) && drop_top_ + k != drop_sel_) {
+                drop_sel_ = drop_top_ + k;
+                dirty_ = true;
+            }
         return;
     }
     if (restart_open_ && screen_ == Screen::Options) {   // only its two buttons
@@ -1158,6 +1262,17 @@ void Frontend::click(int x, int y) {
     if (restart_open_ && screen_ == Screen::Options) {
         for (int b = 0; b < 2; b++)
             if (PtInRect(&restart_buttons_[b], p)) restart_choose(b);
+        return;
+    }
+    if (drop_open_ && screen_ == Screen::Options) {   // a resolution, or away from the list: closed
+        int n = int(resolutions.size());
+        for (int k = 0; k < int(drop_rects_.size()); k++)
+            if (PtInRect(&drop_rects_[k], p)) {
+                drop_pick(n - 1 - (drop_top_ + k));
+                return;
+            }
+        drop_open_ = false;
+        dirty_ = true;
         return;
     }
     if (locked_notice_) {
@@ -1209,6 +1324,10 @@ void Frontend::wheel(int x, int y, int delta) {
     if (screen_ == Screen::GunTest || screen_ == Screen::Splash || (news_open_ && screen_ == Screen::Main) ||
         (restart_open_ && screen_ == Screen::Options))
         return;
+    if (drop_open_ && screen_ == Screen::Options) {
+        drop_key(delta > 0 ? VK_UP : VK_DOWN);
+        return;
+    }
     mouse_move(x, y);
     if (screen_ == Screen::Records) {
         scroll_records(delta > 0 ? -1 : 1);
@@ -2535,6 +2654,7 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
     if (locked_notice_ && screen_ == Screen::Survival) draw_locked_notice();
     if (news_open_ && screen_ == Screen::Main) draw_news();
     if (restart_open_ && screen_ == Screen::Options) draw_restart();
+    if (drop_open_ && screen_ == Screen::Options) draw_drop();
     dirty_ = animating_ && !page && screen_ != Screen::GunTest;   // still moving: again next refresh
     animating_ = false;
     return true;
@@ -2813,6 +2933,44 @@ void Frontend::draw_restart() {
     const wchar_t* about = restart_button_ == 0 ? L"Saves the settings, closes the game and starts it again"
                                                 : L"Back as before.  The change applies the next time the game starts";
     text(ITEM, U(22), about, cx, by + bh + U(26), 1, {HINT, HINT});
+}
+
+// RESOLUTION's list: a card over the darkened settings, the monitor's modes
+// largest first (as many as fit, arrows for the rest), the one in use marked
+void Frontend::draw_drop() {
+    auto U = [&](float v) { return int(v * u_ + 0.5f); };
+    int w = w_, h = h_, cx = w / 2;
+    fill(0, 0, w, h, 0x000000, 0.62f);
+    int n = int(resolutions.size());
+    int half = std::min(U(360), w / 2 - U(16)), row = U(50), head = U(130), foot = U(80);
+    int shown = std::max(1, std::min(n, (h - U(32) - head - foot) / row));
+    if (drop_sel_ < drop_top_) drop_top_ = drop_sel_;
+    if (drop_sel_ >= drop_top_ + shown) drop_top_ = drop_sel_ - shown + 1;
+    drop_top_ = std::clamp(drop_top_, 0, std::max(0, n - shown));
+    int card_h = head + shown * row + foot;
+    int top = std::max(U(16), (h - card_h) / 2), bottom = top + card_h;
+    fill(cx - half, top, cx + half, bottom, PANEL, 0.96f);
+    frame(cx - half, top, cx + half, bottom, std::max(1, U(2)), AMBER, 0.9f);
+    text(display(), U(56), L"RESOLUTION", cx, top + U(32), 1, {GOLD_TOP, GOLD_BOTTOM, EDGE, U(3), 1, U(4)});
+    drop_rects_.clear();
+    const int in_use = n - 1 - resolution_index();
+    int row_px = U(30);
+    for (int k = 0; k < shown && drop_top_ + k < n; k++) {
+        int i = drop_top_ + k, y = top + head + k * row;
+        const auto& r = resolutions[size_t(n - 1 - i)];
+        bool sel = i == drop_sel_;
+        if (sel) band(cx, y, y + row, half - U(24), AMBER, 0.22f);
+        int ty = y + (row - row_px) / 2 - U(4);
+        std::wstring label = std::to_wstring(r.first) + L" x " + std::to_wstring(r.second);
+        text(ITEM, row_px, label, cx - half + U(60), ty, 0,
+             sel ? Style{GOLD_TOP, GOLD_BOTTOM, EDGE, U(3)} : Style{PALE_TOP, PALE_BOTTOM, INK, U(2), 0.95f});
+        if (i == in_use) text(ITEM, U(22), L"IN USE", cx + half - U(60), y + (row - U(22)) / 2 - U(2), 2, {AMBER, AMBER});
+        drop_rects_.push_back({cx - half, y, cx + half, y + row});
+    }
+    if (drop_top_ > 0) triangle(cx, top + head - U(18), U(18), -2, GOLD_BOTTOM, 1);
+    if (drop_top_ + shown < n) triangle(cx, top + head + shown * row + U(12), U(18), 2, GOLD_BOTTOM, 1);
+    const wchar_t* about = pad_prompts ? L"A: use it at once.  B: close" : L"Enter: use it at once.  Esc: close";
+    text(ITEM, U(22), about, cx, bottom - U(46), 1, {HINT, HINT});
 }
 
 // ---- GUN TEST ----
