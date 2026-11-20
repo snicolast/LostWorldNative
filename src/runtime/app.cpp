@@ -612,12 +612,34 @@ static std::string full_path(const std::string& path) {
     return n && n < MAX_PATH ? std::string(full, n) : path;
 }
 
-// QUALITY for the first start, from the graphics card (settings_bridge.cpp)
-static int suggest_quality(const VkPresenter& vk) {
-    VkPhysicalDeviceProperties props;
-    vkGetPhysicalDeviceProperties(vk.gpu(), &props);
-    return suggest_quality(props.deviceName, props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
+// The first start (no anti-aliasing in save/settings.ini yet) picks it for
+// the GPU and the screen instead of MSAA 4x for everyone, as Sega Rally 2
+// does: on an NVIDIA card DLSS is asked for, DLAA, or DLSS QUALITY on a screen
+// larger than 1440p (the game starts in a window, but full screen is the
+// screen's size). A card or a build without DLSS falls back to MSAA as before
+static bool nvidia_card() {
+    DISPLAY_DEVICEA d{};
+    d.cb = sizeof(d);
+    for (DWORD i = 0; EnumDisplayDevicesA(nullptr, i, &d, 0); i++)
+        if (strstr(d.DeviceString, "NVIDIA")) return true;
+    return false;
 }
+
+// The height in pixels of the screen the window is on (0: not known)
+// (debugging aid: LW_SCREEN_HEIGHT=2160 stands for a screen of that height)
+static int screen_height(HWND hwnd) {
+    if (const char* e = getenv("LW_SCREEN_HEIGHT")) return atoi(e);
+    MONITORINFOEXA mi{};
+    mi.cbSize = sizeof(mi);
+    DEVMODEA mode{};
+    mode.dmSize = sizeof(mode);
+    if (!GetMonitorInfoA(MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY), &mi)) return 0;
+    if (!EnumDisplaySettingsA(mi.szDevice, ENUM_CURRENT_SETTINGS, &mode)) return 0;   // (real pixels, whatever the scaling)
+    return int(std::min(mode.dmPelsWidth, mode.dmPelsHeight));   // (the shorter side: a screen turned upright too)
+}
+
+bool g_restart = false;   // RESTART NOW: the game starts again once this one has closed
+static void restart_game();   // (after App::shutdown)
 
 // The zip the ROM came from (empty when it came from a data folder): the boss
 // state makers are started on the same ROM
@@ -881,7 +903,7 @@ struct App {
     double next_image = 0;
     HANDLE image_timer = nullptr;
 
-    bool init(int argc, char** argv, bool first_start);   // false: could not start
+    bool init(bool aa_auto);   // false: could not start. aa_auto: the first start's anti-aliasing (nvidia_card)
     void run();                                            // until the window closes
     [[noreturn]] void shutdown();
     // Both threads stop when the loop ends (and with the App, however it ends)
@@ -1202,7 +1224,7 @@ void App::stop_threads() {
     if (shown_waiter.joinable()) shown_waiter.join();
 }
 
-bool App::init(int argc, char** argv, bool first_start) {
+bool App::init(bool aa_auto) {
     presenter.set_vsync(g_opt.vsync);
     if (!presenter.init("Lost World Native by snicolast", int(SCREEN_H * 2 * std::max(g_opt.max_aspect, 4.0f / 3.0f)), SCREEN_H * 2,
                         g_opt.dlaa)) {
@@ -1212,6 +1234,7 @@ bool App::init(int argc, char** argv, bool first_start) {
         return false;
     }
     printf("GPU: %s\n", presenter.device_name().c_str());
+    if (aa_auto) g_opt.dlss = screen_height(presenter.hwnd()) > 1440 ? 1 : 0;   // DLSS QUALITY above 1440p
     g_pads.init();
     timeBeginPeriod(1);
     QueryPerformanceFrequency(&g_qpf);
@@ -1255,20 +1278,7 @@ bool App::init(int argc, char** argv, bool first_start) {
         CreateThread(nullptr, 512u << 20, game_thread, nullptr, STACK_SIZE_PARAM_IS_A_RESERVATION, nullptr);
     }
 
-    // (not in test runs, nor over graphics options given on the command line)
-    for (int i = 1; i < argc && first_start; i++)
-        for (const char* o : {"--scale", "--half-rate", "--rt", "--no-rt", "--ao", "--no-ao", "--no-shadows", "--no-shafts",
-                              "--no-soft", "--sky", "--no-relief", "--bloom", "--no-bloom", "--msaa", "--aa", "--aniso",
-                              "--pixel2d"})
-            if (strcmp(argv[i], o) == 0) first_start = false;
-    if (first_start && g_opt.menu) {
-        int q = suggest_quality(presenter);
-        static const char* const NAMES[4] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
-        printf("[video] first start: quality %s for this graphics card (options menu, DISPLAY)\n", NAMES[q]);
-        ini.set_quality(q);
-        quality_options(ini, g_opt);   // what QUALITY sets, now from the level picked
-    }
-    if (!renderer.init(presenter, g_opt.supersample, g_opt.msaa, g_opt.aniso, g_opt.dlaa)) {
+    if (!renderer.init(presenter, g_opt.supersample, g_opt.msaa, g_opt.aniso, g_opt.dlaa, g_opt.dlss, g_opt.dlss_model)) {
         fprintf(stderr, "Could not start the 3D renderer on %s (see the [vulkan] line above)\n",
                 presenter.device_name().c_str());
         MessageBoxA(nullptr, "Could not start the 3D renderer. Update the graphics driver.", "Lost World Native",
@@ -1277,10 +1287,19 @@ bool App::init(int argc, char** argv, bool first_start) {
     }
     renderer.set_hud_edges(!g_opt.hud_centre);
     if (g_opt.haze > 0) printf("[video] distance haze on (strength %.2f)\n", g_opt.haze);
+    if (aa_auto) {   // what the first start got: the menu shows it, and saves it with the first setting changed
+        if (!renderer.dlaa_active()) g_opt.dlaa = false, g_opt.dlss = 0;
+        printf("[video] first start: anti-aliasing chosen for this GPU and screen\n");
+    }
     if (g_opt.dlaa && !renderer.dlaa_active()) printf("[video] DLAA not available: using MSAA\n");
     if (renderer.dlaa_active())
-        printf("[video] antialiasing NVIDIA DLAA, anisotropic filtering %dx%s\n", g_opt.aniso,
-               g_opt.aniso > 0 ? " with mipmaps" : " (no mipmaps)");
+        printf("[video] antialiasing NVIDIA %s, anisotropic filtering %dx%s\n",
+               !renderer.dlss_upscaling() ? "DLAA"
+               : g_opt.dlss == 2          ? "DLSS BALANCED"
+               : g_opt.dlss == 3          ? "DLSS PERFORMANCE"
+               : g_opt.dlss == 4          ? "DLSS ULTRA PERFORMANCE"
+                                          : "DLSS QUALITY",
+               g_opt.aniso, g_opt.aniso > 0 ? " with mipmaps" : " (no mipmaps)");
     else
         printf("[video] antialiasing MSAA %dx, anisotropic filtering %dx%s\n", renderer.msaa_samples(), g_opt.aniso,
                g_opt.aniso > 0 ? " with mipmaps" : " (no mipmaps)");
@@ -1336,7 +1355,8 @@ bool App::init(int argc, char** argv, bool first_start) {
         if (s.fullscreen && !presenter.fullscreen()) presenter.toggle_fullscreen();
         if (!survival_cli) {   // survival mode goes straight into the game
             // the logos first (not when a debugging aid drives the menu)
-            if (getenv("LW_MENU_KEYS") || getenv("LW_MENU_SHOT") || getenv("LW_MENU_FILM")) frontend.open(Frontend::Screen::Main);
+            if (getenv("LW_MENU_KEYS") || getenv("LW_MENU_SHOT") || getenv("LW_MENU_FILM") || getenv("LW_RESTARTED"))
+                frontend.open(Frontend::Screen::Main);
             else {
                 frontend.open_splash();
                 frontend.check_for_news();   // news.txt on GitHub while the logo plays
@@ -1680,6 +1700,11 @@ void App::handle_menu_actions() {
             frontend.open(Frontend::Screen::Main);
             break;
         case Frontend::Action::Quit: presenter.close(); break;
+        case Frontend::Action::Restart:   // RESTART NOW: saved, closed as on QUIT, started again (App::shutdown)
+            s.save("save/settings.ini");
+            g_restart = true;
+            presenter.close();
+            break;
         case Frontend::Action::ToggleFullscreen: presenter.toggle_fullscreen(); break;
         case Frontend::Action::CrosshairChanged: load_crosshairs(renderer); break;
         case Frontend::Action::SettingsChanged: {
@@ -2405,8 +2430,38 @@ void App::shutdown() {
     renderer.shutdown();
     presenter.shutdown();
     g_pads.shutdown();
+    if (g_restart) restart_game();
     console_prompt();
     ExitProcess(0);
+}
+
+// RESTART NOW: the same exe, command line, folder and environment, straight to
+// the main menu (LW_RESTARTED: no logo), without the debugging aids of one run
+static void restart_game() {
+    SetEnvironmentVariableA("LW_RESTARTED", "1");
+    for (const char* aid : {"LW_MENU_KEYS", "LW_MENU_SHOT", "LW_MENU_FILM", "LW_MENU_FILM_KEYS", "LW_MENU_FILM_NOW"})
+        SetEnvironmentVariableA(aid, nullptr);
+    wchar_t exe[MAX_PATH];
+    GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    std::wstring cmd = GetCommandLineW();
+    STARTUPINFOW si{sizeof(si)};
+    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE), err = GetStdHandle(STD_ERROR_HANDLE);
+    bool files = out && out != INVALID_HANDLE_VALUE && GetFileType(out) == FILE_TYPE_DISK;   // (a test's redirected log goes on)
+    if (files) {
+        si.dwFlags = STARTF_USESTDHANDLES;
+        si.hStdOutput = out, si.hStdError = err, si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+        SetHandleInformation(out, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+        SetHandleInformation(err, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+    }
+    PROCESS_INFORMATION pi{};
+    printf("[menu] restarting\n");
+    fflush(stdout);
+    if (CreateProcessW(exe, cmd.data(), nullptr, nullptr, files, 0, nullptr, nullptr, &si, &pi)) {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+    } else {
+        printf("[menu] could not start the game again (%lu)\n", GetLastError());
+    }
 }
 
 static std::atomic<bool> g_terminal_prompt{false};   // started from a terminal, nothing redirected: its prompt to bring back
@@ -2461,10 +2516,15 @@ int main(int argc, char** argv) {
     g_opt.menu = !options_disable_menu(argc, argv);
     const bool menu_wanted = g_opt.menu;   // not a test run (--no-menu may still turn the menu off)
     FrontendSettings ini;
-    // The first start (no settings saved yet) picks the QUALITY for the graphics card
-    bool first_start = g_opt.menu && !file_exists("save/settings.ini");
+    // The first start (no anti-aliasing saved yet) picks it for the graphics
+    // card and the screen (nvidia_card), not over --aa or --msaa
+    bool aa_auto = false;
     if (g_opt.menu) {   // save/settings.ini, written by the options menu; command-line options win
         ini.load("save/settings.ini");
+        aa_auto = !ini.aa_saved && nvidia_card();
+        for (int i = 1; i < argc; i++)
+            if (strcmp(argv[i], "--aa") == 0 || strcmp(argv[i], "--msaa") == 0) aa_auto = false;
+        if (aa_auto) ini.aa = 1;   // DLAA; DLSS QUALITY once the screen is known (App::init)
         options_from_settings(ini, g_opt);
         g_pad_settings = {ini.pad_speed, ini.gyro, ini.gyro_speed, ini.vibration, ini.aim_assist};
     }
@@ -2566,7 +2626,7 @@ int main(int argc, char** argv) {
     app.survival_cli = survival_cli;
     app.intro = menu_wanted && !g_opt.menu;
     app.cli_stage = cli_stage, app.cli_zone = cli_zone;
-    if (!app.init(argc, argv, first_start)) return 1;
+    if (!app.init(aa_auto)) return 1;
     app.run();
     app.shutdown();
 }

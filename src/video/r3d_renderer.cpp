@@ -203,13 +203,26 @@ void R3DRenderer::transition(VkCommandBuffer cmd, Image& img, VkImageLayout to, 
     img.layout = to;
 }
 
-bool R3DRenderer::init(VkPresenter& vk, float supersample, int msaa, int aniso, bool dlaa) {
+bool R3DRenderer::init(VkPresenter& vk, float supersample, int msaa, int aniso, bool dlaa, int dlss_mode, int dlss_model) {
     vk_ = &vk;
     dev_ = vk.device();
     supersample_ = std::clamp(supersample, 0.5f, 4.0f);
     aniso_ = float(std::clamp(aniso, 0, 16));
     // DLAA does the anti-aliasing itself from aliased single-sample input
-    if (dlaa && dlaa_.init(vk.instance(), vk.gpu(), dev_)) msaa = 1;
+    if (dlaa && dlaa_.init(vk.instance(), vk.gpu(), dev_)) {
+        msaa = 1;
+        int mode = std::clamp(dlss_mode, 0, dlss::MODE_COUNT - 1);
+        upscale_ = dlss::MODE_SCALE[mode];   // QUALITY two thirds of the size each way ... ULTRA PERFORMANCE a third
+        jitter_phases_ = uint32_t(8.0f * upscale_ * upscale_ + 0.5f);
+        VkPhysicalDeviceProperties gpu;
+        vkGetPhysicalDeviceProperties(vk.gpu(), &gpu);
+        bool fp8 = dlss::has_fp8(gpu.deviceName);
+        dlss_preset_ = dlss::preset_for(mode, dlss_model, fp8);
+        dlaa_.configure(mode, dlss_preset_);
+        printf("[dlaa] mode %d (3D %.0f%% of the size), preset %c (%s, FP8 %s), %u jitter phases\n", mode,
+               100.0f / upscale_, char('A' + dlss_preset_ - 1), dlss_model ? "chosen" : "auto", fp8 ? "yes" : "no",
+               jitter_phases_);
+    }
     msaa_wanted_ = msaa;
     samples_ = msaa_level(msaa);
     const VkPhysicalDeviceLimits& limits = vk.limits();
@@ -710,8 +723,10 @@ void R3DRenderer::apply_pending() {
     if (msaa_changed) printf("[video] antialiasing MSAA %dx\n", int(samples_));
 }
 
-void R3DRenderer::ensure_targets(uint32_t w, uint32_t h) {
-    if (color_.image && color_.w == w && color_.h == h) return;
+// w, h: the 3D image as drawn; up_w, up_h: as DLSS hands it on (the same but with DLSS upscaling)
+void R3DRenderer::ensure_targets(uint32_t w, uint32_t h, uint32_t up_w, uint32_t up_h) {
+    if (color_.image && color_.w == w && color_.h == h && (!dlaa_out_.image || (dlaa_out_.w == up_w && dlaa_out_.h == up_h)))
+        return;
     vkDeviceWaitIdle(dev_);
     destroy_image(color_);
     destroy_image(color_ms_);
@@ -774,9 +789,9 @@ void R3DRenderer::ensure_targets(uint32_t w, uint32_t h) {
     if (dlaa) {
         create_image(motion_, w, h, VK_FORMAT_R16G16_SFLOAT,
                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-        create_image(dlaa_out_, w, h, VK_FORMAT_R16G16B16A16_SFLOAT,
+        create_image(dlaa_out_, up_w, up_h, VK_FORMAT_R16G16B16A16_SFLOAT,
                      VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-        create_image(dlaa_alpha_, w, h, VK_FORMAT_R8G8B8A8_UNORM,
+        create_image(dlaa_alpha_, up_w, up_h, VK_FORMAT_R8G8B8A8_UNORM,
                      VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     }
     // Bloom: glow written by the 3D pass (only while the bloom is on), then
@@ -1667,6 +1682,7 @@ void R3DRenderer::update_atmosphere(const ScreenLayout& lay, uint32_t target_w, 
     if (!night_sky_) night_level_ = 0;
     u.night[0] = night_level_;
     u.night[1] = modern_torch_ ? 1.0f : 0.0f;
+    u.night[2] = 1.0f / upscale_;   // DLSS upscaling: textures as sharp as the picture shown needs
     memcpy(atmosphere_uniform_.mapped, &u, sizeof(u));
 }
 
@@ -2116,8 +2132,8 @@ void R3DRenderer::record_dlaa(const Frame& f) {
         bool ok = dlaa_.evaluate(cmd, {color_.image, color_.view, VK_FORMAT_R16G16B16A16_SFLOAT},
                                  {depth_.image, depth_.view, VK_FORMAT_D32_SFLOAT},
                                  {motion_.image, motion_.view, VK_FORMAT_R16G16_SFLOAT},
-                                 {dlaa_out_.image, dlaa_out_.view, VK_FORMAT_R16G16B16A16_SFLOAT}, out_w, out_h, jitter_x,
-                                 jitter_y, false);
+                                 {dlaa_out_.image, dlaa_out_.view, VK_FORMAT_R16G16B16A16_SFLOAT}, out_w, out_h, f.up_w,
+                                 f.up_h, jitter_x, jitter_y, false);
         // Its alpha separately: where the 3D image is partly transparent the
         // 2D background shows through, and a jittered alpha would make every
         // edge against it shimmer (the ammo counter over the sky)
@@ -2127,7 +2143,7 @@ void R3DRenderer::record_dlaa(const Frame& f) {
                                   {depth_.image, depth_.view, VK_FORMAT_D32_SFLOAT},
                                   {motion_.image, motion_.view, VK_FORMAT_R16G16_SFLOAT},
                                   {dlaa_alpha_.image, dlaa_alpha_.view, VK_FORMAT_R8G8B8A8_UNORM}, out_w, out_h,
-                                  jitter_x, jitter_y, false, 1);
+                                  f.up_w, f.up_h, jitter_x, jitter_y, false, 1);
         transition(cmd, dlaa_out_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         transition(cmd, dlaa_alpha_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         if (!ok) bind_scene_image(color_.view, color_.alpha_view);   // stopped working: plain image from now on
@@ -2394,9 +2410,12 @@ void R3DRenderer::record(VkCommandBuffer cmd, VkImageView target, VkExtent2D ext
     f.cmd = cmd;
     f.extent = extent;
     f.lay = compute_layout(float(extent.width), float(extent.height), max_aspect_);
-    f.out_w = std::max(1u, uint32_t(f.lay.view_w * f.lay.scale * supersample_));
-    f.out_h = std::max(1u, uint32_t(SCREEN_H * f.lay.scale * supersample_));
-    ensure_targets(f.out_w, f.out_h);
+    // (with DLSS upscaling the 3D is drawn smaller than that, and DLSS makes it this size)
+    f.up_w = std::max(1u, uint32_t(f.lay.view_w * f.lay.scale * supersample_));
+    f.up_h = std::max(1u, uint32_t(SCREEN_H * f.lay.scale * supersample_));
+    f.out_w = upscale_ > 1.0f ? std::max(1u, uint32_t(float(f.up_w) / upscale_ + 0.5f)) : f.up_w;
+    f.out_h = upscale_ > 1.0f ? std::max(1u, uint32_t(float(f.up_h) / upscale_ + 0.5f)) : f.up_h;
+    ensure_targets(f.out_w, f.out_h, f.up_w, f.up_h);
     f.vcount = scene_ ? scene_->vertices.size() : 0;
     // Our rain, in the world viewport's view space, after the scene's vertices
     rain_vertices_.clear();
@@ -2416,7 +2435,8 @@ void R3DRenderer::record(VkCommandBuffer cmd, VkImageView target, VkExtent2D ext
     drawn_serial_ = scene_serial_;
     drawn_interp_ = interp_;
     // DLAA: the image is shifted by a different sub-pixel amount each frame
-    // (Halton 2,3 over 8 phases) so it can gather detail between pixels
+    // (Halton 2,3 over 8 phases; when DLSS upscales 8 for each pixel it makes:
+    // jitter_phases_) so it can gather detail between pixels
     float jitter_x = 0, jitter_y = 0, alpha_seed = 0;
     if (dlaa_.ready()) {
         auto halton = [](uint32_t i, uint32_t base) {
@@ -2427,7 +2447,7 @@ void R3DRenderer::record(VkCommandBuffer cmd, VkImageView target, VkExtent2D ext
             }
             return r;
         };
-        uint32_t phase = uint32_t(jitter_index_++ % 8) + 1;
+        uint32_t phase = uint32_t(jitter_index_++ % jitter_phases_) + 1;
         jitter_x = halton(phase, 2) - 0.5f;
         jitter_y = halton(phase, 3) - 0.5f;
         // Alpha-tested edges (foliage): noise threshold that changes every frame

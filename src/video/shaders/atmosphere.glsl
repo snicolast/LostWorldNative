@@ -29,7 +29,8 @@ layout(set = 0, binding = ATMOSPHERE_BINDING) uniform Atmosphere {
     vec4 spot_color; // its light colour (0 = none); w: distance where it starts
     vec4 spot_fog;   // its colour on the fog (spot-on-fog colour * fog attenuation * fog colour); w: extent
     vec4 night;      // x: how much of the procedural night sky shows behind the world, 0..1 (SKY: PROCEDURAL, black backdrop in the dark);
-                     // y: 1 = modern flashlight (the spotlight shaded, soft, glowing in the air)
+                     // y: 1 = modern flashlight (the spotlight shaded, soft, glowing in the air);
+                     // z: texture detail scale, the 3D image's size over the picture shown (1 / DLSS upscaling)
     vec4 rain;       // x: how much it rains, 0..1 (r3d_rain.h): drops in the air, the world wet
     vec4 wind;       // R3DRain::wind: direction across the ground (world x, z), gust 0..1, distance carried
     vec4 bolt;       // lightning channel: x brightness (0 = none), y segments, z its azimuth in the world frame

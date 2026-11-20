@@ -1,5 +1,5 @@
-// The options menu's settings (save/settings.ini) and its QUALITY levels,
-// without the menu itself (frontend.h), for the settings bridge and its test
+// The options menu's settings (save/settings.ini), without the menu itself
+// (frontend.h), for the settings bridge and its test
 #pragma once
 #include <string>
 
@@ -10,7 +10,13 @@ struct FrontendSettings {
     int rear_boost = 0;  // dB on the rear pair: -6, -3, 0, 3, 6, 9, 12
     int weather_sound = 2;  // rain and thunder of our weather: 0 off, 1 low, 2 medium, 3 high
     bool cubic_samples = true;   // smooth (cubic) sample interpolation instead of the original linear one
-    int aa = 0;        // 0 MSAA, 1 DLAA, 2 off (DLAA on or off takes effect on the next launch)
+    // 0 MSAA, 1 DLAA, 2 off, 3 DLSS QUALITY, 4 BALANCED, 5 PERFORMANCE, 6 ULTRA PERFORMANCE
+    // (DLAA and DLSS on, off or changed take effect on the next launch)
+    int aa = 0;
+    bool aa_saved = false;   // load() found it in the file (not there on the first start: chosen then for the GPU, app.cpp)
+    // settings.ini only (dlss_model = auto / k / m / l), for advanced users: the
+    // model DLAA and DLSS use. 0 AUTO (dlss::preset_for), 1 K, 2 M, 3 L
+    int dlss_model = 0;
     int msaa = 4;      // MSAA samples per pixel with aa = 0: 2, 4 or 8
     int aniso = 8;     // anisotropic taps of the texture filtering: 0 (no mipmaps, original look), 2, 4, 8, 16
     bool smooth_2d = true;   // HUD and 2D layers upscaled with xBR (false: square pixels, cheaper)
@@ -60,10 +66,5 @@ struct FrontendSettings {
     void load(const char* path);
     void save(const char* path) const;
 
-    // QUALITY: the graphics options that cost the most, set together. quality()
-    // is the level they match, CUSTOM if none
-    enum Quality { LOW, MEDIUM, HIGH, ULTRA, CUSTOM };
-    static constexpr int SCALES[5] = {50, 67, 75, 85, 100};
-    void set_quality(int q);
-    int quality() const;
+    static constexpr int SCALES[5] = {50, 67, 75, 85, 100};   // RENDER RESOLUTION's steps
 };

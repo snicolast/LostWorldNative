@@ -3,13 +3,13 @@
 // NVIDIA's NGX SDK is a static library built for Microsoft's compiler: it
 // only links with MSVC. dlss_bridge.dll is dlss.cpp plus that library, built
 // once with MSVC (tools/dlss_bridge); a game built with any other compiler
-// loads it at run time (dlss_loader.cpp) and reaches DLAA through the table
+// loads it at run time (dlss_loader.cpp) and reaches DLAA and DLSS through the table
 // below. Plain C types only: the two sides do not share a C++ runtime.
 #pragma once
 #include "vk_presenter.h"
 
 // Bumped with any change to this file. A DLL of another version is refused.
-#define DLSS_BRIDGE_ABI 1
+#define DLSS_BRIDGE_ABI 3
 #define DLSS_BRIDGE_FILE L"dlss_bridge.dll"
 
 struct DlssBridgeImage {
@@ -30,8 +30,10 @@ struct DlssBridgeApi {
     // As dlss::Dlaa::evaluate. 0 once it has stopped working
     int (*evaluate)(void* dlaa, VkCommandBuffer cmd, const DlssBridgeImage* color, const DlssBridgeImage* depth,
                     const DlssBridgeImage* motion, const DlssBridgeImage* output, uint32_t width, uint32_t height,
-                    float jitter_x, float jitter_y, int reset, int channel);
+                    uint32_t out_width, uint32_t out_height, float jitter_x, float jitter_y, int reset, int channel);
     void (*destroy)(void* dlaa);
+    // As dlss::Dlaa::configure
+    void (*configure)(void* dlaa, int mode, int preset);
 };
 
 // The only export of the DLL. nullptr if abi is not the one it was built with.

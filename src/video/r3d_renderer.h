@@ -40,10 +40,16 @@ class R3DRenderer {
 public:
     static constexpr int BOLT_SEGMENTS = 24;   // atmosphere.glsl: segments of a lightning channel
     // msaa: samples per pixel (1 = off); aniso: max anisotropic taps (0 = no mipmaps);
-    // dlaa: NVIDIA DLAA instead of MSAA (the presenter must have its extensions)
-    bool init(VkPresenter& vk, float supersample, int msaa, int aniso, bool dlaa = false);
+    // dlaa: NVIDIA DLAA instead of MSAA (the presenter must have its extensions);
+    // dlss_mode (with dlaa): 0 DLAA, 1 QUALITY, 2 BALANCED, 3 PERFORMANCE, 4 ULTRA
+    // PERFORMANCE: the 3D drawn smaller (dlss::MODE_SCALE) and upscaled.
+    // dlss_model: 0 AUTO, 1 K, 2 M, 3 L (dlss::preset_for)
+    bool init(VkPresenter& vk, float supersample, int msaa, int aniso, bool dlaa = false, int dlss_mode = 0,
+              int dlss_model = 0);
     int msaa_samples() const { return int(samples_); }
     bool dlaa_active() const { return dlaa_.ready(); }
+    bool dlss_upscaling() const { return dlaa_.ready() && upscale_ > 1.0f; }
+    int dlss_preset() const { return dlss_preset_; }   // the NGX preset in use (dlss::PRESET_*), 0 without DLSS
     // Texture pack slots this GPU's descriptor limits allow (TexturePack::set_max_slots)
     uint32_t replacement_slots() const { return replacement_slots_; }
     // MSAA samples per pixel from the next frame on (1 = off; nothing while
@@ -242,7 +248,8 @@ private:
     void bind_scene_image(VkImageView view, VkImageView alpha);
     void update_atmosphere(const ScreenLayout& lay, uint32_t target_w, uint32_t target_h);
     bool back_layer_extended() const;
-    void ensure_targets(uint32_t w, uint32_t h);
+    // w, h: the 3D image as drawn; up_w, up_h: as DLSS hands it on (the same but with DLSS upscaling)
+    void ensure_targets(uint32_t w, uint32_t h, uint32_t up_w, uint32_t up_h);
     void upload_slot(VkDescriptorSet set, uint32_t binding, VkSampler sampler, uint32_t slot, int w, int h,
                      const std::vector<uint8_t>& rgba,
                      std::unordered_map<uint32_t, Image>* replace = nullptr);   // the slot's previous picture there is freed
@@ -268,6 +275,7 @@ private:
         VkExtent2D extent;       // the window
         ScreenLayout lay;        // placement of the game screen in it
         uint32_t out_w, out_h;   // internal 3D resolution
+        uint32_t up_w, up_h;     // ... and what DLSS makes of it (the same, but with DLSS upscaling)
         size_t vcount;           // vertices of the scene
         float before;            // motion vectors: how far back the previously displayed image was
         float jitter_x, jitter_y, alpha_seed;   // DLAA: sub-pixel shift and alpha-test noise seed
@@ -312,8 +320,11 @@ private:
     Image text_cells_;   // per 8x8 cell of the foreground: high-resolution text slot and colours
     Image sky_coords_;   // per back layer pixel: backdrop replacement picture and position (tilegen.h)
     Image texture_ram_, back_, front_, color_, depth_, color_ms_;   // color_ms_: MSAA target, resolved into color_
-    Image motion_, dlaa_out_;   // DLAA: motion vectors (pixels, RG16F) and the anti-aliased image
-    Image dlaa_alpha_;          // DLAA of the 3D image's alpha (in red), which the composition uses
+    Image motion_, dlaa_out_;   // DLAA / DLSS: motion vectors (pixels, RG16F) and the anti-aliased (and upscaled) image
+    Image dlaa_alpha_;          // DLAA / DLSS of the 3D image's alpha (in red), which the composition uses
+    float upscale_ = 1.0f;      // DLSS: the 3D is drawn this many times smaller each way than it is shown (1: DLAA, or none)
+    uint32_t jitter_phases_ = 8;   // 8 per output pixel: 8 x upscale_^2 (8 DLAA, 18 QUALITY ... 72 ULTRA PERFORMANCE)
+    int dlss_preset_ = 0;       // the NGX preset DLAA / DLSS uses (dlss::PRESET_*), 0 without them
     Image glow_, glow_ms_;      // bloom source written by the 3D pass (glow_ms_: MSAA, resolved into glow_)
     Image bloom_a_, bloom_b_;   // bloom at a quarter of the size: reduced and blurred (ends in bloom_a_)
     float bloom_strength_ = 0;

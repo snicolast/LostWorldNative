@@ -75,6 +75,12 @@ int main() {
         CHECK(parse(q, {"--aa", "msaa", "--subtitles", "off", "--auto", "coin@10", "--auto", "start@20", "--trace",
                         "10F650,10D564", "--diff", "10F650@300", "--replay", "out/snap/snap_1.bin"}));
         CHECK(!q.dlaa && q.msaa == 4 && q.subtitles == 0 && q.auto_scripts.size() == 2);
+        Options d;   // DLSS's modes and its model
+        CHECK(parse(d, {"--aa", "dlss"}) && d.dlaa && d.dlss == 1 && d.dlss_model == 0);
+        CHECK(parse(d, {"--aa", "dlss_balanced", "--dlss-model", "m"}) && d.dlaa && d.dlss == 2 && d.dlss_model == 2);
+        CHECK(parse(d, {"--aa", "dlss_performance", "--dlss-model", "l"}) && d.dlss == 3 && d.dlss_model == 3);
+        CHECK(parse(d, {"--aa", "dlss_ultra", "--dlss-model", "auto"}) && d.dlss == 4 && d.dlss_model == 0);
+        CHECK(parse(d, {"--aa", "dlaa", "--dlss-model", "k"}) && d.dlaa && d.dlss == 0 && d.dlss_model == 1);
         CHECK(q.auto_scripts[1] == "start@20");
         CHECK(q.traces.size() == 1 && q.diff == "10F650@300" && q.replay == "out/snap/snap_1.bin");
     }

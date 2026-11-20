@@ -33,7 +33,8 @@ public:
     enum class Screen { None, Splash, Main, Play, Options, Pause, Boss, Records, Survival, Classic, GunTest, Weather };
     enum class Action { None, StartArcade, Resume, Quit, ToggleFullscreen, SettingsChanged,
                         StartBoss, PrepareBosses, LeaveBossMode, StartSurvival, QuitToMenu,
-                        CrosshairChanged };   // a new crosshair picture (crosshair_pick)
+                        CrosshairChanged,   // a new crosshair picture (crosshair_pick)
+                        Restart };          // RESTART NOW: saved, closed and started again (app.cpp)
 
     bool init(const std::string& font_dir);
     void shutdown();
@@ -127,7 +128,7 @@ private:
         BOSS_ENTRY, PREPARE, RETRY, BOSS_LIST, LEAVE_BOSS, RECORDS, SURVIVAL, SURVIVAL_ENTRY, CLASSIC, RANDOM, WEATHER_ENTRY,
         OPT_DISPLAY, OPT_VOLUME, OPT_SPEAKERS, OPT_REAR, OPT_SAMPLES, OPT_AA, OPT_HAZE, OPT_BLOOM, OPT_AO, OPT_SKY, OPT_SUN, OPT_SHADOWS, OPT_SHAFTS, OPT_SOFT, OPT_HDR, OPT_RIM, OPT_RELIEF, OPT_SHARPEN, OPT_LIGHTNING, OPT_RAIN, OPT_TEXT, OPT_CROSS, OPT_MICE, OPT_SUBS,
         OPT_SAT, OPT_GAMMA, OPT_MOTION, OPT_PAD_SPEED, OPT_GYRO, OPT_GYRO_SPEED, OPT_VIBRATION, OPT_ASSIST, OPT_TORCH, OPT_RT, OPT_CROSS_HIDE, OPT_FREE_PLAY,
-        OPT_QUALITY, OPT_SCALE, OPT_HALF_RATE, OPT_VSYNC,
+        OPT_SCALE, OPT_HALF_RATE, OPT_VSYNC,
         OPT_CROSS_STYLE, OPT_CROSS_P1, OPT_CROSS_P2, OPT_MUSIC, OPT_ASPECT, OPT_GUN_TEST, OPT_WEATHER_SOUND,
         OPT_MSAA, OPT_ANISO, OPT_FILTER_2D, OPT_UPDATES,
         NO_ROW,   // a setting only kept in the file
@@ -228,6 +229,17 @@ private:
     bool news_key(int vk);
     void news_choose(int button);
     void start_update();
+    // RESTART NEEDED: leaving the settings with a change that only applies
+    // on a new start (ANTI-ALIASING to or from DLAA / DLSS). LATER goes on as BACK
+    bool restart_open_ = false;
+    int restart_button_ = 0;   // 0 RESTART NOW, 1 LATER
+    int restart_hot_ = -1;     // the button under the pointer
+    RECT restart_buttons_[2]{};
+    bool aa_waits() const;               // ANTI-ALIASING changed, waiting for a restart
+    std::wstring restart_list() const;   // what waits for a restart, "" nothing
+    bool restart_key(int vk);
+    void restart_choose(int button);
+    void draw_restart();
 
 
     Screen screen_ = Screen::None;

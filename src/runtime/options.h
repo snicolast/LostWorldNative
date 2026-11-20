@@ -21,7 +21,10 @@ struct Options {
     // Picture
     float supersample = 1.0f;        // --scale: internal 3D resolution factor
     int msaa = 4;                    // --msaa: samples per pixel (1 = off)
-    bool dlaa = false;               // --aa dlaa: NVIDIA DLAA instead of MSAA
+    bool dlaa = false;               // --aa dlaa: NVIDIA DLAA instead of MSAA (also set by --aa dlss*)
+    int dlss = 0;                    // --aa dlss*: 0 none (DLAA), 1 QUALITY, 2 BALANCED, 3 PERFORMANCE, 4 ULTRA PERFORMANCE
+                                     // (the 3D drawn smaller and upscaled)
+    int dlss_model = 0;              // --dlss-model: 0 auto, 1 K, 2 M, 3 L
     int aniso = 8;                   // --aniso: anisotropic taps (0 = no mipmaps, original look)
     float max_aspect = 16.0f / 9.0f; // --aspect: widest 3D view (4:3 = original)
     bool pixel_2d = false;           // --pixel2d: 2D layers without xBR upscaling

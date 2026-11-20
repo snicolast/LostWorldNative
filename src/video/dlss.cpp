@@ -2,7 +2,6 @@
 
 #include <cstdio>
 
-#include "../common/paths.h"
 #include "nvsdk_ngx_helpers_vk.h"
 #include "nvsdk_ngx_vk.h"
 
@@ -23,8 +22,16 @@ namespace {
 const char* kProjectId = "5e1c7a3e-3b8f-4d2a-9f6e-1d4c2b7a9e10";
 const char* kEngineVersion = "1.0";
 
+std::wstring exe_dir() {
+    wchar_t path[MAX_PATH];
+    DWORD n = GetModuleFileNameW(nullptr, path, MAX_PATH);
+    std::wstring dir(path, n);
+    size_t sep = dir.find_last_of(L"\\/");
+    return sep == std::wstring::npos ? L"." : dir.substr(0, sep);
+}
+
 struct Discovery {
-    std::wstring dir = exe_folder_w();
+    std::wstring dir = exe_dir();
     const wchar_t* paths[1];
     NVSDK_NGX_FeatureCommonInfo common{};
     NVSDK_NGX_FeatureDiscoveryInfo info{};
@@ -102,21 +109,34 @@ bool Dlaa::init(VkInstance instance, VkPhysicalDevice gpu, VkDevice device) {
     return true;
 }
 
-bool Dlaa::ensure_feature(VkCommandBuffer cmd, uint32_t width, uint32_t height, int channel) {
+bool Dlaa::ensure_feature(VkCommandBuffer cmd, uint32_t width, uint32_t height, uint32_t out_width, uint32_t out_height,
+                          int channel) {
     NVSDK_NGX_Handle*& feature = feature_[channel];
-    if (feature && width == width_[channel] && height == height_[channel]) return true;
+    if (feature && width == width_[channel] && height == height_[channel] && out_width == out_width_[channel] &&
+        out_height == out_height_[channel])
+        return true;
     if (feature) {
         vkDeviceWaitIdle(device_);
         NVSDK_NGX_VULKAN_ReleaseFeature(feature);
         feature = nullptr;
     }
-    NVSDK_NGX_Parameter_SetUI(params_, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_DLAA,
-                              NVSDK_NGX_DLSS_Hint_Render_Preset_K);
+    // The same preset for whichever mode NGX looks it up under (0: its own default)
+    static const char* const PRESET_PARAMS[] = {
+        NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_DLAA, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Quality,
+        NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Balanced, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Performance,
+        NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraPerformance};
+    for (const char* name : PRESET_PARAMS) NVSDK_NGX_Parameter_SetUI(params_, name, unsigned(preset_));
+    static const NVSDK_NGX_PerfQuality_Value PERF[MODE_COUNT] = {
+        NVSDK_NGX_PerfQuality_Value_DLAA, NVSDK_NGX_PerfQuality_Value_MaxQuality, NVSDK_NGX_PerfQuality_Value_Balanced,
+        NVSDK_NGX_PerfQuality_Value_MaxPerf, NVSDK_NGX_PerfQuality_Value_UltraPerformance};
+    bool upscale = out_width != width || out_height != height;
     NVSDK_NGX_DLSS_Create_Params create{};
-    create.Feature.InWidth = create.Feature.InTargetWidth = width;
-    create.Feature.InHeight = create.Feature.InTargetHeight = height;
-    create.Feature.InPerfQualityValue = NVSDK_NGX_PerfQuality_Value_DLAA;
-    // Reverse-Z depth; motion vectors at render (= output) resolution.
+    create.Feature.InWidth = width;
+    create.Feature.InHeight = height;
+    create.Feature.InTargetWidth = out_width;
+    create.Feature.InTargetHeight = out_height;
+    create.Feature.InPerfQualityValue = !upscale ? NVSDK_NGX_PerfQuality_Value_DLAA : PERF[mode_ > 0 && mode_ < MODE_COUNT ? mode_ : 1];
+    // Reverse-Z depth; motion vectors at render resolution.
     // The alpha (where it is 0 the composition shows the 2D background) goes
     // through the second instance.
     create.InFeatureCreateFlags = NVSDK_NGX_DLSS_Feature_Flags_DepthInverted | NVSDK_NGX_DLSS_Feature_Flags_MVLowRes;
@@ -125,26 +145,35 @@ bool Dlaa::ensure_feature(VkCommandBuffer cmd, uint32_t width, uint32_t height, 
         create.InFeatureCreateFlags |= NVSDK_NGX_DLSS_Feature_Flags_IsHDR | NVSDK_NGX_DLSS_Feature_Flags_AutoExposure;
     NVSDK_NGX_Result r = NGX_VULKAN_CREATE_DLSS_EXT1(device_, cmd, 1, 1, &feature, params_, &create);
     if (NVSDK_NGX_FAILED(r) || !feature) {
-        LOG_ERROR("[dlaa] could not create DLSS %ux%u (0x%08X)\n", width, height, unsigned(r));
+        LOG_ERROR("[dlaa] could not create DLSS %ux%u -> %ux%u (0x%08X)\n", width, height, out_width, out_height,
+                unsigned(r));
         feature = nullptr;
         failed_ = true;
         return false;
     }
+    if (channel == 0) {
+        static const char* const MODES[MODE_COUNT] = {"DLAA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+        LOG_INFO("[dlaa] DLSS %s %ux%u -> %ux%u, preset %c\n", MODES[upscale && mode_ > 0 && mode_ < MODE_COUNT ? mode_ : 0],
+                 width, height, out_width, out_height, preset_ ? char('A' + preset_ - 1) : '-');
+    }
     width_[channel] = width;
     height_[channel] = height;
+    out_width_[channel] = out_width;
+    out_height_[channel] = out_height;
     return true;
 }
 
 bool Dlaa::evaluate(VkCommandBuffer cmd, const Image& color, const Image& depth, const Image& motion,
-                    const Image& output, uint32_t width, uint32_t height, float jitter_x, float jitter_y,
-                    bool reset, int channel) {
+                    const Image& output, uint32_t width, uint32_t height, uint32_t out_width, uint32_t out_height,
+                    float jitter_x, float jitter_y, bool reset, int channel) {
     if (!params_ || failed_) return false;
-    bool fresh = !feature_[channel] || width != width_[channel] || height != height_[channel];
-    if (!ensure_feature(cmd, width, height, channel)) return false;
+    bool fresh = !feature_[channel] || width != width_[channel] || height != height_[channel] ||
+                 out_width != out_width_[channel] || out_height != out_height_[channel];
+    if (!ensure_feature(cmd, width, height, out_width, out_height, channel)) return false;
     NVSDK_NGX_Resource_VK in_color = resource(color, width, height, false, VK_IMAGE_ASPECT_COLOR_BIT);
     NVSDK_NGX_Resource_VK in_depth = resource(depth, width, height, false, VK_IMAGE_ASPECT_DEPTH_BIT);
     NVSDK_NGX_Resource_VK in_motion = resource(motion, width, height, false, VK_IMAGE_ASPECT_COLOR_BIT);
-    NVSDK_NGX_Resource_VK out = resource(output, width, height, true, VK_IMAGE_ASPECT_COLOR_BIT);
+    NVSDK_NGX_Resource_VK out = resource(output, out_width, out_height, true, VK_IMAGE_ASPECT_COLOR_BIT);
     NVSDK_NGX_VK_DLSS_Eval_Params eval{};
     eval.Feature.pInColor = &in_color;
     eval.Feature.pInOutput = &out;
@@ -163,6 +192,11 @@ bool Dlaa::evaluate(VkCommandBuffer cmd, const Image& color, const Image& depth,
         return false;
     }
     return true;
+}
+
+void Dlaa::configure(int mode, int preset) {
+    mode_ = mode;
+    preset_ = preset;
 }
 
 void Dlaa::shutdown() {

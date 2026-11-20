@@ -26,7 +26,7 @@
 - **Ray-traced sun shadows**, ambient occlusion, distance haze, bloom.
 - **New weather**: dense rain, wet ground, lightning in the T-Rex storm.
 - **Modern flashlight** in the night stages.
-- **Sharp image**: MSAA or NVIDIA DLAA, HD text and HUD, texture packs.
+- **Sharp image**: MSAA, NVIDIA DLAA or DLSS, HD text and HUD, texture packs.
 - **Smooth motion** at 120 / 144 Hz and above.
 - **Arcade sound**, with surround and headphone modes.
 - **Mouse, gamepad (gyro too) or two mice** for 2 players.
@@ -55,7 +55,7 @@ versions of the game will not work.
 You need Windows 10/11 (64-bit) and a GPU with a Vulkan 1.3 driver, or a 1.2 one
 that offers `VK_KHR_dynamic_rendering` (most cards and integrated graphics from 2016 on,
 with current drivers; started from a command prompt, the game's first `[vulkan]` line says what
-yours offers). DLAA needs an NVIDIA RTX; on other cards it switches itself off, and the game builds
+yours offers). DLAA and DLSS need an NVIDIA RTX; on other cards they switch themselves off, and the game builds
 the same on any GPU.
 
 Install it with **[NicoLauncher](https://github.com/snicolast/NicoLauncher-Hub)**, a free app that

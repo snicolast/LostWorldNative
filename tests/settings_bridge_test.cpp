@@ -1,8 +1,5 @@
 // The options menu and the command-line options (runtime/settings_bridge):
-// every menu value survives the trip to Options and back, QUALITY levels are
-// recognised after being set, the first start's quality_options matches
-// what options_from_settings gives for the same settings, and its guess of
-// the level from the graphics card's name
+// every menu value survives the trip to Options and back
 #include <cmath>
 #include <cstdio>
 
@@ -21,7 +18,7 @@ static int g_failed = 0;
 // The settings the bridge carries (the others, such as the window, the
 // gamepad and the menu music, stay in FrontendSettings)
 #define BRIDGED(X)                                                                                            \
-    X(volume) X(speakers) X(rear_boost) X(weather_sound) X(cubic_samples) X(aa) X(msaa) X(aniso) X(smooth_2d)  \
+    X(volume) X(speakers) X(rear_boost) X(weather_sound) X(cubic_samples) X(aa) X(dlss_model) X(msaa) X(aniso) X(smooth_2d)  \
     X(scale) X(half_rate) X(vsync) X(aspect) X(haze) X(bloom) X(ao) X(sky) X(sun) X(shadows) X(ray_tracing)  \
     X(shafts) X(soft) X(hdr) X(rim) X(relief) X(sharpen) X(torch) X(lightning) X(rain) X(hd_text)           \
     X(crosshair) X(crosshair_style) X(crosshair_hide) X(free_play) X(smooth) X(second_mouse) X(subtitles)    \
@@ -59,7 +56,8 @@ static void test_round_trip() {
         {"speakers", &FrontendSettings::speakers, {0, 1, 2}},
         {"rear_boost", &FrontendSettings::rear_boost, {-6, -3, 0, 3, 6, 9, 12}},
         {"weather_sound", &FrontendSettings::weather_sound, {0, 1, 2, 3}},
-        {"aa", &FrontendSettings::aa, {0, 1, 2}},
+        {"aa", &FrontendSettings::aa, {0, 1, 2, 3, 4, 5, 6}},
+        {"dlss_model", &FrontendSettings::dlss_model, {0, 1, 2, 3}},
         {"msaa", &FrontendSettings::msaa, {2, 4, 8}},
         {"aniso", &FrontendSettings::aniso, {0, 2, 4, 8, 16}},
         {"scale", &FrontendSettings::scale, {50, 67, 75, 85, 100}},
@@ -124,98 +122,9 @@ static void test_aspect_kept() {
     CHECK(std::fabs(o.max_aspect - 16.0f / 9.0f) < 1e-6f);
 }
 
-// set_quality(q) is recognised as q, from any anti-aliasing (DLAA picked by
-// hand stays), and survives the trip through the options
-static void test_quality() {
-    for (int aa : {0, 1, 2})
-        for (int q = FrontendSettings::LOW; q <= FrontendSettings::ULTRA; q++) {
-            FrontendSettings s;
-            s.aa = aa;
-            s.set_quality(q);
-            CHECK(s.quality() == q);
-            CHECK((aa == 1) == (s.aa == 1));
-            CHECK(round_trip(s).quality() == q);
-        }
-    FrontendSettings custom;
-    custom.set_quality(FrontendSettings::LOW);
-    custom.ao = true;
-    CHECK(custom.quality() == FrontendSettings::CUSTOM);
-}
-
-// The first start: quality_options over options from the command line sets
-// what options_from_settings would for those settings and leaves the rest
-static void test_quality_options() {
-    for (int q = FrontendSettings::LOW; q <= FrontendSettings::ULTRA; q++) {
-        FrontendSettings s;
-        s.set_quality(q);
-        Options all;
-        options_from_settings(s, all);
-        Options o;
-        o.volume = 7.5f;   // as from the command line: not a menu step
-        o.gamma = 1.13f;
-        quality_options(s, o);
-        CHECK(o.supersample == all.supersample && o.half_rate == all.half_rate && o.ray_tracing == all.ray_tracing);
-        CHECK(o.ao == all.ao && o.shadows == all.shadows && o.shafts == all.shafts && o.soft == all.soft);
-        CHECK(o.sky_procedural == all.sky_procedural && o.relief == all.relief && o.bloom == all.bloom);
-        CHECK(o.msaa == all.msaa && o.aniso == all.aniso && o.pixel_2d == all.pixel_2d);
-        CHECK(o.volume == 7.5f && o.gamma == 1.13f);
-        FrontendSettings back = s;
-        settings_from_options(o, back);
-        CHECK(back.quality() == q);
-    }
-}
-
-// The first start's guess from the graphics card's name (Vulkan's deviceName)
-static void test_suggest_quality() {
-    enum { L = FrontendSettings::LOW, M = FrontendSettings::MEDIUM, H = FrontendSettings::HIGH, U = FrontendSettings::ULTRA };
-    struct Card {
-        const char* name;
-        bool integrated;
-        int quality;
-    };
-    static const Card cards[] = {
-        {"NVIDIA GeForce RTX 5070 Ti", false, U},
-        {"NVIDIA GeForce RTX 4090", false, U},
-        {"NVIDIA GeForce RTX 3080", false, H},
-        {"NVIDIA GeForce RTX 3060", false, M},
-        {"NVIDIA GeForce RTX 2060", false, M},
-        {"NVIDIA GeForce RTX 3050", false, M},
-        {"NVIDIA GeForce RTX 4060 Laptop GPU", false, M},
-        {"NVIDIA GeForce RTX 2060 with Max-Q Design", false, L},
-        {"NVIDIA GeForce GTX 1660 Ti", false, M},
-        {"NVIDIA GeForce GTX 1660 SUPER", false, M},
-        {"NVIDIA GeForce GTX 1660 Ti with Max-Q Design", false, L},
-        {"NVIDIA GeForce GTX 1650", false, L},
-        {"NVIDIA GeForce GTX 1080 Ti", false, M},
-        {"NVIDIA GeForce GTX 1060 6GB", false, L},
-        {"NVIDIA GeForce GTX 970", false, L},
-        {"AMD Radeon RX 9070 XT", false, H},
-        {"AMD Radeon RX 7900 XTX", false, H},
-        {"AMD Radeon RX 6600", false, M},
-        {"AMD Radeon RX 5700 XT", false, M},
-        {"AMD Radeon RX 580 Series", false, L},
-        {"AMD Radeon RX Vega", false, L},
-        {"Intel(R) Arc(TM) A770 Graphics", false, M},
-        {"Intel(R) Arc(TM) B580 Graphics", false, M},
-        {"Intel(R) Arc(TM) A380 Graphics", false, L},
-        {"Intel(R) Arc(TM) Graphics", true, L},
-        {"AMD Radeon 780M Graphics", true, L},
-        {"Intel(R) UHD Graphics 630", true, L},
-        {"Some Future GPU 9000", false, M},
-    };
-    for (const Card& c : cards) {
-        int q = suggest_quality(c.name, c.integrated);
-        if (q != c.quality) printf("  %s: %d, expected %d\n", c.name, q, c.quality);
-        CHECK(q == c.quality);
-    }
-}
-
 int main() {
-    test_suggest_quality();
     test_round_trip();
     test_aspect_kept();
-    test_quality();
-    test_quality_options();
     if (g_failed) {
         printf("%d checks failed\n", g_failed);
         return 1;

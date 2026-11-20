@@ -73,10 +73,23 @@ const std::vector<Entry>& table() {
         section("Picture"),
         real("--scale", &Options::supersample, "internal 3D resolution multiplied by F (1)"),
         num("--msaa", &Options::msaa, "samples per pixel (4; 1 = no MSAA)"),
-        custom("--aa", "msaa|dlaa|none", "antialiasing: msaa (default), dlaa (NVIDIA) or none", false,
+        custom("--aa", "msaa|dlaa|dlss|dlss_balanced|dlss_performance|dlss_ultra|none",
+               "antialiasing: msaa (default), dlaa, dlss (quality upscaling), dlss_balanced, dlss_performance, dlss_ultra "
+               "(all NVIDIA) or none", false,
                [](Options& o, const char* v) {
-                   o.dlaa = strcmp(v, "dlaa") == 0;
+                   static const char* const DLSS[5] = {"", "dlss", "dlss_balanced", "dlss_performance", "dlss_ultra"};
+                   o.dlss = 0;
+                   for (int m = 1; m < 5; m++)
+                       if (strcmp(v, DLSS[m]) == 0) o.dlss = m;
+                   if (strcmp(v, "dlss_quality") == 0) o.dlss = 1;
+                   o.dlaa = o.dlss || strcmp(v, "dlaa") == 0;
                    if (strcmp(v, "none") == 0 || strcmp(v, "off") == 0) o.msaa = 1;
+               }),
+        custom("--dlss-model", "auto|k|m|l", "DLSS's model (preset): auto (K, M for dlss_performance, L for dlss_ultra; "
+               "K without FP8, RTX 20/30), k, m or l", false,
+               [](Options& o, const char* v) {
+                   o.dlss_model = (v[0] == 'k' || v[0] == 'K') ? 1 : (v[0] == 'm' || v[0] == 'M') ? 2
+                                  : (v[0] == 'l' || v[0] == 'L') ? 3 : 0;
                }),
         num("--aniso", &Options::aniso, "anisotropic filtering (8; 0 = no mipmaps, original look)"),
         custom("--aspect", "A:B", "wider 3D view: 16:9 (default), 21:9, 4:3 or a number", false,
