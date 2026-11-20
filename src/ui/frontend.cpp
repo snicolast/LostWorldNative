@@ -240,8 +240,9 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
          .words = {"4:3", "16:9", "21:9"}, .other = 1, .kind = CHOICE, .shown = {L"4:3 (ORIGINAL)", L"16:9", L"21:9"},
          .hint = L"Widest 3D view: 21:9 fills ultrawide monitors (2560x1080, 3440x1440); 4:3 is the arcade's own"},
         {.id = OPT_SCALE, .tab = DISPLAY_TAB, .label = L"RENDER SCALE", .key = "resolution_3d", .number = &FS::scale,
-         .lo = FS::SCALES[0], .hi = 100, .kind = SLIDER, .steps = {std::begin(FS::SCALES), std::end(FS::SCALES)},
-         .text = percent, .hint = L"Resolution of the 3D picture: lower is faster.  The HUD and the text stay sharp"},
+         .lo = FS::SCALES[0], .hi = 200, .kind = SLIDER, .steps = {std::begin(FS::SCALES), std::end(FS::SCALES)},
+         .text = percent, .hint = L"Resolution of the 3D picture: lower is faster; above 100% it is drawn bigger and scaled down, "
+                                  L"sharper and much slower.  The HUD and the text stay sharp"},
         {.id = OPT_VSYNC, .tab = DISPLAY_TAB, .label = L"VSYNC", .key = "vsync", .number = &FS::vsync,
          .words = {"off", "on", "adaptive"}, .other = 1, .also = {{"0", 0}, {"1", 1}, {"false", 0}, {"true", 1}},
          .kind = CHOICE, .shown = {L"OFF", L"ON", L"ADAPTIVE"},

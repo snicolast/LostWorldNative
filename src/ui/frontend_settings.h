@@ -74,5 +74,5 @@ struct FrontendSettings {
     void load(const char* path);
     void save(const char* path) const;
 
-    static constexpr int SCALES[5] = {50, 67, 75, 85, 100};   // RENDER SCALE's steps
+    static constexpr int SCALES[9] = {50, 67, 75, 85, 100, 125, 150, 175, 200};   // RENDER SCALE's steps (above 100: supersampling)
 };
