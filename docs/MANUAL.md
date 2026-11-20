@@ -89,7 +89,12 @@ when the gamepad is held still for a moment. It rumbles when firing and when tak
 hit. Menus are driven with the D-pad or the left stick, A / B (as
 printed on a Nintendo gamepad) and L1 / R1 for tabs. Settings >
 CONTROLS has the stick speed, the gyroscope and its speed, and the
-rumble strength. The first gamepad, even one plugged in mid-game, shares
+rumble strength. On Xbox One / Series pads the motors in the triggers kick too
+(the fire trigger on a shot, the reload one on a reload, both on a hit):
+TRIGGER RUMBLE sets them as a share of VIBRATION (OFF to 100%). For that SDL
+reads Xbox pads through raw input and Windows.Gaming.Input instead of XInput,
+which cannot reach those motors; --no-trigger-rumble goes back to XInput. The
+console says `(trigger rumble)` next to a pad that has them. The first gamepad, even one plugged in mid-game, shares
 player 1 with the mouse (whichever moved last aims; START also hands it the
 sight); a second gamepad is player 2. SDL3 is downloaded automatically
 the first time you build.

@@ -346,6 +346,7 @@ static bool poll_gamepads(HWND hwnd) {
             g_pads.rumble_triggers(i, 0.0f, 0.6f, 60);
         } else if (reload && !reload_was[i]) {
             g_pads.rumble(i, 0.35f, 0.0f, 50);
+            g_pads.rumble_triggers(i, 0.45f, 0.0f, 50);
         }
         fire_was[i] = fire, reload_was[i] = reload;
         if (pad.back) pause = true;
@@ -364,8 +365,10 @@ static bool poll_gamepads(HWND hwnd) {
         uint32_t lives = rd32(p ? 0x1A377C : 0x1A3720);
         if (g_inputs.p[p].playing && lives < lives_was[p])
             for (int i = 0; i < Gamepads::MAX; i++)
-                if (g_pads.pad(i).connected && pad_player(i, connected) == p && g_pads.now() - g_pads.pad(i).last_used < 60)
+                if (g_pads.pad(i).connected && pad_player(i, connected) == p && g_pads.now() - g_pads.pad(i).last_used < 60) {
                     g_pads.rumble(i, 0.9f, 0.7f, 320);
+                    g_pads.rumble_triggers(i, 0.7f, 0.7f, 250);
+                }
         lives_was[p] = lives;
     }
     return pause;
@@ -1236,6 +1239,7 @@ bool App::init(bool aa_auto) {
     }
     printf("GPU: %s\n", presenter.device_name().c_str());
     if (aa_auto) g_opt.dlss = screen_height(presenter.hwnd()) > 1440 ? 1 : 0;   // DLSS QUALITY above 1440p
+    g_pads.trigger_rumble = g_opt.trigger_rumble;
     g_pads.init();
     timeBeginPeriod(1);
     QueryPerformanceFrequency(&g_qpf);
@@ -1750,7 +1754,7 @@ void App::handle_menu_actions() {
             else raw_mice::set_saved(s.gun_p1, s.gun_p2);
             g_subtitles = g_opt.subtitles;
             g_free_play = g_opt.free_play;
-            g_pad_settings = {s.pad_speed, s.gyro, s.gyro_speed, s.vibration, s.aim_assist};
+            g_pad_settings = {s.pad_speed, s.gyro, s.gyro_speed, s.vibration, s.trigger_rumble, s.aim_assist};
             s.save("save/settings.ini");
             break;
         }
@@ -2567,7 +2571,7 @@ int main(int argc, char** argv) {
             if (strcmp(argv[i], "--aa") == 0 || strcmp(argv[i], "--msaa") == 0) aa_auto = false;
         if (aa_auto) ini.aa = 1;   // DLAA; DLSS QUALITY once the screen is known (App::init)
         options_from_settings(ini, g_opt);
-        g_pad_settings = {ini.pad_speed, ini.gyro, ini.gyro_speed, ini.vibration, ini.aim_assist};
+        g_pad_settings = {ini.pad_speed, ini.gyro, ini.gyro_speed, ini.vibration, ini.trigger_rumble, ini.aim_assist};
     }
     // The survival mode's options live in survival.cpp: the table hands them over
     auto extra = [](Options&, const std::string& a, const char* next) -> int {

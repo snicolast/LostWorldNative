@@ -194,6 +194,7 @@ struct Frontend::Setting {
 
 namespace {
 std::wstring percent(int v) { return std::to_wstring(v) + L"%"; }
+std::wstring percent_or_off(int v) { return v ? percent(v) : std::wstring(L"OFF"); }
 std::wstring decimal(int v) {   // GAMMA
     wchar_t text[16];
     swprintf(text, 16, L"%.2f", v / 100.0);
@@ -356,6 +357,9 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         {.id = OPT_VIBRATION, .tab = CONTROLS_TAB, .label = L"VIBRATION", .key = "vibration", .number = &FS::vibration,
          .words = LEVEL_WORDS, .kind = CHOICE, .shown = LEVELS, .levels = true,
          .hint = L"The gamepad rumbles when you shoot and when you are hit"},
+        {.id = OPT_TRIGGERS, .tab = CONTROLS_TAB, .label = L"TRIGGER RUMBLE", .key = "trigger_rumble", .number = &FS::trigger_rumble,
+         .lo = 0, .hi = 100, .grain = 10, .kind = SLIDER, .step = 10, .text = percent_or_off,
+         .hint = L"Xbox One / Series pads: the trigger kicks when you fire, the other when you reload, both when you are hit (a share of VIBRATION)"},
         {.id = OPT_ASSIST, .tab = CONTROLS_TAB, .label = L"AIM ASSIST", .key = "aim_assist", .number = &FS::aim_assist,
          .words = LEVEL_WORDS, .kind = CHOICE, .shown = LEVELS, .levels = true,
          .hint = L"With a gamepad the sight slows down over the dinosaurs and follows them a little"},
