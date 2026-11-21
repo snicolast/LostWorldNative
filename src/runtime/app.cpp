@@ -899,6 +899,7 @@ struct App {
     int queue_extra = 0;
     double went_out = 0, last_miss = -100;
     bool repeat_image = false;   // MAX FPS below the refresh rate (vsync): this refresh shows the last image again
+    bool in_background = false;  // BACKGROUND FPS: another window has the focus (wait_for_refresh)
     int repeat_count = 0;        // refreshes since the last image drawn
     // VSYNC: OFF still draws no more images than the monitor's refreshes:
     // without a limit the GPU draws thousands a second for nothing and the
@@ -1504,7 +1505,15 @@ void App::wait_for_refresh() {
     double period = !g_opt.interp || g_opt.max_fps == 0 ? display_clock.period
                     : g_opt.max_fps > 0                 ? std::max(1.0 / g_opt.max_fps, 1.0 / 1000)
                                                         : 0;
-    if (!g_opt.vsync && period > 0) {   // the next image an interval after the last (from now after a slow one)
+    // BACKGROUND FPS: 30 a second at most while another window has the focus,
+    // with vsync too (each image then waits for its refresh as well)
+    bool background = g_opt.menu && frontend.settings.background_fps && GetForegroundWindow() != presenter.hwnd();
+    if (background != in_background) {
+        in_background = background;
+        printf(background ? "[video] in the background: 30 images a second at most\n" : "[video] in front again\n");
+    }
+    if (background) period = std::max(period, 1.0 / 30);
+    if ((!g_opt.vsync || background) && period > 0) {   // the next image an interval after the last (from now after a slow one)
         double now = now_seconds();
         if (now - next_image > period) next_image = now;
         if (image_timer && next_image - now > 0.001) {   // to ~0.5 ms before, then a spin
@@ -2124,7 +2133,8 @@ bool App::present_frame(double loop_from) {
     // work for the GPU (60 at 120 Hz: every other refresh; without vsync the
     // images are not tied to refreshes, wait_for_refresh spaces them)
     int refreshes = 1;   // per image drawn
-    if (g_opt.vsync && g_opt.interp && g_opt.max_fps > 0 && g_opt.replay.empty() && !g_opt.shot_frame && film.empty())
+    if (g_opt.vsync && g_opt.interp && g_opt.max_fps > 0 && g_opt.replay.empty() && !g_opt.shot_frame && film.empty() &&
+        !in_background)   // (BACKGROUND FPS paces the images itself)
         refreshes = std::max(1, int(std::lround(1.0 / (g_opt.max_fps * display_clock.period))));
     repeat_count = refreshes > 1 ? (repeat_count + 1) % refreshes : 0;
     repeat_image = repeat_count != 0;

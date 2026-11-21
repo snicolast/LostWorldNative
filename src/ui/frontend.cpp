@@ -256,6 +256,8 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
                    L"In step with the refreshes while the game keeps up; a late image goes out at once (less stutter, it may tear then)"}},
         // (settings.ini: "max_fps = monitor / unlimited / N", read and written apart, below; the row: option_items)
         {.id = OPT_MAX_FPS, .tab = DISPLAY_TAB, .label = L"MAX FPS"},
+        {.id = OPT_BGFPS, .tab = DISPLAY_TAB, .label = L"BACKGROUND FPS", .key = "background_fps", .flag = &FS::background_fps,
+         .kind = TOGGLE, .hint = L"On: 30 images a second at most while another window has the focus (less work for the GPU)"},
         {.id = OPT_MOTION, .tab = DISPLAY_TAB, .label = L"MOTION", .key = "motion", .flag = &FS::smooth,
          .words = {"original", "smooth"}, .other = 1, .kind = CHOICE, .shown = {L"ORIGINAL", L"SMOOTH"},
          .hint = L"Smooth: the 3D is also drawn between the game's 57.5 frames, at your monitor's refresh rate"},
