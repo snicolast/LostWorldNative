@@ -13,6 +13,20 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[22] 2026-11-21
+- EXPERIENCE: ARCADE ORIGINAL, the cabinet as it was (attract, START, 4:3)
+- Display: window, borderless or exclusive fullscreen, and a RESOLUTION list
+- RENDER RESOLUTION is now RENDER SCALE, up to 200% for finer edges
+- MAX FPS: MONITOR, 30 to 240 or UNLIMITED. VSYNC has a new ADAPTIVE mode
+- BACKGROUND FPS: 30 images a second while the game is not in front
+- WIDESCREEN: new 32:9 and AUTO
+- RTX: DLSS QUALITY, BALANCED, PERFORMANCE or ULTRA PERFORMANCE
+- New FXAA anti-aliasing, used on cards without DLSS
+- QUALITY presets removed. Some changes now ask to RESTART NOW or LATER
+- Xbox pads: TRIGGER RUMBLE on shots, reloads and hits. Stronger rumble
+- SURFACE DETAIL removed: the texture relief did not suit the game
+- Fire and light halos: no more grain or noisy edge with the effects on
+
 [21] 2026-11-20
 - NVIDIA RTX: DLAA now works in installs made with NicoLauncher, which until now quietly used MSAA instead. Press Update in the launcher to get it (it downloads about 60 MB from NVIDIA)
 

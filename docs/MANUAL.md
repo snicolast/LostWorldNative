@@ -266,7 +266,7 @@ saved games and are not versioned.
   the driver lacks it. The console prints `[video] vsync on/adaptive/off` when
   it changes.
 - What costs the most: measured on an RTX 5070 Ti at 1440p, the ambient
-  occlusion, the render resolution, the procedural sky and the sun shadows; on
+  occlusion, the render scale, the procedural sky and the sun shadows; on
   integrated graphics, limited by memory bandwidth, also the MSAA samples, the
   anisotropic taps and the xBR of the 2D layers. Each one is its own option
   in the settings.
