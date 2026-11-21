@@ -22,7 +22,7 @@
 
 ## What you get
 
-- **True widescreen** (16:9 or 21:9, in Options > Display > Widescreen), not stretched. Any resolution.
+- **True widescreen** (16:9, 21:9, 32:9 or AUTO, in Options > Display > Widescreen), not stretched. Any resolution.
 - **Ray-traced sun shadows**, ambient occlusion, distance haze, bloom.
 - **New weather**: dense rain, wet ground, lightning in the T-Rex storm.
 - **Modern flashlight** in the night stages.

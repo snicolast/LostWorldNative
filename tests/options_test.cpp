@@ -81,6 +81,9 @@ int main() {
         CHECK(parse(d, {"--aa", "dlss_performance", "--dlss-model", "l"}) && d.dlss == 3 && d.dlss_model == 3);
         CHECK(parse(d, {"--aa", "dlss_ultra", "--dlss-model", "auto"}) && d.dlss == 4 && d.dlss_model == 0);
         CHECK(parse(d, {"--aa", "dlaa", "--dlss-model", "k"}) && d.dlaa && d.dlss == 0 && d.dlss_model == 1);
+        Options wide;
+        CHECK(parse(wide, {"--aspect", "auto"}) && near(wide.max_aspect, 32.0f / 9.0f));
+        CHECK(parse(wide, {"--aspect", "32:9"}) && near(wide.max_aspect, 32.0f / 9.0f));
         Options fx;
         CHECK(parse(fx, {"--aa", "fxaa"}) && fx.fxaa && !fx.dlaa && fx.msaa == 1);
         CHECK(parse(fx, {"--aa", "msaa"}) && !fx.fxaa && !fx.dlaa);

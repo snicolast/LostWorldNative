@@ -19,6 +19,9 @@
 
 namespace {
 
+constexpr int REFERENCE_MARGIN = 200;   // BACK_MARGIN when tilegen_expected.txt was made
+static_assert(BACK_MARGIN >= REFERENCE_MARGIN);
+
 struct Trial {
     uint32_t format;
     bool raws;
@@ -55,8 +58,13 @@ std::vector<Trial> run() {
                                        .back_raw = raws ? back_raw.data() : nullptr,
                                        .back_raw_top = raws ? back_top.data() : nullptr,
                                        .back_under = raws ? back_under.data() : nullptr});
+        // The back image over the 200 columns beyond each side it had when the
+        // reference was made (BACK_MARGIN grew to 440 for 32:9: the columns
+        // added further out come from the same loop)
         uint64_t h = FNV1A_BASIS;
-        for (auto* v : {&back, &front, &front_raw, &front_top, &back_raw, &back_top, &back_under})
+        for (int y = 0; y < SCREEN_H; y++)
+            h = fnv1a_words(&back[y * BACK_W + BACK_MARGIN - REFERENCE_MARGIN], SCREEN_W + 2 * REFERENCE_MARGIN, h);
+        for (auto* v : {&front, &front_raw, &front_top, &back_raw, &back_top, &back_under})
             h = fnv1a_words(v->data(), v->size(), h);
         out.push_back({format, raws, h});
     }

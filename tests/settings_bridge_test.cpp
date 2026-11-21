@@ -63,7 +63,7 @@ static void test_round_trip() {
         {"scale", &FrontendSettings::scale, {50, 67, 75, 85, 100, 125, 150, 175, 200}},
         {"max_fps", &FrontendSettings::max_fps, {-1, 0, 30, 60, 117, 144, 240}},
         {"vsync", &FrontendSettings::vsync, {0, 1, 2}},
-        {"aspect", &FrontendSettings::aspect, {0, 1, 2}},
+        {"aspect", &FrontendSettings::aspect, {0, 1, 2, 3, 4}},
         {"bloom", &FrontendSettings::bloom, {0, 1, 2, 3}},
         {"ray_tracing", &FrontendSettings::ray_tracing, {0, 1, 2}},
         {"rain", &FrontendSettings::rain, {0, 1, 2}},
@@ -121,6 +121,14 @@ static void test_aspect_kept() {
     s.aspect = 1;
     options_from_settings(s, o);
     CHECK(std::fabs(o.max_aspect - 16.0f / 9.0f) < 1e-6f);
+    // AUTO and 32:9 allow the same width; each stays as it was chosen
+    for (int a : {3, 4}) {
+        s.aspect = a;
+        options_from_settings(s, o);
+        CHECK(std::fabs(o.max_aspect - 32.0f / 9.0f) < 1e-6f);
+        settings_from_options(o, s);
+        CHECK(s.aspect == a);
+    }
 }
 
 int main() {

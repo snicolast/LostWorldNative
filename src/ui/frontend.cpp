@@ -237,8 +237,13 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         // (settings.ini: "resolution = 1920x1080", read and written apart, below; the row's value: option_items)
         {.id = OPT_RESOLUTION, .tab = DISPLAY_TAB, .label = L"RESOLUTION"},
         {.id = OPT_ASPECT, .tab = DISPLAY_TAB, .label = L"WIDESCREEN", .key = "aspect", .number = &FS::aspect,
-         .words = {"4:3", "16:9", "21:9"}, .other = 1, .kind = CHOICE, .shown = {L"4:3 (ORIGINAL)", L"16:9", L"21:9"},
-         .hint = L"Widest 3D view: 21:9 fills ultrawide monitors (2560x1080, 3440x1440); 4:3 is the arcade's own"},
+         .words = {"4:3", "16:9", "21:9", "32:9", "auto"}, .other = 1, .kind = CHOICE,
+         .shown = {L"4:3 (ORIGINAL)", L"16:9", L"21:9", L"32:9", L"AUTO"},
+         .hints = {L"The arcade's own 4:3 picture: black bars at the sides of a wider window",
+                   L"The 3D view at most 16:9 wide: black bars at the sides of a wider window",
+                   L"The 3D view at most 21:9 wide: fills ultrawide monitors (2560x1080, 3440x1440)",
+                   L"The 3D view at most 32:9 wide: fills super ultrawide monitors (5120x1440, 3840x1080)",
+                   L"Fills the window, whatever its shape (up to 32:9)"}},
         {.id = OPT_SCALE, .tab = DISPLAY_TAB, .label = L"RENDER SCALE", .key = "resolution_3d", .number = &FS::scale,
          .lo = FS::SCALES[0], .hi = 200, .kind = SLIDER, .steps = {std::begin(FS::SCALES), std::end(FS::SCALES)},
          .text = percent, .hint = L"Resolution of the 3D picture: lower is faster; above 100% it is drawn bigger and scaled down, "

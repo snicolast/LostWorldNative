@@ -1230,7 +1230,8 @@ void App::stop_threads() {
 
 bool App::init(bool aa_auto) {
     presenter.set_vsync(g_opt.vsync);
-    if (!presenter.init("Lost World Native by snicolast", int(SCREEN_H * 2 * std::max(g_opt.max_aspect, 4.0f / 3.0f)), SCREEN_H * 2,
+    // (the window no wider than 21:9 at first, whatever WIDESCREEN allows: a 32:9 one would not fit most desktops)
+    if (!presenter.init("Lost World Native by snicolast", int(SCREEN_H * 2 * std::clamp(g_opt.max_aspect, 4.0f / 3.0f, 2.4f)), SCREEN_H * 2,
                         g_opt.dlaa)) {
         fprintf(stderr, "Could not start Vulkan; try --headless\n");
         MessageBoxA(nullptr, "Could not start Vulkan. Update the graphics driver: the game needs Vulkan 1.3.",

@@ -9,7 +9,7 @@
 struct FrontendSettings;
 
 // Menu levels as option values
-extern const float MAX_ASPECT[3];       // WIDESCREEN 4:3, 16:9, 21:9 (up to 2.4)
+extern const float MAX_ASPECT[5];       // WIDESCREEN 4:3, 16:9, 21:9 (up to 2.4), 32:9, AUTO (up to 32:9)
 extern const float BLOOM_STRENGTH[4];   // BLOOM OFF, LOW, MEDIUM, HIGH
 int aspect_level(float max_aspect);
 

@@ -186,8 +186,8 @@ vec3 distance_haze(vec3 c, vec3 view_point, float appear, float game_fog) {
         vec2 p = gl_FragCoord.xy * atm.backdrop.xy;
         float x = (p.x - atm.backdrop.z) / atm.backdrop.w;
         bool inside = atm.range.w > 0.5 || (x >= 0.0 && x <= 1.0);
-        // The back layer is drawn 200 pixels wider on each side (tilegen.h)
-        vec2 q = vec2((x * 496.0 + 200.0) / 896.0, p.y);
+        // The back layer is drawn 440 pixels wider on each side (tilegen.h BACK_MARGIN)
+        vec2 q = vec2((x * 496.0 + 440.0) / 1376.0, p.y);
         vec4 b = inside && q.x > 0.0 && q.x < 1.0 ? texture(layer2d_back, q) : vec4(0.0);
         vec3 behind = b.a > 0.5 ? scroll_fog(b.rgb / b.a, p, mist_light(view_point) + lightning_glow(view_point)) : atm.haze.rgb;
         c = mix(c, behind, fade);

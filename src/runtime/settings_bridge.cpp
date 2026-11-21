@@ -6,10 +6,15 @@
 
 // Ultrawide monitors are 2.37 (2560x1080) to 2.39 (3440x1440), wider than
 // 21/9 = 2.33, so 21:9 allows up to 2.4
-const float MAX_ASPECT[3] = {4.0f / 3.0f, 16.0f / 9.0f, 2.4f};
+const float MAX_ASPECT[5] = {4.0f / 3.0f, 16.0f / 9.0f, 2.4f, 32.0f / 9.0f, 32.0f / 9.0f};
 const float BLOOM_STRENGTH[4] = {0.0f, 0.6f, 1.0f, 1.6f};
 
-int aspect_level(float max_aspect) { return max_aspect < 1.5f ? 0 : max_aspect < 2.0f ? 1 : 2; }
+int aspect_level(float max_aspect) { return max_aspect < 1.5f ? 0 : max_aspect < 2.0f ? 1 : max_aspect < 3.0f ? 2 : 3; }
+
+namespace {
+// The level a WIDESCREEN value allows: AUTO fills the window up to 32:9, as 32:9 does
+int level_of(int aspect) { return aspect == 4 ? 3 : aspect; }
+}  // namespace
 
 void options_from_settings(const FrontendSettings& s, Options& o) {
     o.supersample = s.scale / 100.0f;
@@ -35,8 +40,8 @@ void options_from_settings(const FrontendSettings& s, Options& o) {
     o.dlss = s.aa >= 3 && s.aa <= 6 ? s.aa - 2 : 0;   // 3 QUALITY .. 6 ULTRA PERFORMANCE
     o.dlss_model = s.dlss_model;
     o.vsync = std::clamp(s.vsync, 0, 2);
-    int aspect = std::clamp(s.aspect, 0, 2);
-    if (aspect != aspect_level(o.max_aspect)) o.max_aspect = MAX_ASPECT[aspect];   // --aspect 2.6 stays as 21:9
+    int aspect = std::clamp(s.aspect, 0, 4);
+    if (level_of(aspect) != aspect_level(o.max_aspect)) o.max_aspect = MAX_ASPECT[aspect];   // --aspect 2.6 stays as 21:9
     o.haze = s.haze ? 1.0f : 0.0f;
     o.sun = s.sun;
     o.lightning = s.lightning;
@@ -73,7 +78,8 @@ void settings_from_options(const Options& o, FrontendSettings& s) {
         if (sc <= int(o.supersample * 100 + 0.5f)) s.scale = sc;
     s.max_fps = std::max(o.max_fps, -1);
     s.vsync = std::clamp(o.vsync, 0, 2);
-    s.aspect = aspect_level(o.max_aspect);   // --aspect 2.6 shows as 21:9 and is kept until changed
+    if (level_of(s.aspect) != aspect_level(o.max_aspect))   // (AUTO stays AUTO)
+        s.aspect = aspect_level(o.max_aspect);   // --aspect 2.6 shows as 21:9 and is kept until changed
     s.haze = o.haze > 0;
     s.bloom = o.bloom <= 0 ? 0 : o.bloom < 0.8f ? 1 : o.bloom < 1.3f ? 2 : 3;
     s.ao = o.ao > 0;
