@@ -32,7 +32,7 @@
 - **Mouse, gamepad (gyro too) or two mice** for 2 players.
 - **New modes**: Random Spawns (the arcade game shuffled), Boss Fight, Survival, achievements and stats.
   The achievements are also written to `achievements/achievements.csv` for [PlayniteAchievements](https://github.com/justin-delano/PlayniteAchievements) (Editor, Spreadsheet Import).
-- **ARCADE ORIGINAL** (GAME > EXPERIENCE): the cabinet as it was, attract mode, START and 4:3, with its own settings.
+- **ARCADE ORIGINAL** (Options > Game > Experience): the cabinet as it was, attract mode, START and 4:3, with its own settings.
 - **NEW:** Ultra-widescreen support.
 
 <p align="center">
