@@ -49,7 +49,6 @@ struct Options {
     bool sky_procedural = true;      // --sky original|procedural: drawn sky instead of the original picture
     bool hdr = true;                 // --no-hdr: the original's clipped lighting
     bool rim = true;                 // --no-rim: no rim light on dinosaurs and people
-    bool relief = true;              // --no-relief: flat textures, as in the original
     bool sharpen = true;             // --no-sharpen: no sharpening of the 3D image
     bool modern_torch = true;        // --torch original: the spotlight exactly as the Real3D draws it
     bool shafts = true;              // --no-shafts: no light shafts from the sun

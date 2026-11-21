@@ -131,7 +131,6 @@ const std::vector<Entry>& table() {
                false, [](Options& o, const char* v) { o.weather = weather_from_name(v); }),
         off("--no-hdr", &Options::hdr, "clipped lighting like the original"),
         off("--no-rim", &Options::rim, "no rim light on dinosaurs and characters"),
-        off("--no-relief", &Options::relief, "flat textures, no relief"),
         off("--no-sharpen", &Options::sharpen, "no adaptive sharpening of the 3D image"),
         custom("--torch", "modern|original", "torch in the night stages: modern (default) or original", false,
                [](Options& o, const char* v) { o.modern_torch = strcmp(v, "original") != 0; }),

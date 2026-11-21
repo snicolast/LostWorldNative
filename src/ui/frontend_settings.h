@@ -43,7 +43,6 @@ struct FrontendSettings {
     bool soft = true;      // soft particles
     bool hdr = true;       // HDR lighting
     bool rim = true;       // rim light on dinosaurs and people
-    bool relief = true;    // surface detail from the textures
     bool sharpen = true;   // contrast adaptive sharpening
     bool torch = true;     // modern flashlight at night (false: the original spotlight)
     bool lightning = true; // lightning in dark grey fog
@@ -115,7 +114,7 @@ struct FrontendSettings {
         aniso = 0;                  // no mipmaps: the original texture look
         smooth_2d = false;          // square pixels in the HUD and the 2D
         aspect = 0;                 // the cabinet's 4:3 screen
-        haze = ao = sky = sun = shadows = shafts = soft = hdr = rim = relief = sharpen = false;
+        haze = ao = sky = sun = shadows = shafts = soft = hdr = rim = sharpen = false;
         torch = lightning = false;  // the original spotlight, no lightning of ours
         bloom = 0, ray_tracing = 0, rain = 0;
         hd_text = false;            // the ROM's own letters

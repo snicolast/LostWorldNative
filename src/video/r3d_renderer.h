@@ -153,8 +153,6 @@ public:
     void set_sun(bool on) { sun_ = on; }
     // Rim light on the world's dinosaurs, people and vehicles (not in the original)
     void set_rim_light(bool on) { rim_ = on; }
-    // Surface detail: the textures' light and dark read as relief by the lighting (not in the original)
-    void set_relief(bool on) { relief_ = on; }
     // Contrast adaptive sharpening of the 3D image: 0 = off, 1 = strongest
     void set_sharpen(float amount) { sharpen_ = amount; }
     // FXAA over the finished 3D image (compose.frag): cheap edge smoothing for
@@ -339,7 +337,6 @@ private:
     float ao_strength_ = 0;
     bool sun_ = false;
     bool rim_ = false;
-    bool relief_ = false;
     float sharpen_ = 0;
     bool fxaa_ = false;
     bool night_sky_ = false;

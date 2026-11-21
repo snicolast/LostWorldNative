@@ -25,7 +25,6 @@ void options_from_settings(const FrontendSettings& s, Options& o) {
     o.shafts = s.shafts;
     o.soft = s.soft;
     o.sky_procedural = s.sky;
-    o.relief = s.relief;
     o.bloom = BLOOM_STRENGTH[std::clamp(s.bloom, 0, 3)];
     o.msaa = s.aa == 2 || s.aa == 7 ? 1 : s.msaa;   // (none or FXAA: no MSAA)
     o.fxaa = s.aa == 7;
@@ -93,7 +92,6 @@ void settings_from_options(const Options& o, FrontendSettings& s) {
     s.rain = o.rain;
     s.hdr = o.hdr;
     s.rim = o.rim;
-    s.relief = o.relief;
     s.sharpen = o.sharpen;
     s.torch = o.modern_torch;
     s.hd_text = !o.classic_text;
