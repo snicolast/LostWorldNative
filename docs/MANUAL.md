@@ -268,8 +268,8 @@ saved games and are not versioned.
 - What costs the most: measured on an RTX 5070 Ti at 1440p, the ambient
   occlusion, the render resolution, the procedural sky and the sun shadows; on
   integrated graphics, limited by memory bandwidth, also the MSAA samples, the
-  anisotropic taps, the surface detail and the xBR of the 2D layers. Each one
-  is its own option in the settings.
+  anisotropic taps and the xBR of the 2D layers. Each one is its own option
+  in the settings.
 - --letterbox: keeps the black bars in scenes (removed by default).
 - --boot: shows the boot screens (WARNING notice and copyright). By
   default they run at full speed with a black screen (about 2 s instead of

@@ -37,7 +37,6 @@ layout(set = 0, binding = ATMOSPHERE_BINDING) uniform Atmosphere {
                      // (radians), w segments of the main channel (the rest are branches)
     vec4 bolt_light; // xyz: direction the lightning lights the world from (view space; 0 = none)
     vec4 bolt_seg[24];   // segments: azimuth (from bolt.z) and elevation of both ends, radians
-    vec4 relief;     // surface detail: x strength (0 = off), y distance where it has faded out (view units)
     vec4 sky_sun;    // the sun drawn in the sky and its light shafts: direction in view space (R3DRenderer::step_sky_sun)
     vec4 rt;         // ray traced sun shadows: x 1 = on (2: left half only), y size of the sun (tangent of its radius),
                      // z rays per point, w noise seed (changes every image with DLAA)

@@ -199,46 +199,6 @@ vec4 sample_texture(vec2 duv_dx, vec2 duv_dy) {
     return sum;
 }
 
-// Surface detail (not in the original): the texture's own light and dark
-// read as height, so the light, the shadows and the rim pick out the grain of
-// stone, bark, sheet metal and skin. Brightness at an offset (uv units).
-float relief_height(vec2 offset, vec2 duv_dx, vec2 duv_dy, int level) {
-    vec4 s;
-    if (replace != 0u) {
-        s = textureGrad(replacements[nonuniformEXT(replace)], uv + offset, duv_dx, duv_dy);
-    } else {
-        ivec2 base = ivec2(int(tex & 2047u), int((tex >> 11) & 2047u));
-        ivec2 size = ivec2(32 << int((tex >> 22) & 7u), 32 << int((tex >> 25) & 7u));
-        s = bilinear(base, size, (uv + offset) * vec2(size), level, (tex >> 28) & 15u);
-        s.rgb = s.a > 0.0 ? s.rgb / s.a : vec3(0.0);
-    }
-    return dot(s.rgb, vec3(0.2126, 0.7152, 0.0722));
-}
-
-// The normal tilted by the texture's height slopes, in the surface's own
-// frame worked out from the screen derivatives (no tangents in the data)
-vec3 relief_normal(vec3 n, float h0, vec3 dpx, vec3 dpy, vec2 duv_dx, vec2 duv_dy) {
-    float strength = atm.relief.x * clamp(1.0 - (-view_pos.z) / atm.relief.y, 0.0, 1.0);
-    float nl = length(n);
-    if (strength <= 0.0 || nl <= 0.0) return n;
-    vec3 N = n / nl;
-    vec2 size = replace != 0u ? vec2(textureSize(replacements[nonuniformEXT(replace)], 0))
-                              : vec2(32 << int((tex >> 22) & 7u), 32 << int((tex >> 25) & 7u));
-    // One step = the pixel's footprint (at least a texel), at the matching mip level
-    vec2 footprint = max(abs(duv_dx), abs(duv_dy)) * size;
-    float texels = max(max(footprint.x, footprint.y), 1.0);
-    int max_level = max(findMSB(int(min(size.x, size.y))) - 1, 0);
-    int level = replace != 0u ? 0 : clamp(int(floor(log2(texels))), 0, max_level);
-    float hu = relief_height(vec2(texels / size.x, 0.0), duv_dx, duv_dy, level);
-    float hv = relief_height(vec2(0.0, texels / size.y), duv_dx, duv_dy, level);
-    vec3 dp2perp = cross(dpy, N), dp1perp = cross(N, dpx);
-    vec3 T = dp2perp * duv_dx.x + dp1perp * duv_dy.x;
-    vec3 B = dp2perp * duv_dx.y + dp1perp * duv_dy.y;
-    float inv = inversesqrt(max(max(dot(T, T), dot(B, B)), 1e-30));
-    vec3 tilted = normalize(N - strength * ((hu - h0) * T * inv + (hv - h0) * B * inv));
-    return tilted * nl;
-}
-
 // Where lightning lights the world from (view space): above the strike, or
 // straight overhead
 vec3 lightning_dir() {
@@ -317,7 +277,6 @@ void main() {
     // picture it makes: the textures are filtered for the latter)
     float lod_scale = atm.night.z > 0.0 ? atm.night.z : 1.0;
     vec2 duv_dx = dFdx(uv) * lod_scale, duv_dy = dFdy(uv) * lod_scale;
-    vec3 dpx = dFdx(view_pos), dpy = dFdy(view_pos);   // the surface's frame, for the surface detail
     // World position (rain on the world), and its size of a pixel
     vec3 world_pos = atm.camera.xyz + vec3(dot(atm.axes[0].xyz, view_pos), dot(atm.axes[1].xyz, view_pos),
                                           dot(atm.axes[2].xyz, view_pos));
@@ -377,8 +336,6 @@ void main() {
     }
     if ((flags & (LUMINOUS | RAIN)) == 0u) {
         vec3 n = normal;
-        if (atm.relief.x > 0.0 && (flags & (WORLD | TEXTURED)) == (WORLD | TEXTURED) && (flags & FIXED_SHADE) == 0u)
-            n = relief_normal(n, dot(t.rgb, vec3(0.2126, 0.7152, 0.0722)), dpx, dpy, duv_dx, duv_dy);
         float s = (flags & FIXED_SHADE) != 0u ? fixed_shade : dot(vp.sun.xyz, n);
         s = clamp(s, -1.0, 1.0);
         s = max(s, 0.0);

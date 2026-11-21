@@ -20,7 +20,7 @@ static int g_failed = 0;
 #define BRIDGED(X)                                                                                            \
     X(volume) X(speakers) X(rear_boost) X(weather_sound) X(cubic_samples) X(aa) X(dlss_model) X(msaa) X(aniso) X(smooth_2d)  \
     X(scale) X(max_fps) X(vsync) X(aspect) X(haze) X(bloom) X(ao) X(sky) X(sun) X(shadows) X(ray_tracing)  \
-    X(shafts) X(soft) X(hdr) X(rim) X(relief) X(sharpen) X(torch) X(lightning) X(rain) X(hd_text)           \
+    X(shafts) X(soft) X(hdr) X(rim) X(sharpen) X(torch) X(lightning) X(rain) X(hd_text)           \
     X(crosshair) X(crosshair_style) X(crosshair_hide) X(free_play) X(smooth) X(second_mouse) X(subtitles)    \
     X(saturation) X(gamma)
 
@@ -92,7 +92,7 @@ static void test_round_trip() {
         {"sky", &FrontendSettings::sky},                     {"sun", &FrontendSettings::sun},
         {"shadows", &FrontendSettings::shadows},             {"shafts", &FrontendSettings::shafts},
         {"soft", &FrontendSettings::soft},                   {"hdr", &FrontendSettings::hdr},
-        {"rim", &FrontendSettings::rim},                     {"relief", &FrontendSettings::relief},
+        {"rim", &FrontendSettings::rim},
         {"sharpen", &FrontendSettings::sharpen},             {"torch", &FrontendSettings::torch},
         {"lightning", &FrontendSettings::lightning},         {"hd_text", &FrontendSettings::hd_text},
         {"crosshair", &FrontendSettings::crosshair},         {"free_play", &FrontendSettings::free_play},
@@ -149,7 +149,7 @@ static void test_arcade_base() {
     // the arcade's own: no anti-aliasing or effects, 4:3, the ROM's letters, free play
     CHECK(a.aa == 2 && a.aa_saved && a.aniso == 0 && !a.smooth_2d && a.aspect == 0);
     CHECK(!a.haze && !a.ao && !a.sky && !a.sun && !a.shadows && !a.shafts && !a.soft && !a.hdr && !a.rim);
-    CHECK(!a.relief && !a.sharpen && !a.torch && !a.lightning && a.bloom == 0 && a.ray_tracing == 0 && a.rain == 0);
+    CHECK(!a.sharpen && !a.torch && !a.lightning && a.bloom == 0 && a.ray_tracing == 0 && a.rain == 0);
     CHECK(!a.hd_text && a.smooth && a.subtitles == 0 && a.saturation == 100 && a.gamma == 100);
     CHECK(a.volume == FrontendSettings{}.volume && a.weather_sound == 0 && !a.cubic_samples && a.free_play);
     CHECK(same(a, round_trip(a), "arcade"));

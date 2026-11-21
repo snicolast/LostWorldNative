@@ -318,8 +318,6 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
          .hint = L"Soft glow around fire, lights, the sky and sunlit surfaces"},
         {.id = OPT_RIM, .tab = LIGHTING_TAB, .label = L"RIM LIGHT", .key = "rim_light", .flag = &FS::rim, .kind = TOGGLE,
          .hint = L"A soft edge of light around dinosaurs and people, lifting them off the background"},
-        {.id = OPT_RELIEF, .tab = LIGHTING_TAB, .label = L"SURFACE DETAIL", .key = "surface_detail", .flag = &FS::relief,
-         .kind = TOGGLE, .hint = L"Light and shadow bring out the grain of stone, bark, metal and skin"},
         {.id = OPT_TORCH, .tab = LIGHTING_TAB, .label = L"FLASHLIGHT", .key = "flashlight", .flag = &FS::torch,
          .words = {"original", "modern"}, .other = 1, .kind = CHOICE, .shown = {L"ORIGINAL", L"MODERN"},
          .hint = L"At night: a soft beam with real shading and a glow in the air, or the original spot"},
@@ -587,7 +585,7 @@ const Frontend::Picture& Frontend::preview(Id id) {
         {OPT_MOTION, L"motion"}, {OPT_AA, L"anti_aliasing"}, {OPT_HAZE, L"haze"}, {OPT_BLOOM, L"bloom"},
         {OPT_AO, L"ambient_occlusion"}, {OPT_SKY, L"sky"}, {OPT_SUN, L"sun"}, {OPT_SHADOWS, L"sun_shadows"},
         {OPT_RT, L"ray_tracing"}, {OPT_SHAFTS, L"light_shafts"}, {OPT_SOFT, L"soft_particles"}, {OPT_HDR, L"hdr"},
-        {OPT_RIM, L"rim_light"}, {OPT_RELIEF, L"surface_detail"}, {OPT_TORCH, L"flashlight"},
+        {OPT_RIM, L"rim_light"}, {OPT_TORCH, L"flashlight"},
         {OPT_LIGHTNING, L"lightning"}, {OPT_RAIN, L"rain"}, {OPT_SAT, L"saturation"}, {OPT_SHARPEN, L"sharpen"},
         {OPT_TEXT, L"hd_text"}, {OPT_CROSS, L"crosshair_backdrop"}, {OPT_SUBS, L"subtitles"}};
     Picture& p = previews_[int(id)];

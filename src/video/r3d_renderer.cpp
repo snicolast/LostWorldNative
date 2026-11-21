@@ -60,7 +60,6 @@ struct AtmosphereUniform {
     float bolt[4];
     float bolt_light[4];
     float bolt_seg[R3DRenderer::BOLT_SEGMENTS * 4];
-    float relief[4];
     float sky_sun[4];
     float rt[4];
     float weather[4];
@@ -1663,10 +1662,6 @@ void R3DRenderer::update_atmosphere(const ScreenLayout& lay, uint32_t target_w, 
         u.sunlight[2] = k;
     }
     if (w && rim_) u.sunlight[3] = 0.6f;
-    if (relief_) {
-        u.relief[0] = 2.5f;
-        u.relief[1] = 120.0f;   // detail only where it can be seen (it costs two more texture reads)
-    }
     // The world viewport's spotlight (spec 7.1), applied to the game world
     if (w && w->spot_radius[0] > 0 && w->spot_radius[1] > 0) {
         u.spot[0] = w->spot_center[0];

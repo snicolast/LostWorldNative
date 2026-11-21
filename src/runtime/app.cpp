@@ -1653,7 +1653,6 @@ void App::apply_video_options(const Options* was) {
     renderer.set_rain(o.rain);
     renderer.set_hdr(o.hdr);
     renderer.set_rim_light(o.rim);
-    renderer.set_relief(o.relief);
     renderer.set_sharpen(o.sharpen ? 0.5f : 0.0f);
     renderer.set_modern_torch(o.modern_torch);
     if (!was || o.sky_procedural != was->sky_procedural) {
