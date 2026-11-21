@@ -1,0 +1,123 @@
+name: Close issues with no reply
+
+# When the maintainer comments on an open issue, the issue gets the
+# "waiting for reply" label. Any reply from someone else removes it.
+# Once a day, open issues that still have the label and whose last comment
+# is the maintainer's, 5 days old or more, are closed with a message.
+# Only issues: pull requests and discussions are left alone.
+
+on:
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "0 21 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+env:
+  MAINTAINER: snicolast
+  LABEL: waiting for reply
+  DAYS: "5"
+
+jobs:
+  label:
+    if: github.event_name == 'issue_comment' && !github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { MAINTAINER, LABEL } = process.env;
+            const issue = context.payload.issue;
+            const comment = context.payload.comment;
+            const ref = { ...context.repo, issue_number: issue.number };
+            const login = comment.user.login.toLowerCase();
+            const hasLabel = issue.labels.some(l => l.name === LABEL);
+
+            // Bots (including this workflow's own message) never count as a reply
+            if (comment.user.type === 'Bot' || login.endsWith('[bot]')) return;
+
+            if (login === MAINTAINER.toLowerCase()) {
+              // Only open issues opened by someone else wait for a reply
+              if (issue.state !== 'open') return;
+              if (issue.user.login.toLowerCase() === MAINTAINER.toLowerCase()) return;
+              if (hasLabel) return;
+              try {
+                await github.rest.issues.createLabel({
+                  ...context.repo, name: LABEL, color: 'd4c5f9',
+                  description: `Closes automatically after ${process.env.DAYS} days with no reply`,
+                });
+              } catch (e) {
+                if (e.status !== 422) throw e; // 422 = it already exists
+              }
+              await github.rest.issues.addLabels({ ...ref, labels: [LABEL] });
+              core.info(`#${issue.number}: waiting for reply`);
+            } else if (hasLabel) {
+              try {
+                await github.rest.issues.removeLabel({ ...ref, name: LABEL });
+              } catch (e) {
+                if (e.status !== 404) throw e;
+              }
+              core.info(`#${issue.number}: ${comment.user.login} replied`);
+            }
+
+  close:
+    if: github.event_name != 'issue_comment'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { MAINTAINER, LABEL } = process.env;
+            const days = Number(process.env.DAYS);
+            const limit = Date.now() - days * 24 * 60 * 60 * 1000;
+            const message = [
+              `This issue has been closed automatically because there has been no reply for ${days} days since my last message.`,
+              '',
+              `If it's still happening or you have more information, just mention me (@${MAINTAINER}) in a comment and I'll take another look and reopen it if needed.`,
+              '',
+              'Thanks!',
+            ].join('\n');
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo, state: 'open', labels: LABEL, per_page: 100,
+            });
+            for (const issue of issues) {
+              if (issue.pull_request) continue;
+              const ref = { ...context.repo, issue_number: issue.number };
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                ...ref, per_page: 100,
+              });
+              const last = comments
+                .filter(c => c.user.type !== 'Bot' && !c.user.login.endsWith('[bot]'))
+                .pop();
+
+              if (!last || last.user.login.toLowerCase() !== MAINTAINER.toLowerCase()) {
+                // Someone replied after all: the label is stale
+                try {
+                  await github.rest.issues.removeLabel({ ...ref, name: LABEL });
+                } catch (e) {
+                  if (e.status !== 404) throw e;
+                }
+                core.info(`#${issue.number}: has a reply, label removed`);
+                continue;
+              }
+              if (new Date(last.created_at).getTime() > limit) {
+                core.info(`#${issue.number}: still waiting (last message ${last.created_at})`);
+                continue;
+              }
+
+              await github.rest.issues.createComment({ ...ref, body: message });
+              await github.rest.issues.update({ ...ref, state: 'closed', state_reason: 'not_planned' });
+              // Without the label, reopening the issue later starts from zero
+              try {
+                await github.rest.issues.removeLabel({ ...ref, name: LABEL });
+              } catch (e) {
+                if (e.status !== 404) throw e;
+              }
+              core.info(`#${issue.number}: closed, no reply since ${last.created_at}`);
+            }
