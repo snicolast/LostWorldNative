@@ -2624,6 +2624,8 @@ int main(int argc, char** argv) {
         aa_auto = !ini.aa_saved && !aa_given && nvidia_card();
         if (aa_auto) ini.aa = 1;   // DLAA; DLSS QUALITY once the screen is known (App::init)
         else if (!ini.aa_saved && !aa_given) ini.aa = 7;   // no DLSS on other cards: FXAA, cheap (MSAA costs old cards a lot)
+        if (g_arcade && !other_ini.aa_saved)   // PC EDITION's first start comes in ARCADE ORIGINAL: its pick all the same
+            other_ini.aa = nvidia_card() ? 1 : 7;
         options_from_settings(ini, g_opt);
         g_pad_settings = {ini.pad_speed, ini.gyro, ini.gyro_speed, ini.vibration, ini.trigger_rumble, ini.aim_assist};
     }
