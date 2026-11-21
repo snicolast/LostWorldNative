@@ -54,7 +54,7 @@ layout(push_constant) uniform Compose {
 const float HUD_TOP_ROWS = 32.0;
 
 const ivec2 SIZE_2D = ivec2(496, 384);
-const int BACK_MARGIN = 200;   // tilegen.h: the back layers extend beyond both sides
+const int BACK_MARGIN = 440;   // tilegen.h: the back layers extend beyond both sides
 const ivec2 SIZE_BACK = ivec2(496 + 2 * BACK_MARGIN, 384);
 
 // Crosshair: ring and cross with a dark outline so it reads on any background;

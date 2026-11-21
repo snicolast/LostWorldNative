@@ -2170,7 +2170,10 @@ R3DRenderer::ComposePush R3DRenderer::compose_push(const Frame& f) const {
                    .window = {W, H},
                    .layer2d = {lay.game_x0 / lay.view_w, SCREEN_W / lay.view_w},
                    .filter2d = {smooth_2d_ ? 1.0f : 0.0f, lay.scale},
-                   .hud = {hud_edges_ && hud_band_ ? lay.game_x0 : 0.0f, hdr_ ? 1.0f : 0.0f, overlay_brightness_,
+                   // (the score's halves out to the sides of the view, no further than a 21:9 one's:
+                   // on a 32:9 screen they would end up out of sight)
+                   .hud = {hud_edges_ && hud_band_ ? std::min(lay.game_x0, (SCREEN_H * 2.4f - SCREEN_W) / 2) : 0.0f,
+                           hdr_ ? 1.0f : 0.0f, overlay_brightness_,
                            extend_back ? 1.0f : 0.0f},
                    .sky = {seconds, 0, sun_ && weather_.overcast * outdoor_ < 0.5f ? 1.0f : 0.0f, 0},
                    .effects = {bloom_strength_, saturation_, gamma_, 0},

@@ -96,10 +96,13 @@ const std::vector<Entry>& table() {
                                   : (v[0] == 'l' || v[0] == 'L') ? 3 : 0;
                }),
         num("--aniso", &Options::aniso, "anisotropic filtering (8; 0 = no mipmaps, original look)"),
-        custom("--aspect", "A:B", "wider 3D view: 16:9 (default), 21:9, 4:3 or a number", false,
+        custom("--aspect", "A:B", "wider 3D view: 16:9 (default), 21:9, 32:9, 4:3, auto (the window's shape, up to 32:9) "
+               "or a number", false,
                [](Options& o, const char* v) {
                    const char* colon = strchr(v, ':');
-                   o.max_aspect = colon ? float(atof(v) / atof(colon + 1)) : float(atof(v));
+                   o.max_aspect = strcmp(v, "auto") == 0 ? 32.0f / 9.0f
+                                  : colon            ? float(atof(v) / atof(colon + 1))
+                                                     : float(atof(v));
                }),
         real("--light-gain", &Options::light_gain, "multiply the sunlight and the ambient light (1)"),
         strength("--bloom", &Options::bloom, "glow around bright things, strength F (1)"),

@@ -16,8 +16,9 @@ class TextHD;
 constexpr int SCREEN_W = 496, SCREEN_H = 384;
 // The layers below the 3D image (the sky) are also drawn beyond both sides of
 // the screen for widescreen: the tilemaps wrap every 512 pixels, so the extra
-// columns continue the background as the game scrolls it.
-constexpr int BACK_MARGIN = 200, BACK_W = SCREEN_W + 2 * BACK_MARGIN;
+// columns continue the background as the game scrolls it. 440 on each side
+// covers a 32:9 view (384 * 32 / 9 = 1365 pixels wide).
+constexpr int BACK_MARGIN = 440, BACK_W = SCREEN_W + 2 * BACK_MARGIN;
 constexpr uint32_t TILEGEN_BASE = 0xF1000000, TILEGEN_SIZE = 0x190000;
 constexpr uint32_t TILEGEN_PAGES = TILEGEN_SIZE >> 16;   // in 64 KB pages
 static_assert(TILEGEN_SIZE % 0x10000 == 0);

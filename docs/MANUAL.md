@@ -53,7 +53,7 @@ sees as a mouse), one click with it while player 1 is playing makes it
 player 2's gun and joins the game (if player 2 joined with start first, their
 first shot does it, unless a gamepad is player 2's); from then on each mouse moves its own
 crosshair and the pointer stays inside the window. The guns (mouse, light gun or gamepad) aim
-over the whole 3D view, also the side bands of a 16:9 or 21:9 picture, and the enemies drawn
+over the whole 3D view, also the side bands of a 16:9, 21:9 or 32:9 picture, and the enemies drawn
 there can be shot (except on the stage select screen, which stays 4:3). A shot outside the 3D
 view (the black bars of a window wider than it) or on its very edge (where a light gun parks an
 off-screen shot) reloads, as on the cabinet. Disable it in Settings > Controls >
@@ -176,10 +176,14 @@ saved games and are not versioned.
 
 ## Video and sound options
 
-- --aspect 16:9 (default), 21:9 or 4:3 (or WIDESCREEN in the settings,
+- --aspect 16:9 (default), 21:9, 32:9, auto or 4:3 (or WIDESCREEN in the settings,
   DISPLAY tab, applied at once): maximum width of the 3D view. WIDESCREEN
   21:9 allows up to 2.4:1, so 2560x1080 and 3440x1440 monitors are filled
-  edge to edge. The sky (background 2D layers) is also drawn at the sides; the HUD stays in
+  edge to edge; 32:9 does the same for 5120x1440 and 3840x1080, and AUTO fills
+  the window whatever its shape, up to 32:9. The window starts no wider than 21:9.
+  The sky (background 2D layers) is also drawn at the sides (440 pixels beyond
+  each side of the 2D screen, tilegen.h BACK_MARGIN); the score's halves go out
+  to the sides of the view, no further than a 21:9 one's; the HUD stays in
   the central 4:3 with --hud-centre. The guns aim over the whole 3D view:
   the game's ADC values only reach a little beyond the 4:3 screen, so in a
   wider view the runtime gives the game the aim itself (rt_gun_aimed, in

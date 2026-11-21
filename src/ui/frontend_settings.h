@@ -30,7 +30,7 @@ struct FrontendSettings {
     bool max_fps_saved = false;   // load() found it (else an older file's half_rate = 1: 60)
     bool half_rate = false;       // older versions' key (above 100 Hz every other refresh), read only
     int vsync = 1;            // 0 off (images go out without waiting for the refresh), 1 on, 2 adaptive (on unless late)
-    int aspect = 1;    // widest 3D view: 0 4:3 (original), 1 16:9, 2 21:9 (ultrawide, up to 2.4:1)
+    int aspect = 1;    // widest 3D view: 0 4:3 (original), 1 16:9, 2 21:9 (ultrawide, up to 2.4:1), 3 32:9, 4 AUTO (up to 32:9)
     bool haze = true;  // distance haze
     int bloom = 2;     // glow around bright things: 0 off, 1 low, 2 medium, 3 high
     bool ao = true;    // ambient occlusion
