@@ -14,7 +14,7 @@
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
 [22] 2026-11-21
-- EXPERIENCE: ARCADE ORIGINAL, the cabinet as it was (attract, START, 4:3)
+- GAME > EXPERIENCE: ARCADE ORIGINAL, the cabinet as it was (attract, START, 4:3)
 - Display: window, borderless or exclusive fullscreen, and a RESOLUTION list
 - RENDER RESOLUTION is now RENDER SCALE, up to 200% for finer edges
 - MAX FPS: MONITOR, 30 to 240 or UNLIMITED. VSYNC has a new ADAPTIVE mode
