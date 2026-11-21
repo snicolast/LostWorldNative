@@ -1613,6 +1613,8 @@ void App::apply_video_options(const Options* was) {
         presenter.set_vsync(o.vsync);
     }
     renderer.set_fxaa(o.fxaa);   // at once, like MSAA (not while DLAA runs: R3DRenderer::fxaa)
+    if (was && o.fxaa != was->fxaa && o.msaa == was->msaa && !renderer.dlaa_active())   // (with MSAA: apply_pending)
+        printf("[video] antialiasing %s\n", o.fxaa ? "FXAA" : "off");
     renderer.set_smooth_2d(!o.pixel_2d);
     if (!was || o.max_aspect != was->max_aspect) renderer.set_max_aspect(o.max_aspect);
     renderer.set_distance_haze(o.haze > 0 ? haze_strength : 0);   // at the strength of the start (--haze)

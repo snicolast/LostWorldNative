@@ -723,7 +723,10 @@ void R3DRenderer::apply_pending() {
                 glow ? "on" : "off");
     destroy_image(color_);   // ensure_targets makes every target again
     can_repeat_ = false;
-    if (msaa_changed) printf("[video] antialiasing MSAA %dx\n", int(samples_));
+    if (msaa_changed) {
+        if (samples_ == VK_SAMPLE_COUNT_1_BIT && fxaa()) printf("[video] antialiasing FXAA\n");
+        else printf("[video] antialiasing MSAA %dx\n", int(samples_));
+    }
 }
 
 // w, h: the 3D image as drawn; up_w, up_h: as DLSS hands it on (the same but with DLSS upscaling)
