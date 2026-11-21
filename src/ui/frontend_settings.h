@@ -28,6 +28,7 @@ struct FrontendSettings {
     // second at most (with vsync in whole refreshes). settings.ini: max_fps = monitor / unlimited / N
     int max_fps = 0;
     bool max_fps_saved = false;   // load() found it (else an older file's half_rate = 1: 60)
+    bool background_fps = true;   // BACKGROUND FPS: 30 images a second at most while another window has the focus
     bool half_rate = false;       // older versions' key (above 100 Hz every other refresh), read only
     int vsync = 1;            // 0 off (images go out without waiting for the refresh), 1 on, 2 adaptive (on unless late)
     int aspect = 1;    // widest 3D view: 0 4:3 (original), 1 16:9, 2 21:9 (ultrawide, up to 2.4:1), 3 32:9, 4 AUTO (up to 32:9)

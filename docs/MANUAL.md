@@ -234,6 +234,12 @@ saved games and are not versioned.
   can. Any number can go in settings.ini (`max_fps = 117` for G-Sync below a
   144 Hz monitor's rate). --half-rate (and an older settings.ini's
   `half_rate = 1`) is `--max-fps 60`.
+- BACKGROUND FPS (settings, DISPLAY tab; `background_fps = 1` in settings.ini,
+  on by default): while another window has the focus, 30 images a second at
+  most, with or without vsync, so the game left running in a corner costs the
+  GPU little. The game itself goes on at its speed; the console prints
+  `[video] in the background` and `[video] in front again`. Only with the menu
+  (not with --no-menu).
 - --vsync on|off|adaptive (--no-vsync is off; VSYNC in the settings, DISPLAY
   tab). OFF: each image goes out as soon as it is drawn instead of at the
   monitor's next refresh (Vulkan immediate mode, or mailbox if the driver has
@@ -575,7 +581,7 @@ normal behaviour when unset):
 | LW_FRAMELOG=path | Writes a line per present (timings, frames shown) and per game frame, and when each image reached the screen (VK_KHR_present_wait); `python tools/frame_log.py path` reports missed refreshes, uneven motion and latency |
 | LW_SKYLOG=path | Writes the back layers' scroll of each 2D frame, the world camera of each 3D frame and, per present, the pairing and the sub-pixel position drawn; `python tools/sky_log.py path` compares how the sky scrolls with how the camera turns (pixels per radian, how many frames apart) and how smoothly the sky is drawn between frames |
 | LW_QUEUE=N | At most N images waiting for the screen (2 by default; 0 = the whole swapchain) |
-| LW_BACKGROUND=1 | The window opens behind all the others and never takes the keyboard (test runs while the computer is in use) |
+| LW_BACKGROUND=1 | The window opens behind all the others and never takes the keyboard (test runs while the computer is in use; with the menu, BACKGROUND FPS then holds it at 30 images a second unless `background_fps = 0`) |
 | LW_WINDOW_POS=x,y | Puts the window there (-30000,0: out of sight) |
 | LW_MENU_KEYS=40,13,27 | Presses those keys in the menu (one every 10 presents; `cX/Y` clicks pixel X,Y), saves out/menu.bmp and exits |
 | LW_MENU_SHOT=path.bmp | Saves the menu image each time it is redrawn |
