@@ -81,6 +81,9 @@ int main() {
         CHECK(parse(d, {"--aa", "dlss_performance", "--dlss-model", "l"}) && d.dlss == 3 && d.dlss_model == 3);
         CHECK(parse(d, {"--aa", "dlss_ultra", "--dlss-model", "auto"}) && d.dlss == 4 && d.dlss_model == 0);
         CHECK(parse(d, {"--aa", "dlaa", "--dlss-model", "k"}) && d.dlaa && d.dlss == 0 && d.dlss_model == 1);
+        Options fx;
+        CHECK(parse(fx, {"--aa", "fxaa"}) && fx.fxaa && !fx.dlaa && fx.msaa == 1);
+        CHECK(parse(fx, {"--aa", "msaa"}) && !fx.fxaa && !fx.dlaa);
         Options f;   // MAX FPS and VSYNC
         CHECK(f.max_fps == 0 && f.vsync == 1);
         CHECK(parse(f, {"--max-fps", "117", "--vsync", "adaptive"}) && f.max_fps == 117 && f.vsync == 2);

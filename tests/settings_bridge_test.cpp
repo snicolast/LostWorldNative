@@ -56,7 +56,7 @@ static void test_round_trip() {
         {"speakers", &FrontendSettings::speakers, {0, 1, 2}},
         {"rear_boost", &FrontendSettings::rear_boost, {-6, -3, 0, 3, 6, 9, 12}},
         {"weather_sound", &FrontendSettings::weather_sound, {0, 1, 2, 3}},
-        {"aa", &FrontendSettings::aa, {0, 1, 2, 3, 4, 5, 6}},
+        {"aa", &FrontendSettings::aa, {0, 1, 2, 3, 4, 5, 6, 7}},
         {"dlss_model", &FrontendSettings::dlss_model, {0, 1, 2, 3}},
         {"msaa", &FrontendSettings::msaa, {2, 4, 8}},
         {"aniso", &FrontendSettings::aniso, {0, 2, 4, 8, 16}},

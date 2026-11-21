@@ -185,20 +185,25 @@ saved games and are not versioned.
   wider view the runtime gives the game the aim itself (rt_gun_aimed, in
   fn_0000CBF0), where its X is drawn and its shots land.
 - --msaa N (default 4; 1 = off): edge antialiasing, including the
-  cut-out edges of plants. In the settings: ANTI-ALIASING (OFF, MSAA, DLAA,
+  cut-out edges of plants. In the settings: ANTI-ALIASING (OFF, FXAA, MSAA, DLAA,
   DLSS QUALITY, BALANCED, PERFORMANCE, ULTRA PERFORMANCE) and MSAA SAMPLES (2X,
-  4X, 8X), DISPLAY tab. MSAA and OFF apply at once (the pipelines and the
+  4X, 8X), DISPLAY tab. OFF, FXAA and MSAA apply at once (the pipelines and the
   render targets are made again); DLAA and DLSS need a restart, which the game
   offers when you leave the settings (RESTART NOW, or LATER). On integrated
-  graphics the samples are the single biggest cost: 2X or OFF there.
+  graphics the samples are the single biggest cost: FXAA, 2X or OFF there.
+- --aa fxaa: FXAA (after Timothy Lottes' FXAA 3.11) over the finished 3D image
+  instead of MSAA: the edges are found by their brightness and sampled across
+  in the composition pass (compose.frag), so it costs almost nothing, at the
+  price of slightly softer textures. SHARPEN leaves the pixels it smoothed alone.
+  Never together with DLAA or DLSS.
 - --aa dlaa: NVIDIA DLAA (DLSS at native resolution) instead of MSAA. The 3D is
   drawn without MSAA with a different subpixel jitter each frame, together
   with its depth and a per-pixel motion vector, and DLSS turns it into
   a clean image of the same size. Needs an RTX GPU and nvngx_dlss.dll
   next to LostWorld.exe (build.bat downloads the official NVIDIA DLSS SDK with
-  tools/get_dlss.bat the first time and copies the DLL); if anything is missing, MSAA is used. --aa none disables
+  tools/get_dlss.bat the first time and copies the DLL); if anything is missing, FXAA is used. --aa none disables
   antialiasing. On the first start (no aa in save/settings.ini) an NVIDIA card
-  gets DLAA, or DLSS QUALITY on a screen above 1440p; other cards MSAA.
+  gets DLAA, or DLSS QUALITY on a screen above 1440p; other cards FXAA.
 - --aa dlss (or dlss_quality), dlss_balanced, dlss_performance, dlss_ultra:
   NVIDIA DLSS. The 3D is drawn smaller (67%, 58%, 50% or 33% of the size each
   way, NVIDIA's ratios), with 8 jitter phases per output pixel (18, 24, 32, 72),

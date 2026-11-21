@@ -154,8 +154,9 @@ and `save/settings.ini`.
 one table for the parser and `--help`) and back; `app.cpp` hands the options to
 the renderer (`App::apply_video_options`, at the start and after each change in
 the menu) and to the sound (`apply_sound_options`). The first start (no `aa`
-in the file) picks the anti-aliasing on an NVIDIA card: DLAA, or DLSS QUALITY on a
-screen above 1440p (`nvidia_card`, `screen_height` in `app.cpp`). DLAA and DLSS start
+in the file) picks the anti-aliasing: on an NVIDIA card DLAA, or DLSS QUALITY on a
+screen above 1440p (`nvidia_card`, `screen_height` in `app.cpp`); on other cards, or
+when DLSS cannot start, FXAA (`compose.frag`). DLAA and DLSS start
 with the renderer: leaving the settings with them changed offers RESTART NOW, which
 saves, closes and starts the same exe again (`LW_RESTARTED`: no logo).
 
