@@ -70,10 +70,60 @@ struct FrontendSettings {
     std::string gun_p1, gun_p2; // the guns picked in GUN TEST: device paths ("" = the first and second to fire)
     bool check_updates = true;  // at launch, news.txt on GitHub: a window with what is new and UPDATE NOW
     int news_seen = 0;          // the newest news.txt entry the player closed with LATER
+    // EXPERIENCE (the file's first section only): 0 PC EDITION, 1 ARCADE ORIGINAL (no main
+    // menu: the attract, coins and START, the original look; Esc pauses). Each experience
+    // keeps its own settings: PC EDITION's at the top of the file, ARCADE ORIGINAL's in [arcade]
+    int experience = 0;
 
-    // save/settings.ini; missing keys keep their current value
-    void load(const char* path);
-    void save(const char* path) const;
+    // save/settings.ini; missing keys keep their current value. section: "" the file's
+    // first one (PC EDITION, and the keys of the whole game), "arcade" ARCADE ORIGINAL's.
+    // false: no such section (or no file)
+    bool load(const char* path, const char* section = "");
+    // what save writes: a "key = value" line per setting (section: without the keys of
+    // the whole game, which only the first section keeps)
+    std::string text(bool section = false) const;
+    void save(const char* path) const;   // this alone (no [arcade] section)
+    // PC EDITION's settings at the top (with the keys of the whole game as `whole` has
+    // them), ARCADE ORIGINAL's in [arcade] when `arcade` is given
+    static void save_both(const char* path, const FrontendSettings& pc, const FrontendSettings* arcade,
+                          const FrontendSettings& whole);
+    // The keys of the whole game (whatever the experience): EXPERIENCE, the update
+    // check, the guns picked in GUN TEST, the logos, the WEATHER last picked
+    void copy_whole_game(const FrontendSettings& from) {
+        experience = from.experience, check_updates = from.check_updates, news_seen = from.news_seen;
+        gun_p1 = from.gun_p1, gun_p2 = from.gun_p2, splash = from.splash, run_weather = from.run_weather;
+    }
+
+    // ARCADE ORIGINAL's settings before it has a section of its own: these (the
+    // screen, the sound's speakers, the controls and the crosshairs) with the arcade's
+    // own look
+    FrontendSettings arcade_defaults() const {
+        FrontendSettings a = *this;
+        a.arcade_base();
+        return a;
+    }
+    // Those base values (the [arcade] section's first time, and RESTORE ORIGINAL): the
+    // Model 3's picture and sound, nothing new on top. The screen (MODE, RESOLUTION,
+    // RENDER SCALE, VSYNC, MAX FPS...), the speakers, the controls and the crosshairs
+    // stay the player's
+    void arcade_base() {
+        const FrontendSettings d;
+        volume = d.volume;
+        weather_sound = 0;          // no rain or thunder of ours
+        cubic_samples = false;      // the sound chip's own interpolation
+        aa = 2, aa_saved = true;    // no anti-aliasing (the Model 3 had none; not the first start's pick, app.cpp)
+        aniso = 0;                  // no mipmaps: the original texture look
+        smooth_2d = false;          // square pixels in the HUD and the 2D
+        aspect = 0;                 // the cabinet's 4:3 screen
+        haze = ao = sky = sun = shadows = shafts = soft = hdr = rim = relief = sharpen = false;
+        torch = lightning = false;  // the original spotlight, no lightning of ours
+        bloom = 0, ray_tracing = 0, rain = 0;
+        hd_text = false;            // the ROM's own letters
+        smooth = true;              // MOTION SMOOTH (as PC EDITION)
+        subtitles = 0;
+        saturation = gamma = 100;
+        free_play = true;           // the pause's CREDIT (or GAME > FREE PLAY): a coin per game instead
+    }
 
     static constexpr int SCALES[9] = {50, 67, 75, 85, 100, 125, 150, 175, 200};   // RENDER SCALE's steps (above 100: supersampling)
 };

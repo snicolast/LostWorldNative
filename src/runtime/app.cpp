@@ -126,6 +126,9 @@ static void apply_sound_options(const Options& o) {
 //   6 / 2 = player 2's coin and start, F2 = test, F3 = service.
 // With FREE PLAY the game itself needs no credit (g_free_play)
 static bool g_menu_open = false;     // a menu has the controls
+// EXPERIENCE ARCADE ORIGINAL runs (save/settings.ini's experience = arcade): no main
+// menu, the attract plays, coins and START; Esc opens its own pause (frontend.cpp)
+static bool g_arcade = false;
 static bool g_block_buttons = false; // after a menu closes: buttons ignored until released
 static int g_p1_pad = -1;            // the gamepad aiming for player 1; -1: the mouse (whichever moved last)
 static bool g_p2_pad = false;        // a gamepad is player 2's (poll_gamepads)
@@ -764,7 +767,9 @@ struct NewPictures {
 // the latest image at the monitor's refresh rate (vsync). main() hands over
 // to App::init, App::run and App::shutdown; what was its state is here
 struct App {
-    FrontendSettings ini;   // save/settings.ini (main)
+    FrontendSettings ini;   // save/settings.ini (main): the experience running
+    FrontendSettings other_ini;   // the other experience's (Frontend::other)
+    bool arcade_section = false;  // the file has ARCADE ORIGINAL's [arcade] section (written again from then on)
     bool survival_cli = false;   // --survival STAGE:ZONE
     bool intro = false;          // --no-menu (not a test run): the splash, then the game
     int cli_stage = 0, cli_zone = 0;
@@ -930,6 +935,7 @@ struct App {
     void update_survival();
     void update_toast();
     void handle_menu_actions();
+    void save_settings();
     void start_arcade();
     void cancel_arcade_entry();
     void update_arcade_entry();
@@ -1278,7 +1284,7 @@ bool App::init(bool aa_auto) {
         g_audio.start();
         intro = intro && !survival_cli && g_opt.replay.empty() && !g_opt.shot_frame && ini.splash &&
                 !getenv("LW_MENU_KEYS") && !getenv("LW_MENU_SHOT") && !getenv("LW_MENU_FILM");
-        g_hold = (g_opt.menu || intro) && !survival_cli;   // the main menu (or the splash) comes first
+        g_hold = ((g_opt.menu && !g_arcade) || intro) && !survival_cli;   // the main menu (or the splash) comes first
         g_boot_skip = g_fast_idle = !g_opt.show_boot;
         g_sound.set_dsp_enabled(!g_boot_skip);
         g_sound.set_muted(g_boot_skip);
@@ -1362,6 +1368,8 @@ bool App::init(bool aa_auto) {
         FrontendSettings& s = frontend.settings;
         s = ini;   // the window, the menu music, the gamepad and the guns picked: as the file has them
         settings_from_options(g_opt, s);
+        frontend.other = other_ini;
+        frontend.arcade = g_arcade;
         frontend.aa_at_launch = s.aa;
         frontend.rt_available = renderer.ray_tracing_available();
         frontend.resolutions = presenter.display_modes();
@@ -1381,7 +1389,10 @@ bool App::init(bool aa_auto) {
             presenter.set_mode(s.display_mode, s.res_w, s.res_h);
             s.display_mode = presenter.mode();   // (a FULLSCREEN the monitor refused: BORDERLESS)
         }
-        if (!survival_cli) {   // survival mode goes straight into the game
+        if (g_arcade) {   // ARCADE ORIGINAL: the game at once, its attract (Esc: the pause)
+            frontend.open(Frontend::Screen::None);
+            printf("[experience] ARCADE ORIGINAL: no main menu, the attract plays (Esc pauses)\n");
+        } else if (!survival_cli) {   // survival mode goes straight into the game
             // the logos first (not when a debugging aid drives the menu)
             if (getenv("LW_MENU_KEYS") || getenv("LW_MENU_SHOT") || getenv("LW_MENU_FILM") || getenv("LW_RESTARTED"))
                 frontend.open(Frontend::Screen::Main);
@@ -1599,14 +1610,16 @@ void App::update_survival() {
 // Achievement notices
 void App::update_toast() {
     if (!toast_shown) return;
+    // (ARCADE ORIGINAL: counted, in RECORDS once back in PC EDITION, but nothing over the game)
     for (int i : stats_take_new_achievements())
-        toast.push(achievement_table()[size_t(i)].name, achievement_table()[size_t(i)].text);
+        if (!g_arcade) toast.push(achievement_table()[size_t(i)].name, achievement_table()[size_t(i)].text);
     for (int i : survival_take_unlocked())
-        toast.push_rising(L"ARENA UNLOCKED  \u00B7  SURVIVAL!", SURVIVAL_ZONES[i].name,
-                          L"Play it from PLAY > SURVIVAL");
+        if (!g_arcade)
+            toast.push_rising(L"ARENA UNLOCKED  \u00B7  SURVIVAL!", SURVIVAL_ZONES[i].name,
+                              L"Play it from PLAY > SURVIVAL");
     // The author's credit over the attract (seen with the menu off, --no-menu)
     toast.set_credit(L"PC port by snicolast", L"github.com/snicolast/LostWorldNative",
-                     g_in_attract && !g_menu_open && !g_boot_skip && !g_arcade_entry);
+                     g_in_attract && !g_menu_open && !g_boot_skip && !g_arcade_entry && !g_arcade);
     RECT rc;
     GetClientRect(presenter.hwnd(), &rc);
     if (toast.draw(rc.right, rc.bottom, now_seconds(), toast_pixels))
@@ -1670,7 +1683,8 @@ void App::cancel_arcade_entry() {
 
 void App::update_arcade_entry() {
     // Only the arcade game ends in the attract: the boss fights have their own end
-    g_skip_attract = g_auto.events.empty() && boss_fight < 0 && !boss_loading && boss_pending < 0;
+    // (ARCADE ORIGINAL: always the attract, as on the cabinet)
+    g_skip_attract = g_auto.events.empty() && boss_fight < 0 && !boss_loading && boss_pending < 0 && !g_arcade;
     // A game over: the main menu instead of the attract, the game back at its
     // home state behind it (attract_guard_frame)
     if (g_game_over_menu.exchange(false)) {
@@ -1682,6 +1696,15 @@ void App::update_arcade_entry() {
         play_waits = false;
         close_menu();
     }
+}
+
+// save/settings.ini: PC EDITION's settings at the top, ARCADE ORIGINAL's in its
+// [arcade] section (once it has one, or once it is chosen)
+void App::save_settings() {
+    const FrontendSettings& s = frontend.settings;
+    if (g_arcade) FrontendSettings::save_both("save/settings.ini", frontend.other, &s, s);
+    else
+        FrontendSettings::save_both("save/settings.ini", s, arcade_section || s.experience == 1 ? &frontend.other : nullptr, s);
 }
 
 void App::handle_menu_actions() {
@@ -1744,14 +1767,14 @@ void App::handle_menu_actions() {
             break;
         case Frontend::Action::Quit: presenter.close(); break;
         case Frontend::Action::Restart:   // RESTART NOW: saved, closed as on QUIT, started again (App::shutdown)
-            s.save("save/settings.ini");
+            save_settings();
             g_restart = true;
             presenter.close();
             break;
         case Frontend::Action::DisplayChanged:   // MODE, RESOLUTION: at once
             presenter.set_mode(s.display_mode, s.res_w, s.res_h);
             s.display_mode = presenter.mode();   // (a FULLSCREEN the monitor refused: BORDERLESS)
-            s.save("save/settings.ini");
+            save_settings();
             frontend.invalidate();
             break;
         case Frontend::Action::CrosshairChanged: load_crosshairs(renderer); break;
@@ -1773,7 +1796,7 @@ void App::handle_menu_actions() {
             g_subtitles = g_opt.subtitles;
             g_free_play = g_opt.free_play;
             g_pad_settings = {s.pad_speed, s.gyro, s.gyro_speed, s.vibration, s.trigger_rumble, s.aim_assist};
-            s.save("save/settings.ini");
+            save_settings();
             break;
         }
         default: break;
@@ -1891,7 +1914,7 @@ void App::update_boss_mode() {
 void App::update_menus() {
     if (frontend.settings.display_mode != presenter.mode()) {   // F11 / Alt+Enter
         frontend.settings.display_mode = presenter.mode();
-        frontend.settings.save("save/settings.ini");
+        save_settings();
         frontend.invalidate();
     }
     {   // the window's inside and the desktop, for RESOLUTION; the refresh rate, for MAX FPS
@@ -2579,18 +2602,30 @@ int main(int argc, char** argv) {
     // those always start from the same defaults
     g_opt.menu = !options_disable_menu(argc, argv);
     const bool menu_wanted = g_opt.menu;   // not a test run (--no-menu may still turn the menu off)
-    FrontendSettings ini;
+    FrontendSettings ini, other_ini;   // the experience to run, the other one (EXPERIENCE)
+    bool arcade_section = false;
     // The first start (no anti-aliasing saved yet) picks it for the graphics
     // card and the screen (nvidia_card), not over --aa or --msaa
     bool aa_auto = false;
     if (g_opt.menu) {   // save/settings.ini, written by the options menu; command-line options win
         ini.load("save/settings.ini");
+        // ARCADE ORIGINAL's own settings: its section, over the arcade's defaults
+        FrontendSettings arcade_ini = ini.arcade_defaults();
+        arcade_section = arcade_ini.load("save/settings.ini", "arcade");
+        if (ini.experience == 1) {
+            other_ini = ini;
+            ini = arcade_ini;
+            g_arcade = true;
+            printf("[experience] ARCADE ORIGINAL\n");
+        } else other_ini = arcade_ini;
         bool aa_given = false;
         for (int i = 1; i < argc; i++)
             if (strcmp(argv[i], "--aa") == 0 || strcmp(argv[i], "--msaa") == 0) aa_given = true;
         aa_auto = !ini.aa_saved && !aa_given && nvidia_card();
         if (aa_auto) ini.aa = 1;   // DLAA; DLSS QUALITY once the screen is known (App::init)
         else if (!ini.aa_saved && !aa_given) ini.aa = 7;   // no DLSS on other cards: FXAA, cheap (MSAA costs old cards a lot)
+        if (g_arcade && !other_ini.aa_saved)   // PC EDITION's first start comes in ARCADE ORIGINAL: its pick all the same
+            other_ini.aa = nvidia_card() ? 1 : 7;
         options_from_settings(ini, g_opt);
         g_pad_settings = {ini.pad_speed, ini.gyro, ini.gyro_speed, ini.vibration, ini.trigger_rumble, ini.aim_assist};
     }
@@ -2689,6 +2724,8 @@ int main(int argc, char** argv) {
     // Window (App): the game on its own thread, this one draws
     App app;
     app.ini = ini;
+    app.other_ini = other_ini;
+    app.arcade_section = arcade_section;
     app.survival_cli = survival_cli;
     app.intro = menu_wanted && !g_opt.menu;
     app.cli_stage = cli_stage, app.cli_zone = cli_zone;

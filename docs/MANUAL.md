@@ -46,6 +46,20 @@ it to the menu. A window wider or taller than the video is filled with its
 background colour around it.
 `splash_screens = 0` in save/settings.ini goes straight to the menu.
 
+Settings > Game > EXPERIENCE picks how the game starts, from the next launch (RESTART NOW is
+offered when you leave the settings): PC EDITION (the default) is all of the above; ARCADE
+ORIGINAL is the cabinet: no logo or main menu, the game boots into its own attract (title,
+rankings, demo) and comes back to it after each game, START (1 / 2, a gamepad's START, a light
+gun's start button) plays, with FREE PLAY on until it is turned off (then 5 / 6 insert coins), and
+it starts with the arcade's look: no anti-aliasing or mipmaps, no new effects, the original sky,
+letters and spotlight, square-pixel 2D, 4:3, the sound chip's own interpolation, no weather sound
+or subtitles. Achievements are still counted (no notices over the game). Esc pauses it with a
+pause of its own: RESUME, SETTINGS (all of them), QUIT GAME, CREDIT (FREE PLAY or COIN), RESTORE
+ORIGINAL (the arcade's look and sound again, after asking) and BACK TO PC EDITION (from the next
+start). Each experience keeps its own settings: PC EDITION's at the top of save/settings.ini,
+ARCADE ORIGINAL's in its `[arcade]` section (`experience = arcade` or `pc` stays at the top);
+the screen, the speakers, the controls and the crosshairs start as PC EDITION's.
+
 Two players can play, as in the arcade: player 2 joins at any
 time with 6 (coin) and 2 (start), and has their own crosshair (blue; player
 1's is yellow). With a second mouse (or a light gun that Windows

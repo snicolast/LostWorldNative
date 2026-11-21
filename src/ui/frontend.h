@@ -65,7 +65,11 @@ public:
     // Actions picked since the last call, oldest first
     std::vector<Action> take_actions();
 
-    FrontendSettings settings;
+    FrontendSettings settings;   // the experience running (EXPERIENCE: settings.experience, the one for the next start)
+    // The other experience's settings (PC EDITION's while ARCADE ORIGINAL runs, and the
+    // other way round): kept as they are, saved with these (app.cpp)
+    FrontendSettings other;
+    bool arcade = false;    // ARCADE ORIGINAL is running: no main menu, a pause of its own
     int aa_at_launch = 0;   // anti-aliasing the renderer was started with
     bool rt_available = false;   // the GPU can trace rays (RAY TRACING option)
     std::wstring gamepads;  // the pads connected, for the CONTROLS tab ("" = none)
@@ -137,7 +141,8 @@ private:
         OPT_SAT, OPT_GAMMA, OPT_MOTION, OPT_PAD_SPEED, OPT_GYRO, OPT_GYRO_SPEED, OPT_VIBRATION, OPT_ASSIST, OPT_TORCH, OPT_RT, OPT_CROSS_HIDE, OPT_FREE_PLAY,
         OPT_SCALE, OPT_MAX_FPS, OPT_BGFPS, OPT_VSYNC,
         OPT_CROSS_STYLE, OPT_CROSS_P1, OPT_CROSS_P2, OPT_MUSIC, OPT_ASPECT, OPT_GUN_TEST, OPT_WEATHER_SOUND,
-        OPT_MSAA, OPT_ANISO, OPT_FILTER_2D, OPT_UPDATES, OPT_RESOLUTION, OPT_TRIGGERS,
+        OPT_MSAA, OPT_ANISO, OPT_FILTER_2D, OPT_UPDATES, OPT_RESOLUTION, OPT_TRIGGERS, OPT_EXPERIENCE,
+        PAUSE_CREDIT, PAUSE_RESTORE, PC_EDITION,   // ARCADE ORIGINAL's pause
         NO_ROW,   // a setting only kept in the file
     };
     // How an option row shows its value: a switch, a choice with a dot per
@@ -176,6 +181,7 @@ private:
     const std::wstring& default_value(int id);   // what option_items shows for it with the defaults
     void activate(const Item& it, int dir);
     void reset_tab();   // the open settings tab back to its defaults
+    FrontendSettings base_defaults() const;   // those defaults: PC EDITION's, or ARCADE ORIGINAL's look
     void back();
     void push(Action a) { actions_.push_back(a); }
     void select(int index);
@@ -244,6 +250,13 @@ private:
     RECT restart_buttons_[2]{};
     bool aa_waits() const;               // ANTI-ALIASING changed, waiting for a restart
     std::wstring restart_list() const;   // what waits for a restart, "" nothing
+    // BACK TO PC EDITION (ARCADE ORIGINAL's pause): the same window, with this instead
+    // of the list; LATER goes back to the pause
+    std::wstring restart_note_;
+    // RESTORE ORIGINAL (ARCADE ORIGINAL's pause): the same window asks RESTORE / CANCEL
+    // first; RESTORE puts arcade_base() back, then RESTART NEEDED if something needs it
+    bool restore_ask_ = false;
+    bool restart_shown() const { return restart_open_ && (screen_ == Screen::Options || screen_ == Screen::Pause); }
     bool restart_key(int vk);
     void restart_choose(int button);
     void draw_restart();
