@@ -393,6 +393,13 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
          .hint = L"Every mouse and light gun Windows sees, what each one is doing and which player it is.  "
                  L"Fire each gun to make it player 1's or player 2's for good"},
         // GAME
+        // (settings.ini's first section only: the keys of the whole game, FrontendSettings::copy_whole_game)
+        {.id = OPT_EXPERIENCE, .tab = GAME_TAB, .label = L"EXPERIENCE", .key = "experience", .number = &FS::experience,
+         .words = {"pc", "arcade"}, .kind = CHOICE, .shown = {L"PC EDITION", L"ARCADE ORIGINAL"},
+         .hints = {L"The PC version: the main menu, every mode, the achievements on screen and the new graphics.  "
+                   L"Each experience keeps its own settings",
+                   L"The arcade game as it was: no menu, straight to the attract, START (1 or a gamepad) to play, the "
+                   L"original 4:3 look.  Esc pauses.  Each experience keeps its own settings"}},
         {.id = OPT_FREE_PLAY, .tab = GAME_TAB, .label = L"FREE PLAY", .key = "free_play", .flag = &FS::free_play,
          .kind = TOGGLE, .hint = L"The arcade's own free play: start and continue with 1 / 2 or a light gun's start button, no coins"},
         {.id = OPT_UPDATES, .tab = GAME_TAB, .label = L"CHECK FOR UPDATES", .key = "check_updates", .flag = &FS::check_updates,
@@ -425,13 +432,34 @@ const Frontend::Setting* Frontend::setting_of(Id id) {
 
 // ---- Settings file ----
 
-void FrontendSettings::load(const char* path) {
+namespace {
+// Only in the file's first section: they belong to the whole game, not to an experience
+bool whole_game_key(const char* key) {
+    static const char* const KEYS[] = {"experience", "check_updates", "news_seen", "gun_p1", "gun_p2", "splash_screens", "run_weather"};
+    for (const char* k : KEYS)
+        if (strcmp(k, key) == 0) return true;
+    return false;
+}
+}  // namespace
+
+bool FrontendSettings::load(const char* path, const char* section) {
     FILE* f = fopen(path, "r");
-    if (!f) return;
+    if (!f) return false;
+    const bool top = !section || !*section;
+    bool found = top;
+    std::string in_section;   // "" the first section, else the name of the last [name] line
     char line[512];
     while (fgets(line, sizeof(line), f)) {
+        char name[64];
+        if (sscanf(line, " [%63[^]]]", name) == 1) {
+            in_section = name;
+            found |= in_section == section;
+            continue;
+        }
+        if (top ? !in_section.empty() : in_section != section) continue;
         char key[64], value[400];   // device paths are long
         if (sscanf(line, " %63[^= ] = %399s", key, value) != 2) continue;
+        if (!top && whole_game_key(key)) continue;
         for (const Frontend::Setting& d : Frontend::setting_table())
             if (d.key && strcmp(d.key, key) == 0) d.read(*this, value);
         if (strcmp(key, "aa") == 0) aa_saved = true;   // (the first start chooses it, app.cpp)
@@ -447,19 +475,36 @@ void FrontendSettings::load(const char* path) {
     fclose(f);
     if (!display_mode_saved) display_mode = fullscreen ? 1 : 0;   // an older version's file: its full screen was borderless
     if (!max_fps_saved && half_rate) max_fps = 60;   // ...its FRAME RATE: HALF (every other refresh above 100 Hz)
+    return found;
+}
+
+std::string FrontendSettings::text(bool section) const {
+    FrontendSettings s = *this;
+    s.fullscreen = display_mode != 0;   // (for older versions)
+    std::string out;
+    for (const Frontend::Setting& d : Frontend::setting_table())
+        if (d.key && !(section && whole_game_key(d.key))) out += std::string(d.key) + " = " + d.write(s) + "\n";
+    out += "resolution = " + std::to_string(res_w) + "x" + std::to_string(res_h) + "\n";
+    out += "max_fps = " + (max_fps < 0 ? std::string("unlimited") : max_fps == 0 ? std::string("monitor") : std::to_string(max_fps)) + "\n";
+    return out;
 }
 
 void FrontendSettings::save(const char* path) const {
     FILE* f = fopen(path, "w");
     if (!f) return;
-    FrontendSettings s = *this;
-    s.fullscreen = display_mode != 0;   // (for older versions)
-    for (const Frontend::Setting& d : Frontend::setting_table())
-        if (d.key) fprintf(f, "%s = %s\n", d.key, d.write(s).c_str());
-    fprintf(f, "resolution = %dx%d\n", res_w, res_h);
-    if (max_fps < 0) fprintf(f, "max_fps = unlimited\n");
-    else if (max_fps == 0) fprintf(f, "max_fps = monitor\n");
-    else fprintf(f, "max_fps = %d\n", max_fps);
+    fputs(text().c_str(), f);
+    fclose(f);
+}
+
+void FrontendSettings::save_both(const char* path, const FrontendSettings& pc, const FrontendSettings* arcade,
+                                 const FrontendSettings& whole) {
+    FrontendSettings top = pc;
+    top.copy_whole_game(whole);
+    std::string out = top.text();
+    if (arcade) out += "[arcade]\n" + arcade->text(true);
+    FILE* f = fopen(path, "w");
+    if (!f) return;
+    fputs(out.c_str(), f);
     fclose(f);
 }
 
@@ -649,6 +694,9 @@ std::vector<Frontend::Item> Frontend::option_items(const FrontendSettings& s) co
                 it.enabled = false;
             }
             break;
+        case OPT_EXPERIENCE:
+            if (s.experience != (arcade ? 1 : 0)) it.hint += L".  Applies after a restart (offered when you leave the settings)";
+            break;
         case OPT_PAD_SPEED: it.hint += gamepads.empty() ? L"No gamepad connected" : L"Connected: " + gamepads; break;
         case OPT_GYRO:
             if (!gyro_pad) it.hint = L"Point the gamepad to aim (DualSense, DualShock 4, Switch Pro).  None connected";
@@ -658,9 +706,15 @@ std::vector<Frontend::Item> Frontend::option_items(const FrontendSettings& s) co
     return all;
 }
 
+FrontendSettings Frontend::base_defaults() const {
+    FrontendSettings d;
+    if (arcade) d.arcade_base();
+    return d;
+}
+
 const std::wstring& Frontend::default_value(int id) {
     if (defaults_.empty() || defaults_rt_ != rt_available) {
-        defaults_ = option_items(FrontendSettings{});
+        defaults_ = option_items(base_defaults());
         defaults_rt_ = rt_available;
     }
     static const std::wstring none;
@@ -670,9 +724,9 @@ const std::wstring& Frontend::default_value(int id) {
 }
 
 void Frontend::reset_tab() {
-    const FrontendSettings d;
-    for (const Item& it : items())
-        if (const Setting* row = setting_of(it.id); row && it.id != OPT_DISPLAY) {   // the window stays as it is
+    const FrontendSettings d = base_defaults();
+    for (const Item& it : items())   // the window stays as it is, and the experience
+        if (const Setting* row = setting_of(it.id); row && it.id != OPT_DISPLAY && it.id != OPT_EXPERIENCE) {
             row->set(settings, row->get(d));
             if (it.id == OPT_MAX_FPS) settings.max_fps = d.max_fps;   // (kept apart from the table)
         }
@@ -711,6 +765,15 @@ std::vector<Frontend::Item> Frontend::items() const {
         return list;
     }
     case Screen::Pause:
+        if (arcade)   // ARCADE ORIGINAL: no main menu to go back to; its own entries after QUIT GAME
+            return {{RESUME, L"RESUME", L"", L"Back to the game"},
+                    {SETTINGS, L"SETTINGS", L"", L"Display, sound, controls and the experience"},
+                    {QUIT, L"QUIT GAME", L"", L"Close the game"},
+                    {PAUSE_CREDIT, L"CREDIT", settings.free_play ? L"FREE PLAY" : L"COIN",
+                     settings.free_play ? L"Start and continue with START alone.  Enter: a coin per game (5 inserts one)"
+                                        : L"Insert a coin with 5 (6 for player 2), then START.  Enter: FREE PLAY"},
+                    {PAUSE_RESTORE, L"RESTORE ORIGINAL", L"", L"The arcade's original look and sound (not the screen or the controls)"},
+                    {PC_EDITION, L"BACK TO PC EDITION", L"", L"The main menu and the PC settings come back on the next start"}};
         if (boss_mode)
             return {{RESUME, L"RESUME", L"", L"Back to the fight"},
                     {RETRY, L"RETRY FIGHT", L"", L"Start this boss fight again"},
@@ -818,6 +881,8 @@ void Frontend::open(Screen s) {
     }
     locked_notice_ = false;
     drop_open_ = false;
+    restart_open_ = restore_ask_ = false;   // (not left open behind another screen)
+    restart_note_.clear();
     screen_ = s;
     selected_ = 0;
     scroll_ = 0;
@@ -899,6 +964,23 @@ void Frontend::activate(const Item& it, int dir) {
     case LEAVE_BOSS: push(Action::LeaveBossMode); break;
     case BACK: back(); break;
     case RESUME: push(Action::Resume); break;
+    case PAUSE_CREDIT:   // (GAME > FREE PLAY too)
+        settings.free_play = !settings.free_play;
+        push(Action::SettingsChanged);
+        break;
+    case PAUSE_RESTORE:   // RESTORE / CANCEL first (restart_choose)
+        restore_ask_ = restart_open_ = true;
+        restart_button_ = 0;
+        restart_hot_ = -1;
+        break;
+    case PC_EDITION:   // saved at once; RESTART NOW, or LATER (back to the pause)
+        settings.experience = 0;
+        push(Action::SettingsChanged);
+        restart_note_ = L"PC EDITION: the main menu comes back on the next start";
+        restart_open_ = true;
+        restart_button_ = 0;
+        restart_hot_ = -1;
+        break;
     case SETTINGS: options_from_pause_ = true; tab_ = 0; open(Screen::Options); selected_ = 1; break;
     case OPT_DISPLAY:   // applied at once (app.cpp)
         settings.display_mode = (std::clamp(settings.display_mode, 0, 2) + dir + 3) % 3;
@@ -1004,7 +1086,7 @@ bool Frontend::key(int vk) {
     }
     end_strike();
     if (news_open_ && screen_ == Screen::Main) return news_key(vk);
-    if (restart_open_ && screen_ == Screen::Options) return restart_key(vk);
+    if (restart_shown()) return restart_key(vk);
     if (drop_open_ && screen_ == Screen::Options) return drop_key(vk);
     if (locked_notice_) {   // any of these closes it
         if (vk != VK_RETURN && vk != VK_SPACE && vk != VK_ESCAPE && vk != VK_BACK) return true;
@@ -1179,9 +1261,14 @@ bool Frontend::aa_waits() const {
 }
 
 std::wstring Frontend::restart_list() const {
-    if (!aa_waits()) return L"";
-    const Setting& d = *setting_of(OPT_AA);
-    return L"ANTI-ALIASING " + std::wstring(d.shown[d.pos(settings)]);
+    std::wstring list;
+    if (settings.experience != (arcade ? 1 : 0))
+        list = std::wstring(L"EXPERIENCE ") + (settings.experience ? L"ARCADE ORIGINAL" : L"PC EDITION");
+    if (aa_waits()) {
+        const Setting& d = *setting_of(OPT_AA);
+        list += (list.empty() ? L"" : L" and ") + (L"ANTI-ALIASING " + std::wstring(d.shown[d.pos(settings)]));
+    }
+    return list;
 }
 
 bool Frontend::restart_key(int vk) {
@@ -1199,9 +1286,26 @@ bool Frontend::restart_key(int vk) {
 
 void Frontend::restart_choose(int button) {
     dirty_ = true;
+    if (restore_ask_) {   // RESTORE ORIGINAL: RESTORE, or CANCEL (back to the pause)
+        restore_ask_ = restart_open_ = false;
+        if (button == 1) return;
+        settings.arcade_base();   // (not the screen, the speakers, the controls)
+        push(Action::SettingsChanged);
+        if (!restart_list().empty()) {   // (ANTI-ALIASING from DLAA or DLSS): RESTART NEEDED next
+            restart_open_ = true;
+            restart_button_ = 0;
+            restart_hot_ = -1;
+        }
+        return;
+    }
     if (button == 0) {   // RESTART NOW: app.cpp saves, closes and starts the game again
         restart_open_ = false;
         push(Action::Restart);
+        return;
+    }
+    if (screen_ == Screen::Pause) {   // BACK TO PC EDITION or a restore, LATER: the pause again (saved already)
+        restart_open_ = false;
+        restart_note_.clear();
         return;
     }
     back();   // LATER: on, as BACK would (not asked again)
@@ -1277,7 +1381,7 @@ void Frontend::mouse_move(int x, int y) {
             }
         return;
     }
-    if (restart_open_ && screen_ == Screen::Options) {   // only its two buttons
+    if (restart_shown()) {   // only its two buttons
         int hot = -1;
         for (int b = 0; b < 2; b++)
             if (PtInRect(&restart_buttons_[b], POINT{x, y})) hot = b;
@@ -1307,7 +1411,7 @@ void Frontend::click(int x, int y) {
             if (PtInRect(&news_buttons_[b], p)) news_choose(b);
         return;
     }
-    if (restart_open_ && screen_ == Screen::Options) {
+    if (restart_shown()) {
         for (int b = 0; b < 2; b++)
             if (PtInRect(&restart_buttons_[b], p)) restart_choose(b);
         return;
@@ -1370,7 +1474,7 @@ void Frontend::click(int x, int y) {
 
 void Frontend::wheel(int x, int y, int delta) {
     if (screen_ == Screen::GunTest || screen_ == Screen::Splash || (news_open_ && screen_ == Screen::Main) ||
-        (restart_open_ && screen_ == Screen::Options))
+        (restart_shown()))
         return;
     if (drop_open_ && screen_ == Screen::Options) {
         drop_key(delta > 0 ? VK_UP : VK_DOWN);
@@ -2701,7 +2805,7 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
     else draw_menu(over_game, list);
     if (locked_notice_ && screen_ == Screen::Survival) draw_locked_notice();
     if (news_open_ && screen_ == Screen::Main) draw_news();
-    if (restart_open_ && screen_ == Screen::Options) draw_restart();
+    if (restart_shown()) draw_restart();
     if (drop_open_ && screen_ == Screen::Options) draw_drop();
     dirty_ = animating_ && !page && screen_ != Screen::GunTest;   // still moving: again next refresh
     animating_ = false;
@@ -2944,23 +3048,27 @@ void Frontend::draw_restart() {
     int w = w_, h = h_, cx = w / 2;
     fill(0, 0, w, h, 0x000000, 0.62f);
     int half = std::min(U(520), w / 2 - U(16));
-    std::wstring what = restart_list() + L" needs a restart";
+    std::wstring what = restore_ask_ ? std::wstring(L"The arcade's original look and sound: no anti-aliasing or new effects, the "
+                                                    L"original sky, letters and spotlight, 4:3, FREE PLAY.  The screen, the "
+                                                    L"speakers, the controls and the crosshairs stay as they are")
+                        : !restart_note_.empty() ? restart_note_
+                                                 : restart_list() + L" needs a restart";
     std::vector<std::wstring> lines = wrap(BODY, U(28), what, 2 * half - U(120));
-    if (over_game()) lines.push_back(L"");   // (the warning below)
+    if (over_game() && !restore_ask_) lines.push_back(L"");   // (the warning below)
     int bh = U(66);
     int card_h = U(150) + int(lines.size()) * U(40) + U(30) + bh + U(26) + U(30) + U(34);
     int top = std::max(U(16), (h - card_h) / 2), bottom = top + card_h;
     fill(cx - half, top, cx + half, bottom, PANEL, 0.96f);
     frame(cx - half, top, cx + half, bottom, std::max(1, U(2)), AMBER, 0.9f);
-    text(display(), U(64), L"RESTART NEEDED", cx, top + U(36), 1, {GOLD_TOP, GOLD_BOTTOM, EDGE, U(3), 1, U(4)});
+    text(display(), U(64), restore_ask_ ? L"RESTORE ORIGINAL" : L"RESTART NEEDED", cx, top + U(36), 1, {GOLD_TOP, GOLD_BOTTOM, EDGE, U(3), 1, U(4)});
     int y = top + U(150);
     for (size_t i = 0; i < lines.size(); i++, y += U(40)) {
-        if (over_game() && i + 1 == lines.size())
+        if (over_game() && !restore_ask_ && i + 1 == lines.size())
             text(ITEM, U(24), L"THE GAME IN PROGRESS WILL BE LOST.  LATER KEEPS IT", cx, y + U(4), 1, {0xFF9A8E, 0xFF9A8E});
         else text(BODY, U(28), lines[i], cx, y, 1, {0xE8C890, 0xE8C890});
     }
     // The buttons side by side, the chosen one lit (as UPDATE AVAILABLE's)
-    static const wchar_t* const LABELS[2] = {L"RESTART NOW", L"LATER"};
+    const wchar_t* const LABELS[2] = {restore_ask_ ? L"RESTORE" : L"RESTART NOW", restore_ask_ ? L"CANCEL" : L"LATER"};
     int bw = std::min(U(340), half - U(40)), gap = U(40), by = y + U(30);
     int ink0 = INT_MAX, ink1 = INT_MIN;   // both labels' letters, centred in the boxes whatever the font
     for (const wchar_t* l : LABELS) {
@@ -2978,8 +3086,9 @@ void Frontend::draw_restart() {
         const Style st = sel ? Style{GOLD_TOP, GOLD_BOTTOM, EDGE, U(2), 1, U(2)} : Style{PALE_TOP, PALE_BOTTOM, INK, U(2), 0.95f};
         text(display(), U(40), LABELS[b], x0 + bw / 2, label_y, 1, st);
     }
-    const wchar_t* about = restart_button_ == 0 ? L"Saves the settings, closes the game and starts it again"
-                                                : L"Back as before.  The change applies the next time the game starts";
+    const wchar_t* about = restore_ask_         ? (restart_button_ == 0 ? L"Puts the original settings back now" : L"Back to the pause")
+                           : restart_button_ == 0 ? L"Saves the settings, closes the game and starts it again"
+                                                  : L"Back as before.  The change applies the next time the game starts";
     text(ITEM, U(22), about, cx, by + bh + U(26), 1, {HINT, HINT});
 }
 

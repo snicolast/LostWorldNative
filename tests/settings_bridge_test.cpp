@@ -131,9 +131,44 @@ static void test_aspect_kept() {
     }
 }
 
+// EXPERIENCE ARCADE ORIGINAL: the arcade's look over the player's screen and
+// controls, and it survives the trip like any other settings
+static void test_arcade_base() {
+    FrontendSettings pc;
+    pc.display_mode = 2, pc.res_w = 2560, pc.res_h = 1440, pc.scale = 150, pc.max_fps = 120, pc.vsync = 2;
+    pc.speakers = 1, pc.rear_boost = 6, pc.pad_speed = 8, pc.gyro = false, pc.vibration = 3, pc.aim_assist = 0;
+    pc.crosshair_style = 0, pc.crosshair_hide = 5, pc.second_mouse = false, pc.volume = 9, pc.free_play = false;
+    pc.gun_p1 = "gun", pc.experience = 1;
+    FrontendSettings a = pc.arcade_defaults();
+    // kept: the screen, the speakers, the controls, the crosshairs, the keys of the whole game
+    CHECK(a.display_mode == 2 && a.res_w == 2560 && a.res_h == 1440 && a.scale == 150 && a.max_fps == 120 && a.vsync == 2);
+    CHECK(a.speakers == 1 && a.rear_boost == 6);
+    CHECK(a.pad_speed == 8 && !a.gyro && a.vibration == 3 && a.aim_assist == 0);
+    CHECK(a.crosshair_style == 0 && a.crosshair_hide == 5 && !a.second_mouse);
+    CHECK(a.gun_p1 == "gun" && a.experience == 1);
+    // the arcade's own: no anti-aliasing or effects, 4:3, the ROM's letters, free play
+    CHECK(a.aa == 2 && a.aa_saved && a.aniso == 0 && !a.smooth_2d && a.aspect == 0);
+    CHECK(!a.haze && !a.ao && !a.sky && !a.sun && !a.shadows && !a.shafts && !a.soft && !a.hdr && !a.rim);
+    CHECK(!a.relief && !a.sharpen && !a.torch && !a.lightning && a.bloom == 0 && a.ray_tracing == 0 && a.rain == 0);
+    CHECK(!a.hd_text && a.smooth && a.subtitles == 0 && a.saturation == 100 && a.gamma == 100);
+    CHECK(a.volume == FrontendSettings{}.volume && a.weather_sound == 0 && !a.cubic_samples && a.free_play);
+    CHECK(same(a, round_trip(a), "arcade"));
+    Options o;
+    options_from_settings(a, o);
+    CHECK(o.msaa == 1 && !o.dlaa && !o.fxaa && o.free_play);
+    // the keys of the whole game come from the experience running
+    FrontendSettings top;
+    FrontendSettings run = a;
+    run.experience = 0, run.check_updates = false, run.news_seen = 22, run.gun_p2 = "two", run.splash = false, run.run_weather = 3;
+    top.copy_whole_game(run);
+    CHECK(top.experience == 0 && !top.check_updates && top.news_seen == 22 && top.gun_p1 == "gun" && top.gun_p2 == "two");
+    CHECK(!top.splash && top.run_weather == 3 && top.aa == FrontendSettings{}.aa);
+}
+
 int main() {
     test_round_trip();
     test_aspect_kept();
+    test_arcade_base();
     if (g_failed) {
         printf("%d checks failed\n", g_failed);
         return 1;
