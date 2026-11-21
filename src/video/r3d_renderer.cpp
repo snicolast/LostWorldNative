@@ -222,6 +222,9 @@ bool R3DRenderer::init(VkPresenter& vk, float supersample, int msaa, int aniso, 
         printf("[dlaa] mode %d (3D %.0f%% of the size), preset %c (%s, FP8 %s), %u jitter phases\n", mode,
                100.0f / upscale_, char('A' + dlss_preset_ - 1), dlss_model ? "chosen" : "auto", fp8 ? "yes" : "no",
                jitter_phases_);
+    } else if (dlaa) {   // no DLSS on this card (not an RTX, or no NGX): FXAA, far cheaper than MSAA on an old card
+        msaa = 1;
+        fxaa_ = true;
     }
     msaa_wanted_ = msaa;
     samples_ = msaa_level(msaa);
@@ -720,7 +723,10 @@ void R3DRenderer::apply_pending() {
                 glow ? "on" : "off");
     destroy_image(color_);   // ensure_targets makes every target again
     can_repeat_ = false;
-    if (msaa_changed) printf("[video] antialiasing MSAA %dx\n", int(samples_));
+    if (msaa_changed) {
+        if (samples_ == VK_SAMPLE_COUNT_1_BIT && fxaa()) printf("[video] antialiasing FXAA\n");
+        else printf("[video] antialiasing MSAA %dx\n", int(samples_));
+    }
 }
 
 // w, h: the 3D image as drawn; up_w, up_h: as DLSS hands it on (the same but with DLSS upscaling)
@@ -2169,7 +2175,7 @@ R3DRenderer::ComposePush R3DRenderer::compose_push(const Frame& f) const {
                    .sky = {seconds, 0, sun_ && weather_.overcast * outdoor_ < 0.5f ? 1.0f : 0.0f, 0},
                    .effects = {bloom_strength_, saturation_, gamma_, 0},
                    .motion = {back_shift_, (crosshair_picture_[0] ? 1.0f : 0.0f) + (crosshair_picture_[1] ? 2.0f : 0.0f), 0, 0},
-                   .crosshair2 = {-1, -1, sharpen_, 0}};
+                   .crosshair2 = {-1, -1, sharpen_, fxaa() ? 1.0f : 0.0f}};
     place_crosshairs(lay, pc);
     return pc;
 }

@@ -256,11 +256,13 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
          .hint = L"Smooth: the 3D is also drawn between the game's 57.5 frames, at your monitor's refresh rate"},
         // (settings.ini keeps "dlss" as DLSS QUALITY, as in Sega Rally 2; shown and hints in the order of steps)
         {.id = OPT_AA, .tab = DISPLAY_TAB, .label = L"ANTI-ALIASING", .key = "aa", .number = &FS::aa,
-         .words = {"msaa", "dlaa", "none", "dlss", "dlss_balanced", "dlss_performance", "dlss_ultra"},
+         .words = {"msaa", "dlaa", "none", "dlss", "dlss_balanced", "dlss_performance", "dlss_ultra", "fxaa"},
          .also = {{"off", 2}, {"dlss_quality", 3}}, .kind = CHOICE,
-         .shown = {L"OFF", L"MSAA", L"DLAA", L"DLSS QUALITY", L"DLSS BALANCED", L"DLSS PERFORMANCE", L"DLSS ULTRA PERFORMANCE"},
-         .steps = {2, 0, 1, 3, 4, 5, 6},
+         .shown = {L"OFF", L"FXAA", L"MSAA", L"DLAA", L"DLSS QUALITY", L"DLSS BALANCED", L"DLSS PERFORMANCE",
+                   L"DLSS ULTRA PERFORMANCE"},
+         .steps = {2, 7, 0, 1, 3, 4, 5, 6},
          .hints = {L"No edge smoothing: the fastest, with jagged edges",
+                   L"Edge smoothing over the finished picture: nearly free, for older cards and integrated graphics; a little softer",
                    L"Classic edge smoothing, with the samples below",
                    L"NVIDIA DLAA: the cleanest edges, at full size",
                    L"NVIDIA DLSS: draws the 3D smaller and sharpens it back; much faster, nearly as sharp",
@@ -505,6 +507,7 @@ bool Frontend::init(const std::string& font_dir) {
 }
 
 namespace {
+bool nvidia_aa(int aa) { return aa == 1 || (aa >= 3 && aa <= 6); }   // DLAA or DLSS: chosen when the renderer starts
 
 // Any picture format Windows can read (WIC), as BGRA (nothing when it fails)
 bool load_image(const std::wstring& path, std::vector<uint32_t>& px, int& w, int& h) {
@@ -621,8 +624,8 @@ std::vector<Frontend::Item> Frontend::option_items(const FrontendSettings& s) co
                           L", the same shape, to fit on the desktop.  Enter: the list";
             else it.hint = L"The size of the window's picture.  Enter: the list";
             break;
-        case OPT_AA:   // MSAA and off change at once; DLAA and DLSS start (stop, change) with the game
-            if (s.aa == 1 || s.aa >= 3 || aa_at_launch == 1 || aa_at_launch >= 3)
+        case OPT_AA:   // off, FXAA and MSAA change at once; DLAA and DLSS start (stop, change) with the game
+            if (nvidia_aa(s.aa) || nvidia_aa(aa_at_launch))
                 it.hint += s.aa != aa_at_launch ? L".  Applies after a restart (offered when you leave the settings)"
                                                 : L".  Applies after a restart";
             break;
@@ -1163,10 +1166,6 @@ void Frontend::start_update() {
 }
 
 // ---- RESTART NEEDED ----
-
-namespace {
-bool nvidia_aa(int aa) { return aa == 1 || aa >= 3; }   // DLAA or DLSS: chosen when the renderer starts
-}  // namespace
 
 bool Frontend::aa_waits() const {
     return settings.aa != aa_at_launch && (nvidia_aa(settings.aa) || nvidia_aa(aa_at_launch));

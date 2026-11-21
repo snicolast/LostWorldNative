@@ -22,7 +22,8 @@ void options_from_settings(const FrontendSettings& s, Options& o) {
     o.sky_procedural = s.sky;
     o.relief = s.relief;
     o.bloom = BLOOM_STRENGTH[std::clamp(s.bloom, 0, 3)];
-    o.msaa = s.aa == 2 ? 1 : s.msaa;
+    o.msaa = s.aa == 2 || s.aa == 7 ? 1 : s.msaa;   // (none or FXAA: no MSAA)
+    o.fxaa = s.aa == 7;
     o.aniso = s.aniso;
     o.pixel_2d = !s.smooth_2d;
     o.volume = float(s.volume);
@@ -30,8 +31,8 @@ void options_from_settings(const FrontendSettings& s, Options& o) {
     o.cubic_samples = s.cubic_samples;
     o.rear_boost = s.rear_boost;
     o.weather_sound = s.weather_sound;
-    o.dlaa = s.aa == 1 || s.aa >= 3;
-    o.dlss = s.aa >= 3 ? std::min(s.aa - 2, 4) : 0;   // 3 QUALITY .. 6 ULTRA PERFORMANCE
+    o.dlaa = s.aa == 1 || (s.aa >= 3 && s.aa <= 6);
+    o.dlss = s.aa >= 3 && s.aa <= 6 ? s.aa - 2 : 0;   // 3 QUALITY .. 6 ULTRA PERFORMANCE
     o.dlss_model = s.dlss_model;
     o.vsync = std::clamp(s.vsync, 0, 2);
     int aspect = std::clamp(s.aspect, 0, 2);
@@ -62,7 +63,7 @@ void settings_from_options(const Options& o, FrontendSettings& s) {
     s.cubic_samples = o.cubic_samples;
     s.rear_boost = std::clamp(o.rear_boost / 3 * 3, -6, 12);
     s.weather_sound = std::clamp(o.weather_sound, 0, 3);
-    s.aa = o.dlss ? 2 + std::clamp(o.dlss, 1, 4) : o.dlaa ? 1 : o.msaa <= 1 ? 2 : 0;
+    s.aa = o.dlss ? 2 + std::clamp(o.dlss, 1, 4) : o.dlaa ? 1 : o.fxaa ? 7 : o.msaa <= 1 ? 2 : 0;
     s.dlss_model = std::clamp(o.dlss_model, 0, 3);
     if (o.msaa > 1) s.msaa = o.msaa >= 8 ? 8 : o.msaa >= 4 ? 4 : 2;
     s.aniso = o.aniso <= 0 ? 0 : o.aniso < 4 ? 2 : o.aniso < 8 ? 4 : o.aniso < 16 ? 8 : 16;

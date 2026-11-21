@@ -157,6 +157,10 @@ public:
     void set_relief(bool on) { relief_ = on; }
     // Contrast adaptive sharpening of the 3D image: 0 = off, 1 = strongest
     void set_sharpen(float amount) { sharpen_ = amount; }
+    // FXAA over the finished 3D image (compose.frag): cheap edge smoothing for
+    // cards without DLAA, or for a slow one (no MSAA then; never with DLAA running)
+    void set_fxaa(bool on) { fxaa_ = on; }
+    bool fxaa() const { return fxaa_ && !dlaa_.ready(); }
     // A procedural night sky behind a world the game leaves on a black
     // backdrop in the dark (not in the original; part of SKY: PROCEDURAL)
     void set_night_sky(bool on) { night_sky_ = on; }
@@ -337,6 +341,7 @@ private:
     bool rim_ = false;
     bool relief_ = false;
     float sharpen_ = 0;
+    bool fxaa_ = false;
     bool night_sky_ = false;
     float night_level_ = 0;   // how much of the night sky shows, eased towards 0 or 1
     bool modern_torch_ = true;

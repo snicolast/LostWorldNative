@@ -22,6 +22,7 @@ struct Options {
     float supersample = 1.0f;        // --scale: internal 3D resolution factor
     int msaa = 4;                    // --msaa: samples per pixel (1 = off)
     bool dlaa = false;               // --aa dlaa: NVIDIA DLAA instead of MSAA (also set by --aa dlss*)
+    bool fxaa = false;               // --aa fxaa: FXAA over the 3D image instead of MSAA (cheap, for older cards)
     int dlss = 0;                    // --aa dlss*: 0 none (DLAA), 1 QUALITY, 2 BALANCED, 3 PERFORMANCE, 4 ULTRA PERFORMANCE
                                      // (the 3D drawn smaller and upscaled)
     int dlss_model = 0;              // --dlss-model: 0 auto, 1 K, 2 M, 3 L

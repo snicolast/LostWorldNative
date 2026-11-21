@@ -13,7 +13,7 @@ struct FrontendSettings {
     int rear_boost = 0;  // dB on the rear pair: -6, -3, 0, 3, 6, 9, 12
     int weather_sound = 2;  // rain and thunder of our weather: 0 off, 1 low, 2 medium, 3 high
     bool cubic_samples = true;   // smooth (cubic) sample interpolation instead of the original linear one
-    // 0 MSAA, 1 DLAA, 2 off, 3 DLSS QUALITY, 4 BALANCED, 5 PERFORMANCE, 6 ULTRA PERFORMANCE
+    // 0 MSAA, 1 DLAA, 2 off, 3 DLSS QUALITY, 4 BALANCED, 5 PERFORMANCE, 6 ULTRA PERFORMANCE, 7 FXAA
     // (DLAA and DLSS on, off or changed take effect on the next launch)
     int aa = 0;
     bool aa_saved = false;   // load() found it in the file (not there on the first start: chosen then for the GPU, app.cpp)

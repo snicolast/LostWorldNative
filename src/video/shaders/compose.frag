@@ -45,7 +45,7 @@ layout(push_constant) uniform Compose {
     vec4 motion;      // x: how far the 3D has gone from the previous game frame, in vblanks:
                       // the back layers go on by their velocity (in sky_coords) times this;
                       // y: which players have their own crosshair picture (1 = player 1, 2 = player 2)
-    vec4 crosshair2;  // xy: player 2's crosshair, like crosshair; z: sharpening (0 = off); w unused
+    vec4 crosshair2;  // xy: player 2's crosshair, like crosshair; z: sharpening (0 = off); w: 1 = FXAA on the 3D image
 } pc;
 
 // Rows of the 2D screen holding the score (rows 9-30); in widescreen its left
@@ -357,6 +357,68 @@ float exposure() {
     return clamp(pow(0.17 / max(average, 1e-3), 0.35), 0.9, 1.15);
 }
 
+// ---- FXAA (after Timothy Lottes' FXAA 3.11, quality preset 12) ----------------
+// Anti-aliasing for cards without DLAA: finds the edges in the finished 3D
+// image by their brightness and samples across them. Far cheaper than MSAA on
+// an old card, a little softer.
+
+float fxaa_luma(vec2 q) {
+    float l = dot(texture(scene3d, q).rgb, vec3(0.299, 0.587, 0.114));
+    return sqrt(l / (1.0 + l));   // HDR values to a perceptual 0..1
+}
+
+// Where to sample the 3D image at p (p itself away from edges)
+vec2 fxaa(vec2 p) {
+    vec2 t = 1.0 / vec2(textureSize(scene3d, 0));
+    float lM = fxaa_luma(p);
+    float lN = fxaa_luma(p - vec2(0.0, t.y)), lS = fxaa_luma(p + vec2(0.0, t.y));
+    float lW = fxaa_luma(p - vec2(t.x, 0.0)), lE = fxaa_luma(p + vec2(t.x, 0.0));
+    float lo = min(lM, min(min(lN, lS), min(lW, lE))), hi = max(lM, max(max(lN, lS), max(lW, lE)));
+    float range = hi - lo;
+    if (range < max(0.0833, hi * 0.166)) return p;
+    float lNW = fxaa_luma(p - t), lSE = fxaa_luma(p + t);
+    float lNE = fxaa_luma(p + vec2(t.x, -t.y)), lSW = fxaa_luma(p + vec2(-t.x, t.y));
+    // Sub-pixel aliasing (thin lines, single pixels): how far the centre is from its neighbours
+    float sub = clamp(abs((2.0 * (lN + lS + lW + lE) + lNW + lNE + lSW + lSE) / 12.0 - lM) / range, 0.0, 1.0);
+    sub = smoothstep(0.0, 1.0, sub);
+    sub = sub * sub * 0.75;
+    // The edge's direction, and its side the steeper one
+    float edge_h = abs(lNW + lSW - 2.0 * lW) + 2.0 * abs(lN + lS - 2.0 * lM) + abs(lNE + lSE - 2.0 * lE);
+    float edge_v = abs(lNW + lNE - 2.0 * lN) + 2.0 * abs(lW + lE - 2.0 * lM) + abs(lSW + lSE - 2.0 * lS);
+    bool horz = edge_h >= edge_v;
+    float across = horz ? t.y : t.x;
+    float l1 = horz ? lN : lW, l2 = horz ? lS : lE;
+    bool first = abs(l1 - lM) >= abs(l2 - lM);
+    float grad = 0.25 * max(abs(l1 - lM), abs(l2 - lM));
+    if (first) across = -across;
+    float l_edge = 0.5 * ((first ? l1 : l2) + lM);
+    // Along the edge both ways, in growing steps, to where it ends
+    vec2 e = p + (horz ? vec2(0.0, 0.5 * across) : vec2(0.5 * across, 0.0));
+    vec2 along = horz ? vec2(t.x, 0.0) : vec2(0.0, t.y);
+    vec2 p1 = e - along, p2 = e + along;
+    float d1 = fxaa_luma(p1) - l_edge, d2 = fxaa_luma(p2) - l_edge;
+    bool done1 = abs(d1) >= grad, done2 = abs(d2) >= grad;
+    for (int i = 1; i < 8 && !(done1 && done2); i++) {
+        float k = i == 1 ? 1.5 : i < 6 ? 2.0 : i == 6 ? 4.0 : 8.0;
+        if (!done1) {
+            p1 -= along * k;
+            d1 = fxaa_luma(p1) - l_edge;
+            done1 = abs(d1) >= grad;
+        }
+        if (!done2) {
+            p2 += along * k;
+            d2 = fxaa_luma(p2) - l_edge;
+            done2 = abs(d2) >= grad;
+        }
+    }
+    float dist1 = horz ? p.x - p1.x : p.y - p1.y, dist2 = horz ? p2.x - p.x : p2.y - p.y;
+    bool near1 = dist1 < dist2;
+    // Only the end where the edge turns away from the centre's side
+    bool good = ((near1 ? d1 : d2) < 0.0) != (lM < l_edge);
+    float shift = max(good ? 0.5 - min(dist1, dist2) / (dist1 + dist2) : 0.0, sub);
+    return p + (horz ? vec2(0.0, shift * across) : vec2(shift * across, 0.0));
+}
+
 void main() {
     if (pc.sky.w > 1.5 && pc.sky.w < 2.5) {   // measure mode (one pixel): log-average brightness of the 3D image
         float sum = 0.0, n = 0.0;
@@ -374,14 +436,16 @@ void main() {
     vec2 p = (uv - pc.offset) / pc.scale;
     vec3 c = vec3(0.0);
     if (p.x >= 0.0 && p.y >= 0.0 && p.x <= 1.0 && p.y <= 1.0) {
-        vec4 s = texture(scene3d, p);
+        // FXAA: the 3D image (and its alpha, premultiplied alike) sampled across the edges
+        vec2 pf = pc.crosshair2.w > 0.5 ? fxaa(p) : p;
+        vec4 s = texture(scene3d, pf);
         // With DLAA the alpha comes from its own anti-aliasing pass, steady
         // from frame to frame like the colour
-        s.a = texture(scene3d_alpha, p).r;
+        s.a = texture(scene3d_alpha, pf).r;
         // Sharpening (SHARPEN), contrast adaptive like AMD's CAS: detail comes
         // back after the anti-aliasing and the diffusion, flat areas and
-        // strong edges are left alone (no halos)
-        if (pc.crosshair2.z > 0.0 && s.a > 0.0) {
+        // strong edges are left alone (no halos); not on the edges FXAA smoothed
+        if (pc.crosshair2.z > 0.0 && s.a > 0.0 && pf == p) {
             vec2 t = 1.0 / vec2(textureSize(scene3d, 0));
             vec3 a = texture(scene3d, p - vec2(0.0, t.y)).rgb, b = texture(scene3d, p - vec2(t.x, 0.0)).rgb;
             vec3 d = texture(scene3d, p + vec2(t.x, 0.0)).rgb, e = texture(scene3d, p + vec2(0.0, t.y)).rgb;

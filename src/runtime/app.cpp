@@ -1292,11 +1292,13 @@ bool App::init(bool aa_auto) {
     }
     renderer.set_hud_edges(!g_opt.hud_centre);
     if (g_opt.haze > 0) printf("[video] distance haze on (strength %.2f)\n", g_opt.haze);
-    if (aa_auto) {   // what the first start got: the menu shows it, and saves it with the first setting changed
-        if (!renderer.dlaa_active()) g_opt.dlaa = false, g_opt.dlss = 0;
-        printf("[video] first start: anti-aliasing chosen for this GPU and screen\n");
+    // DLAA or DLSS asked for on a card without them (not an RTX): FXAA instead
+    // (the renderer already started without MSAA; the menu shows it)
+    if (g_opt.dlaa && !renderer.dlaa_active()) {
+        printf("[video] DLAA/DLSS not available on %s: using FXAA\n", presenter.device_name().c_str());
+        g_opt.dlaa = false, g_opt.dlss = 0, g_opt.fxaa = true, g_opt.msaa = 1;
     }
-    if (g_opt.dlaa && !renderer.dlaa_active()) printf("[video] DLAA not available: using MSAA\n");
+    if (aa_auto) printf("[video] first start: anti-aliasing chosen for this GPU and screen\n");
     if (renderer.dlaa_active())
         printf("[video] antialiasing NVIDIA %s, anisotropic filtering %dx%s\n",
                !renderer.dlss_upscaling() ? "DLAA"
@@ -1305,6 +1307,9 @@ bool App::init(bool aa_auto) {
                : g_opt.dlss == 4          ? "DLSS ULTRA PERFORMANCE"
                                           : "DLSS QUALITY",
                g_opt.aniso, g_opt.aniso > 0 ? " with mipmaps" : " (no mipmaps)");
+    else if (g_opt.fxaa)
+        printf("[video] antialiasing FXAA, anisotropic filtering %dx%s\n", g_opt.aniso,
+               g_opt.aniso > 0 ? " with mipmaps" : " (no mipmaps)");
     else
         printf("[video] antialiasing MSAA %dx, anisotropic filtering %dx%s\n", renderer.msaa_samples(), g_opt.aniso,
                g_opt.aniso > 0 ? " with mipmaps" : " (no mipmaps)");
@@ -1607,6 +1612,9 @@ void App::apply_video_options(const Options* was) {
         renderer.set_aniso(o.aniso);
         presenter.set_vsync(o.vsync);
     }
+    renderer.set_fxaa(o.fxaa);   // at once, like MSAA (not while DLAA runs: R3DRenderer::fxaa)
+    if (was && o.fxaa != was->fxaa && o.msaa == was->msaa && !renderer.dlaa_active())   // (with MSAA: apply_pending)
+        printf("[video] antialiasing %s\n", o.fxaa ? "FXAA" : "off");
     renderer.set_smooth_2d(!o.pixel_2d);
     if (!was || o.max_aspect != was->max_aspect) renderer.set_max_aspect(o.max_aspect);
     renderer.set_distance_haze(o.haze > 0 ? haze_strength : 0);   // at the strength of the start (--haze)
@@ -2566,10 +2574,12 @@ int main(int argc, char** argv) {
     bool aa_auto = false;
     if (g_opt.menu) {   // save/settings.ini, written by the options menu; command-line options win
         ini.load("save/settings.ini");
-        aa_auto = !ini.aa_saved && nvidia_card();
+        bool aa_given = false;
         for (int i = 1; i < argc; i++)
-            if (strcmp(argv[i], "--aa") == 0 || strcmp(argv[i], "--msaa") == 0) aa_auto = false;
+            if (strcmp(argv[i], "--aa") == 0 || strcmp(argv[i], "--msaa") == 0) aa_given = true;
+        aa_auto = !ini.aa_saved && !aa_given && nvidia_card();
         if (aa_auto) ini.aa = 1;   // DLAA; DLSS QUALITY once the screen is known (App::init)
+        else if (!ini.aa_saved && !aa_given) ini.aa = 7;   // no DLSS on other cards: FXAA, cheap (MSAA costs old cards a lot)
         options_from_settings(ini, g_opt);
         g_pad_settings = {ini.pad_speed, ini.gyro, ini.gyro_speed, ini.vibration, ini.trigger_rumble, ini.aim_assist};
     }
