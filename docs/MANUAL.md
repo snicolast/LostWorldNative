@@ -101,7 +101,9 @@ if already playing), BACK / Share / View pauses and L3 / R3 centre the crosshair
 gamepads with a gyroscope you can also aim by moving the gamepad; it calibrates itself
 when the gamepad is held still for a moment. It rumbles when firing and when taking a
 hit. Menus are driven with the D-pad or the left stick, A / B (as
-printed on a Nintendo gamepad) and L1 / R1 for tabs. Settings >
+printed on a Nintendo gamepad) and L1 / R1 for tabs. OPTIONS and RECORDS
+are laid out as pages: the sections on the left (L1 / R1, Q / E or a click), the
+rows in groups in the middle and the selected row's description on the right. Settings >
 CONTROLS has the stick speed, the gyroscope and its speed, and the
 rumble strength. On Xbox One / Series pads the motors in the triggers kick too
 (the fire trigger on a shot, the reload one on a reload, both on a hit):

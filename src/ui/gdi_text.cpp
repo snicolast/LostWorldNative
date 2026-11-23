@@ -8,9 +8,13 @@
 namespace {
 
 const char* const FILES[GdiText::FACE_COUNT] = {"SairaExtraCondensed-Bold.ttf", "BarlowCondensed-Bold.ttf",
-                                                "ShareTechMono-Regular.ttf", "Jurassic_Park.ttf", "Arimo[wght].ttf"};
+                                                "ShareTechMono-Regular.ttf", "Jurassic_Park.ttf", "Arimo[wght].ttf",
+                                                "BarlowCondensed-SemiBold.ttf", "BarlowCondensed-Medium.ttf",
+                                                "Barlow-Regular.ttf"};
 const wchar_t* const FACES[GdiText::FACE_COUNT] = {L"Saira ExtraCondensed ExCond", L"Barlow Condensed",
-                                                   L"Share Tech Mono", L"Jurassic Park", L"Arimo"};
+                                                   L"Share Tech Mono", L"Jurassic Park", L"Arimo",
+                                                   L"Barlow Condensed SemiBold", L"Barlow Condensed Medium", L"Barlow"};
+const int WEIGHTS[GdiText::FACE_COUNT] = {FW_BOLD, FW_BOLD, FW_NORMAL, FW_NORMAL, FW_NORMAL, FW_SEMIBOLD, FW_MEDIUM, FW_NORMAL};
 
 std::vector<char> read_file(const std::string& path) {
     std::vector<char> data;
@@ -62,7 +66,7 @@ HFONT GdiText::font(Face f, int px) {
     auto key = std::make_pair(int(f), px);
     auto it = fonts_.find(key);
     if (it != fonts_.end()) return it->second;
-    HFONT h = CreateFontW(-px, 0, 0, 0, f == SAIRA || f == BARLOW ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE,
+    HFONT h = CreateFontW(-px, 0, 0, 0, WEIGHTS[f], FALSE, FALSE, FALSE,
                           DEFAULT_CHARSET, OUT_TT_ONLY_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH,
                           FACES[f]);
     fonts_[key] = h;

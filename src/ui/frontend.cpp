@@ -248,6 +248,9 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
          .lo = FS::SCALES[0], .hi = 200, .kind = SLIDER, .steps = {std::begin(FS::SCALES), std::end(FS::SCALES)},
          .text = percent, .hint = L"Resolution of the 3D picture: lower is faster; above 100% it is drawn bigger and scaled down, "
                                   L"sharper and much slower.  The HUD and the text stay sharp"},
+        {.id = OPT_MOTION, .tab = DISPLAY_TAB, .label = L"MOTION", .key = "motion", .flag = &FS::smooth,
+         .words = {"original", "smooth"}, .other = 1, .kind = CHOICE, .shown = {L"ORIGINAL", L"SMOOTH"},
+         .hint = L"Smooth: the 3D is also drawn between the game's 57.5 frames, at your monitor's refresh rate"},
         {.id = OPT_VSYNC, .tab = DISPLAY_TAB, .label = L"VSYNC", .key = "vsync", .number = &FS::vsync,
          .words = {"off", "on", "adaptive"}, .other = 1, .also = {{"0", 0}, {"1", 1}, {"false", 0}, {"true", 1}},
          .kind = CHOICE, .shown = {L"OFF", L"ON", L"ADAPTIVE"},
@@ -258,9 +261,6 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         {.id = OPT_MAX_FPS, .tab = DISPLAY_TAB, .label = L"MAX FPS"},
         {.id = OPT_BGFPS, .tab = DISPLAY_TAB, .label = L"BACKGROUND FPS", .key = "background_fps", .flag = &FS::background_fps,
          .kind = TOGGLE, .hint = L"On: 30 images a second at most while another window has the focus (less work for the GPU)"},
-        {.id = OPT_MOTION, .tab = DISPLAY_TAB, .label = L"MOTION", .key = "motion", .flag = &FS::smooth,
-         .words = {"original", "smooth"}, .other = 1, .kind = CHOICE, .shown = {L"ORIGINAL", L"SMOOTH"},
-         .hint = L"Smooth: the 3D is also drawn between the game's 57.5 frames, at your monitor's refresh rate"},
         // (settings.ini keeps "dlss" as DLSS QUALITY, as in Sega Rally 2; shown and hints in the order of steps)
         {.id = OPT_AA, .tab = DISPLAY_TAB, .label = L"ANTI-ALIASING", .key = "aa", .number = &FS::aa,
          .words = {"msaa", "dlaa", "none", "dlss", "dlss_balanced", "dlss_performance", "dlss_ultra", "fxaa"},
@@ -301,14 +301,6 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
          .hint = L"A sun in the sky and stronger, warmer sunlight outdoors"},
         {.id = OPT_SHADOWS, .tab = LIGHTING_TAB, .label = L"SUN SHADOWS", .key = "shadows", .flag = &FS::shadows,
          .kind = TOGGLE, .hint = L"Dinosaurs, trees and buildings cast shadows away from the sun"},
-        {.id = OPT_RT, .tab = LIGHTING_TAB, .label = L"RAY TRACING", .key = "ray_tracing", .number = &FS::ray_tracing,
-         .words = {"off", "shadows", "ao"}, .other = 2, .also = {{"0", 0}}, .kind = CHOICE,
-         .shown = {L"OFF", L"SHADOWS", L"SHADOWS + AO"}, .levels = true,
-         .hints = {L"Shadows from a shadow map and occlusion from the depth, as without ray tracing",
-                   L"Sun shadows traced through the world: every tree and dinosaur, soft with distance",
-                   L"Also the ambient occlusion: corners and the ground under things, even off screen"}},
-        {.id = OPT_SHAFTS, .tab = LIGHTING_TAB, .label = L"LIGHT SHAFTS", .key = "light_shafts", .flag = &FS::shafts,
-         .kind = TOGGLE, .hint = L"Rays of sunlight streaming between trees and silhouettes"},
         {.id = OPT_HDR, .tab = LIGHTING_TAB, .label = L"HDR LIGHTING", .key = "hdr", .flag = &FS::hdr, .kind = TOGGLE,
          .hint = L"Bright light keeps its detail instead of clipping to white; exposure adapts gently"},
         {.id = OPT_AO, .tab = LIGHTING_TAB, .label = L"AMBIENT OCCLUSION", .key = "ao", .flag = &FS::ao, .kind = TOGGLE,
@@ -321,10 +313,18 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         {.id = OPT_TORCH, .tab = LIGHTING_TAB, .label = L"FLASHLIGHT", .key = "flashlight", .flag = &FS::torch,
          .words = {"original", "modern"}, .other = 1, .kind = CHOICE, .shown = {L"ORIGINAL", L"MODERN"},
          .hint = L"At night: a soft beam with real shading and a glow in the air, or the original spot"},
+        {.id = OPT_RT, .tab = LIGHTING_TAB, .label = L"RAY TRACING", .key = "ray_tracing", .number = &FS::ray_tracing,
+         .words = {"off", "shadows", "ao"}, .other = 2, .also = {{"0", 0}}, .kind = CHOICE,
+         .shown = {L"OFF", L"SHADOWS", L"SHADOWS + AO"}, .levels = true,
+         .hints = {L"Shadows from a shadow map and occlusion from the depth, as without ray tracing",
+                   L"Sun shadows traced through the world: every tree and dinosaur, soft with distance",
+                   L"Also the ambient occlusion: corners and the ground under things, even off screen"}},
         // GRAPHICS (after the lighting): the atmosphere
         {.id = OPT_SKY, .tab = LIGHTING_TAB, .label = L"SKY", .key = "sky", .flag = &FS::sky,
          .words = {"original", "procedural"}, .kind = CHOICE, .shown = {L"ORIGINAL", L"PROCEDURAL"},
          .hint = L"Smooth drifting clouds drawn at full resolution, or the original picture"},
+        {.id = OPT_SHAFTS, .tab = LIGHTING_TAB, .label = L"LIGHT SHAFTS", .key = "light_shafts", .flag = &FS::shafts,
+         .kind = TOGGLE, .hint = L"Rays of sunlight streaming between trees and silhouettes"},
         {.id = OPT_HAZE, .tab = LIGHTING_TAB, .label = L"DISTANCE HAZE", .key = "haze", .flag = &FS::haze, .kind = TOGGLE,
          .hint = L"Far scenery fades into the sky instead of appearing suddenly"},
         {.id = OPT_LIGHTNING, .tab = LIGHTING_TAB, .label = L"LIGHTNING", .key = "lightning", .flag = &FS::lightning,
@@ -400,11 +400,11 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
                    L"original 4:3 look.  Esc pauses.  Each experience keeps its own settings"}},
         {.id = OPT_FREE_PLAY, .tab = GAME_TAB, .label = L"FREE PLAY", .key = "free_play", .flag = &FS::free_play,
          .kind = TOGGLE, .hint = L"The arcade's own free play: start and continue with 1 / 2 or a light gun's start button, no coins"},
-        {.id = OPT_UPDATES, .tab = GAME_TAB, .label = L"CHECK FOR UPDATES", .key = "check_updates", .flag = &FS::check_updates,
-         .kind = TOGGLE, .hint = L"At launch, look on GitHub for a new version and show what is new in it"},
         {.id = OPT_SUBS, .tab = GAME_TAB, .label = L"SUBTITLES", .key = "subtitles", .number = &FS::subtitles,
          .words = {"off", "english", "japanese"}, .kind = CHOICE, .shown = {L"OFF", L"ENGLISH", L"JAPANESE"},
          .hint = L"Captions of what the characters say"},
+        {.id = OPT_UPDATES, .tab = GAME_TAB, .label = L"CHECK FOR UPDATES", .key = "check_updates", .flag = &FS::check_updates,
+         .kind = TOGGLE, .hint = L"At launch, look on GitHub for a new version and show what is new in it"},
         // Only in the file: the WEATHER last picked before a run (in WEATHER_CHOICES' order)
         {.id = NO_ROW, .key = "run_weather", .number = &FS::run_weather,
          .words = {"random", "sunny", "cloudy", "fog", "rain", "storm", "original"}},
@@ -511,7 +511,8 @@ void FrontendSettings::save_both(const char* path, const FrontendSettings& pc, c
 bool Frontend::init(const std::string& font_dir) {
     gdi_ = &GdiText::acquire(font_dir);
     bool ok = gdi_->ready();
-    for (GdiText::Face f : {GdiText::SAIRA, GdiText::BARLOW, GdiText::MONO})   // the others are optional
+    for (GdiText::Face f : {GdiText::SAIRA, GdiText::BARLOW, GdiText::MONO, GdiText::BARLOW_SEMIBOLD, GdiText::BARLOW_MEDIUM,
+                            GdiText::BARLOW_REGULAR})   // the others are optional
         if (!gdi_->loaded(f)) {
             fprintf(stderr, "[menu] could not load the font %s/%s\n", font_dir.c_str(), GdiText::file(f));
             ok = false;
@@ -577,25 +578,6 @@ void Frontend::shutdown() {
     gdi_ = nullptr;
 }
 
-// The picture of an option, if there is one
-const Frontend::Picture& Frontend::preview(Id id) {
-    auto it = previews_.find(int(id));
-    if (it != previews_.end()) return it->second;
-    static const struct { Id id; const wchar_t* name; } FILES[] = {
-        {OPT_MOTION, L"motion"}, {OPT_AA, L"anti_aliasing"}, {OPT_HAZE, L"haze"}, {OPT_BLOOM, L"bloom"},
-        {OPT_AO, L"ambient_occlusion"}, {OPT_SKY, L"sky"}, {OPT_SUN, L"sun"}, {OPT_SHADOWS, L"sun_shadows"},
-        {OPT_RT, L"ray_tracing"}, {OPT_SHAFTS, L"light_shafts"}, {OPT_SOFT, L"soft_particles"}, {OPT_HDR, L"hdr"},
-        {OPT_RIM, L"rim_light"}, {OPT_TORCH, L"flashlight"},
-        {OPT_LIGHTNING, L"lightning"}, {OPT_RAIN, L"rain"}, {OPT_SAT, L"saturation"}, {OPT_SHARPEN, L"sharpen"},
-        {OPT_TEXT, L"hd_text"}, {OPT_CROSS, L"crosshair_backdrop"}, {OPT_SUBS, L"subtitles"}};
-    Picture& p = previews_[int(id)];
-    for (const auto& f : FILES)
-        if (f.id == id)
-            for (const wchar_t* ext : {L".jpg", L".png"})
-                if (load_image(L"res/preview/" + std::wstring(f.name) + ext, p.px, p.w, p.h)) break;
-    return p;
-}
-
 const Frontend::Picture& Frontend::pad_icon(const std::wstring& button) {
     auto it = pad_icons_.find(button);
     if (it != pad_icons_.end()) return it->second;
@@ -610,15 +592,45 @@ const Frontend::Picture& Frontend::pad_icon(const std::wstring& button) {
 
 const wchar_t* const Frontend::TAB_NAMES[Frontend::TAB_COUNT] = {L"DISPLAY", L"GRAPHICS", L"AUDIO", L"CONTROLS", L"GAME"};
 
+namespace {
+// Under each section's name in the column at the left, and in the panel when
+// the column is chosen
+const wchar_t* const TAB_ABOUT[] = {L"Screen, frame rate, picture", L"Lighting, ray tracing, weather",
+                                    L"Volume, speakers, sound", L"Gamepad, sight, guns", L"Edition, free play, updates"};
+const wchar_t* const TAB_MORE[] = {
+    L"Window or full screen, resolution, widescreen, vsync and the frame rate, the edge smoothing and the colours",
+    L"The sun and its shadows, ray tracing, glow and rim light, the sky, haze, lightning and rain",
+    L"The volume, the menu music, stereo, surround or headphones, the rear speakers and the weather",
+    L"The gamepad's sticks, gyro and rumble, the aim assist, the crosshairs and the light guns",
+    L"PC edition or the arcade as it was, free play, subtitles and updates"};
+const wchar_t* const RECORD_TAB_ABOUT[] = {L"Unlocked and still to get", L"Totals, best scores and times"};
+const wchar_t* const RECORD_TAB_MORE[] = {L"Newest first, then the ones still to get with how far you are",
+                                          L"What you have played, your best scores and your fastest stages and bosses"};
+const wchar_t* const RECORD_GROUPS[] = {L"UNLOCKED", L"LOCKED", L"TOTALS", L"BEST SCORES", L"BEST STAGES", L"BOSSES", L"SURVIVAL"};
+constexpr int RECORD_GROUP_COUNT = int(std::size(RECORD_GROUPS));
+}  // namespace
+
+// The heading over the first row of each group of a section (setting_table
+// has the rows in the order shown)
+const wchar_t* Frontend::group_of(Id id) {
+    static const struct { Id id; const wchar_t* name; } GROUPS[] = {
+        {OPT_DISPLAY, L"SCREEN"}, {OPT_VSYNC, L"FRAME RATE"}, {OPT_AA, L"SMOOTHING"}, {OPT_SAT, L"PICTURE"},
+        {OPT_SUN, L"LIGHTING"}, {OPT_RT, L"RAY TRACING"}, {OPT_SKY, L"SKY AND WEATHER"},
+        {OPT_VOLUME, L"VOLUME"}, {OPT_SPEAKERS, L"SOUND"},
+        {OPT_PAD_SPEED, L"GAMEPAD"}, {OPT_CROSS, L"SIGHT"}, {OPT_MICE, L"GUNS"},
+        {OPT_EXPERIENCE, L"EDITION"}, {OPT_FREE_PLAY, L"ARCADE"}, {OPT_UPDATES, L"UPDATES"}};
+    for (const auto& g : GROUPS)
+        if (g.id == id) return g.name;
+    return nullptr;
+}
+
 const wchar_t* const Frontend::RECORD_TAB_NAMES[Frontend::RECORD_TAB_COUNT] = {L"ACHIEVEMENTS", L"STATS"};
 
 void Frontend::set_tab(int t) {
-    bool on_back = selected_ > 0 && selected_ == int(items().size()) - 1;
     tab_ = (t + tab_count()) % tab_count();
     scroll_ = 0;
-    record_scroll_ = 0;
-    int n = int(items().size());   // on an option: the same row, or the last one of a shorter tab
-    selected_ = on_back ? n - 1 : std::min(selected_, std::max(0, n - 2));
+    // the settings page and the records: their first row (the column of sections is not a row)
+    selected_ = screen_ == Screen::Options || screen_ == Screen::Records ? 1 : std::min(selected_, int(items().size()) - 1);
     hovered_ = -1;
     dirty_ = true;
 }
@@ -825,7 +837,7 @@ std::vector<Frontend::Item> Frontend::items() const {
         return list;
     }
     case Screen::Options: {
-        std::vector<Item> list = {{TABS, L"", L"", L"Left / Right here, Q / E or L1 / R1 change the tab"}};
+        std::vector<Item> list = {{TABS, L"", L"", pad_prompts ? L"LB / RB change the section" : L"Q / E or Tab change the section, or click one"}};
         for (const Item& it : option_items(settings))   // the tab's options, in the table's order
             if (setting_of(it.id)->tab == tab_) list.push_back(it);
         list.push_back(
@@ -836,8 +848,11 @@ std::vector<Frontend::Item> Frontend::items() const {
         int got = 0;
         for (int64_t t : records.unlocked) got += t != 0;
         std::wstring summary = std::to_wstring(got) + L" of " + std::to_wstring(achievement_table().size()) +
-                               L" achievements unlocked.  Up / Down scrolls, Q / E changes the tab";
-        return {{TABS, L"", L"", summary}, {BACK, L"BACK", L"", L"Return to the main menu"}};
+                               L" achievements unlocked";
+        std::vector<Item> list = {{TABS, L"", L"", summary}};
+        for (const RecordRow& r : record_rows()) list.push_back({REC_ROW, r.label, r.value, r.detail, r.lit, r.group});
+        list.push_back({BACK, L"BACK", L"", L"Return to the main menu"});
+        return list;
     }
     default:
         return {};
@@ -920,7 +935,7 @@ void Frontend::activate(const Item& it, int dir) {
     switch (it.id) {
     case PLAY: open(Screen::Play); break;
     case OPTIONS: options_from_pause_ = false; tab_ = 0; open(Screen::Options); selected_ = 1; break;
-    case RECORDS: tab_ = 0; record_scroll_ = 0; open(Screen::Records); break;
+    case RECORDS: tab_ = 0; open(Screen::Records); selected_ = 1; break;
     case QUIT: push(Action::Quit); break;
     case QUIT_TO_MENU: push(Action::QuitToMenu); break;
     case CLASSIC: open(Screen::Classic); selected_ = random_spawns ? 1 : 0; break;
@@ -1009,7 +1024,6 @@ void Frontend::activate(const Item& it, int dir) {
     case OPT_CROSS_P1:
     case OPT_CROSS_P2:   // the Windows file dialog; a picture picked is also shown from then on
         if (crosshair_pick(it.id == OPT_CROSS_P2 ? 1 : 0)) {
-            crosshair_loaded_ = false;
             push(Action::CrosshairChanged);
             if (!settings.crosshair_style) {
                 settings.crosshair_style = 1;
@@ -1116,19 +1130,27 @@ bool Frontend::key(int vk) {
     int n = int(list.size());
     bool option_row = selected_ < n && list[selected_].id >= OPT_DISPLAY;
     bool tabs_row = selected_ < n && list[selected_].id == TABS;
-    if (screen_ == Screen::Records) switch (vk) {   // two tabs and a list to scroll
+    if (screen_ == Screen::Records) switch (vk) {   // sections and rows as on the settings page; nothing to change
         case 'Q': case VK_PRIOR: case VK_LEFT: case 'A': set_tab(tab_ - 1); return true;
-        case 'E': case VK_NEXT: case VK_RIGHT: case 'D': case VK_TAB: set_tab(tab_ + 1); return true;
-        case VK_UP: case 'W': scroll_records(-1); return true;
-        case VK_DOWN: case 'S': scroll_records(+1); return true;
-        case VK_RETURN: case VK_SPACE: case VK_ESCAPE: case VK_BACK: back(); return true;
+        case 'E': case VK_NEXT: case VK_RIGHT: case 'D': set_tab(tab_ + 1); return true;
+        case VK_TAB: set_tab(tab_ + ((GetKeyState(VK_SHIFT) & 0x8000) ? -1 : 1)); return true;
+        case VK_UP: case 'W': if (n > 1) select(selected_ <= 1 ? n - 1 : selected_ - 1); return true;
+        case VK_DOWN: case 'S': if (n > 1) select(selected_ >= n - 1 ? 1 : selected_ + 1); return true;
+        case VK_RETURN: case VK_SPACE: if (selected_ == n - 1) back(); return true;
+        case VK_ESCAPE: case VK_BACK: back(); return true;
         default: return false;
         }
-    if (screen_ == Screen::Options) switch (vk) {   // tab keys
+    if (screen_ == Screen::Options) switch (vk) {   // section keys
         case 'Q': case VK_PRIOR: set_tab(tab_ - 1); return true;
         case 'E': case VK_NEXT: set_tab(tab_ + 1); return true;
         case VK_TAB: set_tab(tab_ + ((GetKeyState(VK_SHIFT) & 0x8000) ? -1 : 1)); return true;
         case 'R': reset_tab(); return true;
+        case VK_UP: case 'W':   // the rows and BACK: the column of sections is not one of them
+            if (n > 1) select(selected_ <= 1 ? n - 1 : selected_ - 1);
+            return true;
+        case VK_DOWN: case 'S':
+            if (n > 1) select(selected_ >= n - 1 ? 1 : selected_ + 1);
+            return true;
         }
     switch (vk) {
     case VK_UP: case 'W': select((selected_ + n - 1) % n); return true;
@@ -1442,11 +1464,7 @@ void Frontend::click(int x, int y) {
         back();
         return;
     }
-    if (screen_ == Screen::Records && (PtInRect(&more_up_, p) || PtInRect(&more_down_, p))) {
-        scroll_records(PtInRect(&more_up_, p) ? -1 : 1);
-        return;
-    }
-    if (PtInRect(&more_up_, p) || PtInRect(&more_down_, p)) {   // the scroll arrows of a long settings tab
+    if (PtInRect(&more_up_, p) || PtInRect(&more_down_, p)) {   // the scroll arrows of a long section
         int n = int(items().size());
         int k = std::clamp(selected_ - 1, 0, n - 3) + (PtInRect(&more_up_, p) ? -1 : 1);
         select(1 + std::clamp(k, 0, n - 3));
@@ -1455,11 +1473,12 @@ void Frontend::click(int x, int y) {
     mouse_move(x, y);
     auto list = items();
     if (hovered_ < 0 || hovered_ >= int(list.size()) || !list[hovered_].enabled) return;
-    if (list[hovered_].id == TABS) {   // the tab under the pointer
+    if (list[hovered_].id == TABS) {   // the section under the pointer
         for (int t = 0; t < int(tab_rects_.size()); t++)
             if (PtInRect(&tab_rects_[t], p)) set_tab(t);
         return;
     }
+    if (list[hovered_].id == REC_ROW) return;   // a record: nothing to change
     // Option rows: a click on the value side goes down left of the middle of the
     // value and up right of it (the arrows); on the label it steps up and wraps around
     int dir = +1;
@@ -1479,21 +1498,17 @@ void Frontend::wheel(int x, int y, int delta) {
         return;
     }
     mouse_move(x, y);
-    if (screen_ == Screen::Records) {
-        scroll_records(delta > 0 ? -1 : 1);
-        return;
-    }
     auto list = items();
     bool on_value = hovered_ >= 0 && hovered_ < int(values_.size()) && values_[hovered_].left >= 0 &&
                     x >= values_[hovered_].left;
-    bool scrolls = screen_ == Screen::Options && int(list.size()) - 2 > visible_opts_;
+    bool scrolls = (screen_ == Screen::Options || screen_ == Screen::Records) && options_scroll_;
     if (hovered_ >= 0 && hovered_ < int(list.size()) && list[hovered_].id >= OPT_DISPLAY && list[hovered_].kind != BUTTON &&
         (on_value || !scrolls)) {
         int keep = hovered_;   // over a value: change it
         hovered_ = -1;   // no wrap-around from the wheel
         activate(list[keep], delta > 0 ? +1 : -1);
         hovered_ = keep;
-    } else if (scrolls) {   // a long tab, away from the values: scroll the list
+    } else if (scrolls) {   // a long section, away from the values: scroll the list
         int k = std::clamp(selected_ - 1, 0, int(list.size()) - 3) + (delta > 0 ? -1 : 1);
         select(1 + std::clamp(k, 0, int(list.size()) - 3));
     }
@@ -1554,7 +1569,7 @@ std::vector<Frontend::RecordRow> Frontend::record_rows() const {
         });
         for (int i : order) {
             const AchievementInfo& a = table[size_t(i)];
-            RecordRow r{a.name, a.text, L"", when(i) != 0};
+            RecordRow r{a.name, a.text, L"", when(i) != 0, when(i) != 0 ? 0 : 1};
             if (r.lit) {
                 time_t t = time_t(when(i));
                 wchar_t b[32];
@@ -1572,8 +1587,9 @@ std::vector<Frontend::RecordRow> Frontend::record_rows() const {
         }
         return rows;
     }
+    int group = 2;   // TOTALS, BEST SCORES, BEST STAGES, BOSSES, SURVIVAL (RECORD_GROUPS)
     auto row = [&](const std::wstring& label, const std::wstring& value, const std::wstring& detail = L"") {
-        rows.push_back({label, detail, value, true});
+        rows.push_back({label, detail, value, true, group});
     };
     row(L"GAMES PLAYED", grouped(s.games), grouped(s.games_finished) + L" finished, " + grouped(s.continues) +
                                                L" continues");
@@ -1582,10 +1598,12 @@ std::vector<Frontend::RecordRow> Frontend::record_rows() const {
     row(L"TECHNICAL SHOTS", grouped(s.technical));
     row(L"DINOSAURS DOWN", grouped(s.kills));
     row(L"LIVES LOST", grouped(s.lives_lost));
+    group = 3;
     static const wchar_t* const COURSES[STAT_COURSES] = {L"BEGINNER", L"EXPERT", L"SHUFFLE"};
     for (int i = 0; i < STAT_COURSES; i++)
         row(L"BEST SCORE " + std::wstring(COURSES[i]), s.best_score[i] ? grouped(s.best_score[i]) : L"-",
             s.finished_course[i] ? L"Finished " + grouped(s.finished_course[i]) + L" times" : L"");
+    group = 4;
     for (int i = 0; i < STAT_STAGES; i++) {
         const Stats::Stage& st = s.stage[i];
         std::wstring detail = st.clears ? L"Best score " + grouped(st.best_score) + L",  best hit rate " +
@@ -1594,50 +1612,16 @@ std::vector<Frontend::RecordRow> Frontend::record_rows() const {
         row(L"STAGE " + std::to_wstring(i + 1), st.best_frames ? clock_time(st.best_frames) : L"-",
             grouped(st.clears) + L" clears.  " + detail);
     }
+    group = 5;
     for (int i = 0; i < STAT_BOSSES && i < BOSS_COUNT; i++) {
         const Stats::Boss& b = s.boss[i];
         row(BOSSES[i].name, b.best_frames ? clock_time(b.best_frames) : L"-",
             grouped(b.wins) + L" wins in " + grouped(b.attempts) + L" fights" +
                 (b.flawless ? L",  " + grouped(b.flawless) + L" flawless" : L""));
     }
+    group = 6;
     row(L"SURVIVAL", s.best_wave ? L"WAVE " + std::to_wstring(s.best_wave) : L"-", L"Furthest wave reached");
     return rows;
-}
-
-void Frontend::scroll_records(int by) {
-    int n = int(record_rows().size());
-    int k = std::clamp(record_scroll_ + by, 0, std::max(0, n - visible_records_));
-    if (k != record_scroll_) dirty_ = true;
-    record_scroll_ = k;
-}
-
-// The rows of the open records tab between x0 and x1, from y0 down
-void Frontend::draw_records(int x0, int x1, int y0, int row_h) {
-    auto U = [&](float v) { return int(v * u_ + 0.5f); };
-    auto rows = record_rows();
-    record_scroll_ = std::clamp(record_scroll_, 0, std::max(0, int(rows.size()) - visible_records_));
-    const Style lit{PALE_TOP, PALE_BOTTOM, 0x080806, U(2), 0.95f};
-    const Style dark{DIM, DIM, 0x080806, U(2), 0.9f};
-    const Style value{0xF4D27A, 0xE0A848, 0x080806, U(2), 0.95f};
-    int label_px = U(32), detail_px = U(19);
-    for (int k = 0; k < visible_records_ && record_scroll_ + k < int(rows.size()); k++) {
-        const RecordRow& r = rows[size_t(record_scroll_ + k)];
-        int y = y0 + k * row_h;
-        if (k % 2 == 0) fill(x0 - U(20), y - U(4), x1 + U(20), y + row_h - U(4), 0xFFFFFF, 0.03f);
-        text(ITEM, label_px, r.label, x0, y, 0, r.lit ? lit : dark);
-        if (!r.detail.empty())
-            text(MONO, detail_px, r.detail, x0, y + label_px + U(4), 0, {r.lit ? HINT : DIM, r.lit ? HINT : DIM});
-        text(ITEM, label_px, r.value, x1, y + U(6), 2, r.lit ? value : dark);
-    }
-    if (record_scroll_ > 0) {   // more above / below: arrows that also scroll on a click
-        triangle(x1 + U(36), y0 + U(10), U(20), -2, GOLD_BOTTOM, 1);
-        more_up_ = {x1 + U(10), y0 - U(16), x1 + U(64), y0 + U(36)};
-    }
-    if (record_scroll_ + visible_records_ < int(rows.size())) {
-        int yb = y0 + visible_records_ * row_h - U(20);
-        triangle(x1 + U(36), yb, U(20), 2, GOLD_BOTTOM, 1);
-        more_down_ = {x1 + U(10), yb - U(26), x1 + U(64), yb + U(26)};
-    }
 }
 
 // ---- Drawing primitives (premultiplied BGRA canvas) ----
@@ -2162,30 +2146,6 @@ int Frontend::prompt_width(const wchar_t* pad_button, const wchar_t* key, const 
     return wd;
 }
 
-// The value of an option row, ending at x1 (VOLUME: ten segments); returns
-// where it starts
-int Frontend::draw_value(const Item& it, bool sel, int x1, int y, int item_px) {
-    auto U = [&](float v) { return int(v * u_ + 0.5f); };
-    int cy = y + item_px * 6 / 10;
-    if (it.id == OPT_VOLUME && it.enabled) {
-        int seg_w = U(18), gap = U(5), seg_h = U(22);
-        int x0 = x1 - 10 * seg_w - 9 * gap;
-        int lit_n = int(it.frac * 10 + 0.5f);
-        for (int s = 0; s < 10; s++) {
-            int sx = x0 + s * (seg_w + gap);
-            bool lit = s < lit_n;
-            uint32_t c = lit ? mix(0xFFE2A8, AMBER, float(s) / 9) : 0x34322A;
-            fill(sx - 1, cy - seg_h / 2 - 1, sx + seg_w + 1, cy + seg_h / 2 + 1, 0x000000, 0.8f);
-            fill(sx, cy - seg_h / 2, sx + seg_w, cy + seg_h / 2, c, sel || !lit ? 1.0f : 0.8f);
-        }
-        return x0;
-    }
-    const Style vs = !it.enabled ? Style{DIM, DIM, INK, U(2), 0.9f}
-                     : sel       ? Style{GOLD_TOP, GOLD_BOTTOM, EDGE, U(3)}
-                                 : Style{0xF4D27A, 0xE0A848, INK, U(2), 0.95f};
-    return x1 - text(ITEM, item_px, it.value, x1, y, 2, vs);
-}
-
 // Main, Play, Boss and Survival on the backdrop, and Pause (or the boss list)
 // over the game: the entries in a column at the left, under the logo or the title
 // ---- Lightning ----
@@ -2503,221 +2463,340 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
     if (back_what) back_rect_ = prompt(x, py, L"B", L"ESC", back_what);
 }
 
-// Options and Records as in Star Wars Trilogy and Sega Rally 2: a card in the
-// middle with the title, the tab row, a row per option (its name at the left,
-// its value at the right) and BACK, the description of the chosen row under
-// them and the key help at the bottom. Beside the card, when there is room, a
-// picture of what the chosen option does (the crosshairs for their rows)
-void Frontend::draw_options(bool over_game, const std::vector<Item>& list) {
+// ---- The settings page (OPTIONS, SETTINGS, RECORDS), as Sega Rally 2's ----
+
+namespace {
+// The page's own tones, in the menus' amber (Sega Rally 2's are red and grey-blue)
+constexpr uint32_t PAGE_TEXT = 0xF2EAD6, PAGE_DIM = 0x9C9280, PAGE_FAINT = 0x655E50, PAGE_LINE = 0x4A4234;
+constexpr uint32_t GROUP = 0xF0A040, VALUE = 0xF2D07A, TAG = 0x3A2E1A, TAG_TEXT = 0xF0C890, ACCENT = 0xE8861C;
+constexpr uint32_t ABOUT = 0xE2D8C4, LIT_ABOUT = 0xDCD2BE, POINTER = 0xFFE08A;
+
+std::wstring title_case(const wchar_t* s) {   // DISPLAY -> Display
+    std::wstring t = s;
+    for (size_t i = 1; i < t.size(); i++)
+        if (t[i - 1] != L' ') t[i] = wchar_t(towlower(t[i]));
+    return t;
+}
+}  // namespace
+
+Frontend::Family Frontend::page_font(const std::wstring& s) const {
+    if (!jurassic_) return TITLE;
+    for (wchar_t c : s)   // the Jurassic font has no digits
+        if (c >= L'0' && c <= L'9') return TITLE;
+    return JURASSIC;
+}
+
+void Frontend::ribbon(int x0, int y0, int x1, int y1, int slant, float a0, float a1, int gap, int sw, float alpha) {
+    int h = std::max(1, y1 - y0);
+    for (int y = y0; y < y1; y++) {
+        int s = (y1 - 1 - y) * slant / h;
+        hgrad(x0 + s, y, x1 + s, y + 1, ACCENT, a0 * alpha, a1 * alpha);
+        if (sw > 0) fill(x0 + s - gap - sw, y, x0 + s - gap, y + 1, ACCENT, 0.9f * alpha);
+    }
+}
+
+void Frontend::glide(Glide& g, long key, int y, int h, int& gy, int& gh) {
+    constexpr double GLIDE = 0.13;   // seconds from one row to the next
+    double now = menu_clock();
+    auto at = [&](float& cy, float& ch) {
+        float k = g.t0 < 0 ? 1.0f : float(std::clamp((now - g.t0) / GLIDE, 0.0, 1.0));
+        float e = 1 - (1 - k) * (1 - k) * (1 - k);
+        cy = g.from + (g.to - g.from) * e;
+        ch = g.from_h + (g.to_h - g.from_h) * e;
+        return k;
+    };
+    if (g.key != key) {   // another page (or size): straight there
+        g = Glide{float(y), float(y), float(h), float(h), -1, key};
+    } else if (float(y) != g.to || float(h) != g.to_h) {   // a new target: from where it is now (a fast repeat retargets)
+        float cy, ch;
+        at(cy, ch);
+        g.from = cy, g.from_h = ch, g.to = float(y), g.to_h = float(h), g.t0 = now;
+    }
+    float cy, ch;
+    if (at(cy, ch) >= 1) g.t0 = -1;
+    else gliding_ = true;
+    gy = int(std::lround(cy)), gh = int(std::lround(ch));
+}
+
+// The sections in a column at the left with what each holds, the open one's
+// rows in groups under amber headings (they scroll when they do not all fit),
+// a panel at the right with what the chosen row is and does, and the keys
+// along the bottom. The same page shows the records, with nothing to change
+void Frontend::draw_options_page(bool over_game, const std::vector<Item>& list) {
     auto U = [&](float v) { return int(v * u_ + 0.5f); };
-    int w = w_, h = h_, cx = w / 2;
-    bool rec_page = screen_ == Screen::Records;
-    fill(0, 0, w, h, 0x000000, over_game ? 0.62f : 0.35f);   // the frozen game (or the backdrop) darker
-    int top = U(56), bottom = h - U(56), half = U(560);
-    fill(cx - half, top, cx + half, bottom, PANEL, over_game ? 0.92f : 0.8f);
-    band(cx, top - std::max(1, U(1)), top + std::max(2, U(2)), half, AMBER, 0.9f);   // a bright line at the top and bottom
-    band(cx, bottom - std::max(2, U(2)), bottom + std::max(1, U(1)), half, AMBER, 0.9f);
-    text(display(), U(88), rec_page ? L"RECORDS" : over_game ? L"SETTINGS" : L"OPTIONS", cx, top + U(26), 1,
-         {GOLD_TOP, GOLD_BOTTOM, EDGE, U(5), 1, U(5)});
+    const int w = w_, h = h_, n = int(list.size());
+    const int n_opts = n - 2;   // list: the sections, the rows of the open one, BACK
+    const bool rec = screen_ == Screen::Records;
+    const int tabs = tab_count();
+    auto tab_label = [&](int t) { return rec ? RECORD_TAB_NAMES[t] : TAB_NAMES[t]; };
+    auto tab_about = [&](int t) { return rec ? RECORD_TAB_ABOUT[t] : TAB_ABOUT[t]; };
+    auto tab_more = [&](int t) { return rec ? RECORD_TAB_MORE[t] : TAB_MORE[t]; };
+    // The page darkens what is behind it: the blurred backdrop, or the paused
+    // game (nearly black: its HUD must not show through)
+    fill(0, 0, w, h, over_game ? 0x000000 : PANEL, over_game ? 0.9f : 0.6f);
 
-    const Style gold{GOLD_TOP, GOLD_BOTTOM, EDGE, U(3)};
-    const Style pale{PALE_TOP, PALE_BOTTOM, INK, U(2), 0.95f};
-    const Style dim{DIM, DIM, INK, U(2), 0.9f};
-    int spacing = U(48), item_px = U(40), row_px = U(31), half_w = U(470);   // row_px: the options, in the plain font
-    int left = cx - U(410), right = cx + U(410);   // the rows' names and values, symmetric about the middle
-    int tabs_y = top + U(150), rows_y = tabs_y + spacing + U(20);
-    int foot_y = bottom - U(52);   // the key help's middle
-    // As many option rows as leave room for BACK and two lines of description
-    int rows_room = foot_y - U(150) - item_px - rows_y;
-    int n_opts = int(list.size()) - 2;
-    visible_opts_ = std::clamp(rows_room / spacing, 3, 14);
-    int shown = rec_page ? 0 : std::min(n_opts, visible_opts_);
-    if (!rec_page) {   // keep the chosen option in view
-        scroll_ = std::clamp(scroll_, 0, std::max(0, n_opts - shown));
-        int k = selected_ - 1;
-        if (k >= 0 && k < n_opts) {
-            if (k < scroll_) scroll_ = k;
-            if (k >= scroll_ + shown) scroll_ = k - shown + 1;
-        }
-    }
-    int back_y = rows_y + (rec_page ? visible_opts_ : shown) * spacing + U(8);
-    if (rec_page) {   // the records fill the rows of the options
-        int row_h = U(74);
-        visible_records_ = std::max(3, (back_y - rows_y - U(10)) / row_h);
-        draw_records(left, right - U(10), rows_y, row_h);
+    // Columns: as wide as the window allows, up to 1728 units (1080p: a 96 pixel margin)
+    const int mx = std::max(U(56), (w - U(1728)) / 2);
+    const bool wide = float(w - 2 * mx) / u_ >= 1600;
+    const int rail_w = U(wide ? 300.0f : 250.0f), gap = U(wide ? 48.0f : 32.0f), panel_w = U(wide ? 600.0f : 430.0f);
+    const int rail_x = mx, rows_x0 = mx + rail_w + gap, panel_x0 = w - mx - panel_w, rows_x1 = panel_x0 - gap;
+    const int top = U(196), bottom = h - U(100);   // the columns, between the title and the key help
+
+    // Title, the amber mark under it, where this is, and the logo at the top right
+    const std::wstring title = rec ? L"RECORDS" : over_game ? L"SETTINGS" : L"OPTIONS";
+    text(display(), U(80), title, mx, U(34), 0, {GOLD_TOP, GOLD_BOTTOM, EDGE, U(3), 1, U(4)});
+    fill(mx + U(2), U(134), mx + U(74), U(139), ACCENT, 1);
+    std::wstring crumb = std::wstring(over_game ? L"Pause" : L"Main menu") + L"  ›  " +
+                         (rec ? L"Records" : over_game ? L"Settings" : L"Options") + L"  ›  " + title_case(tab_label(tab_));
+    text(ROW_MEDIUM, U(24), crumb, mx + U(92), U(120), 0, {PAGE_DIM, PAGE_DIM});
+    if (logo_.w > 0) {
+        int lw = U(wide ? 250.0f : 200.0f), lh = lw * logo_.h / logo_.w;
+        sprite(logo_, w - mx - lw, U(18), lw, lh);
     }
 
-    // The tab row: the names side by side, the open one underlined
-    {
-        bool sel = selected_ == 0;
-        int y = tabs_y;
-        if (sel) band(cx, y - U(8), y + item_px + U(14), half_w, AMBER, 0.22f);
-        int gap = U(44), total = 0, tab_px = item_px * 17 / 20;
-        for (int t = 0; t < tab_count(); t++) total += measure(display(), tab_px, tab_name(t)) + gap;
-        if (total - gap > 2 * half_w - U(80)) {   // more than fit: smaller names
-            tab_px = tab_px * (2 * half_w - U(80)) / (total - gap);
-            gap = gap * (2 * half_w - U(80)) / (total - gap);
-            total = 0;
-            for (int t = 0; t < tab_count(); t++) total += measure(display(), tab_px, tab_name(t)) + gap;
-        }
-        int x = cx - (total - gap) / 2;
-        tab_rects_.clear();
-        for (int t = 0; t < tab_count(); t++) {
-            bool open_tab = t == tab_;
-            const Style ts = open_tab ? gold : Style{0xA9A390, 0x8F8978, INK, U(2), 0.95f};
-            int ty0 = y + (item_px - tab_px) / 2;
-            int tw = text(display(), tab_px, tab_name(t), x, ty0, 0, ts);
-            if (open_tab) fill(x, ty0 + tab_px + U(6), x + tw, ty0 + tab_px + U(6) + std::max(2, U(4)), GOLD_BOTTOM, 1);
-            tab_rects_.push_back({x - gap / 2, y - U(8), x + tw + gap / 2, y + item_px + U(14)});
-            x += tw + gap;
-        }
+    hit_.assign(size_t(n), RECT{});
+    values_.assign(size_t(n), ValueArea{-1, 0});
+
+    // The sections, one under the other; the open one with a ribbon
+    const int sec_h = U(92);
+    const Style lit_name{WHITE_TOP, WHITE_BOTTOM, INK, U(2), 1, U(3)}, dim_name{PAGE_DIM, PAGE_DIM, INK, U(2)};
+    tab_rects_.clear();
+    {   // the open section's ribbon, gliding there from the last one
+        int ty = top + tab_ * sec_h;
+        int gy, gh;
+        glide(glide_tab_, (long(screen_) * 2 + long(options_from_pause_)) * 100003 + h_, ty - U(8), sec_h - U(8), gy, gh);
+        int sl = gh * 30 / 100;
+        ribbon(rail_x - U(20) - sl / 2, gy, rail_x + rail_w, gy + gh, sl, 0.85f, 0.0f, U(10), U(8), 1);
+        if (!gliding_) triangle(rail_x + U(8), ty + U(28), U(18), +1, POINTER, 0.95f);
+    }
+    for (int t = 0; t < tabs; t++) {
+        int y = top + t * sec_h;
+        bool open_tab = t == tab_;
+        RECT r{rail_x - U(20), y - U(8), rail_x + rail_w, y + sec_h - U(16)};
+        if (!open_tab && selected_ == 0 && hovered_ == 0 && mouse_y_ >= r.top && mouse_y_ < r.bottom)
+            hgrad(r.left, r.top, r.right, r.bottom, 0xFFFFFF, 0.08f, 0.0f);   // under the pointer
+        text(display(), U(44), tab_label(t), rail_x + U(26), y - U(6), 0, open_tab ? lit_name : dim_name);
+        text(PROSE, U(17), tab_about(t), rail_x + U(28), y + U(46), 0,
+             {open_tab ? LIT_ABOUT : PAGE_FAINT, open_tab ? LIT_ABOUT : PAGE_FAINT});
+        tab_rects_.push_back(r);
+    }
+    hit_[0] = {rail_x - U(20), top - U(8), rail_x + rail_w, top + tabs * sec_h - U(16)};
+    {   // BACK, under the sections
+        int y = top + tabs * sec_h + U(28);
+        bool sel = selected_ == n - 1;
+        RECT r{rail_x - U(20), y - U(6), rail_x + rail_w, y + U(58)};
         if (sel) {
-            int ty = y + item_px * 6 / 10;
-            triangle(tab_rects_.front().left - U(10), ty, U(18), -1, GOLD_BOTTOM, 1);
-            triangle(tab_rects_.back().right + U(10), ty, U(18), +1, GOLD_BOTTOM, 1);
+            int hh = r.bottom - r.top, sl = hh * 30 / 100;
+            ribbon(r.left - sl / 2, r.top, r.right, r.bottom, sl, 0.85f, 0.0f, U(10), U(8), 1);
         }
-        hit_.push_back({cx - half_w, y - U(8), cx + half_w, y + item_px + U(14)});
-        values_.push_back({-1, 0});
+        triangle(rail_x + U(20), y + U(26), U(16), -1, sel ? GOLD_BOTTOM : PAGE_DIM, 1);
+        text(display(), U(40), L"BACK", rail_x + U(40), y - U(2), 0,
+             sel ? Style{GOLD_TOP, GOLD_BOTTOM, EDGE, U(2)} : dim_name);
+        hit_[size_t(n - 1)] = r;
+        back_rect_ = r;
     }
 
-    // The options of the open tab
-    for (int i = 1; i <= n_opts; i++) {
-        int slot = i - 1 - scroll_;
-        if (rec_page || slot < 0 || slot >= shown) {   // scrolled out of view: no hit area
-            hit_.push_back(RECT{});
-            values_.push_back({-1, 0});
-            continue;
+    // The rows in their groups. Rows that do not fit scroll, keeping the chosen one in view
+    const int row_h = U(46), head_h = U(38), head_gap = U(10), label_px = U(30);
+    std::vector<const wchar_t*> group(size_t(std::max(0, n_opts)), nullptr);   // the heading over each row, if any
+    std::vector<const wchar_t*> group_name(size_t(std::max(0, n_opts)), L"");  // the group each row is in
+    const wchar_t* current = L"";
+    for (int k = 0; k < n_opts; k++) {
+        const Item& it = list[size_t(1 + k)];
+        const wchar_t* g = rec ? (k > 0 && list[size_t(k)].index == it.index   // records: a heading where the group changes
+                                      ? nullptr
+                                      : RECORD_GROUPS[std::clamp(it.index, 0, RECORD_GROUP_COUNT - 1)])
+                               : group_of(it.id);
+        if (g) current = group[size_t(k)] = g;
+        group_name[size_t(k)] = current;
+    }
+    auto height = [&](int k, bool first) {   // a row with its heading (the first one shown always has one)
+        bool head = first ? *group_name[size_t(k)] != 0 : group[size_t(k)] != nullptr;
+        return row_h + (head ? head_h + (first ? 0 : head_gap) : 0);
+    };
+    auto fits = [&](int from, int to) {
+        int sum = 0;
+        for (int k = from; k <= to; k++) sum += height(k, k == from);
+        return sum <= bottom - top;
+    };
+    int k_sel = selected_ - 1;
+    scroll_ = std::clamp(scroll_, 0, std::max(0, n_opts - 1));
+    if (k_sel >= 0 && k_sel < n_opts) {
+        if (k_sel < scroll_) scroll_ = k_sel;
+        while (scroll_ < k_sel && !fits(scroll_, k_sel)) scroll_++;
+    }
+    while (scroll_ > 0 && fits(scroll_ - 1, n_opts - 1)) scroll_--;   // no room left empty at the bottom
+    options_scroll_ = n_opts > 0 && (scroll_ > 0 || !fits(0, n_opts - 1));
+
+    int cap0, cap1;
+    ink_rows(ROW, label_px, L"H", cap0, cap1);   // the capitals centred in the row
+    const Style gold{GOLD_TOP, GOLD_BOTTOM, EDGE, U(2)};
+    bool row_ribbon = false;
+    if (k_sel >= scroll_ && k_sel < n_opts) {   // the chosen row's ribbon, gliding there from the last one
+        int ry = top, k = scroll_;
+        for (; k <= k_sel; k++) {
+            if (ry + height(k, k == scroll_) > bottom) break;
+            ry += height(k, k == scroll_);
         }
-        const Item& it = list[i];
-        bool sel = i == selected_;
-        int y = rows_y + slot * spacing;
-        if (sel) band(cx, y - U(8), y + row_px + U(10), half_w, AMBER, it.enabled ? 0.22f : 0.10f);
-        text(ITEM, row_px, it.label, left, y, 0, !it.enabled ? dim : sel ? gold : pale);
-        int vx0 = draw_value(it, sel, right, y, row_px);
-        int ty = y + row_px * 6 / 10;
-        if (sel && it.enabled && it.kind != BUTTON) {
-            triangle(vx0 - U(24), ty, U(18), -1, GOLD_BOTTOM, 1);
-            triangle(right + U(24), ty, U(18), +1, GOLD_BOTTOM, 1);
+        if (k > k_sel) {   // shown
+            ry -= row_h;
+            const Item& it = list[size_t(1 + k_sel)];
+            int gy, gh;
+            glide(glide_row_, (long(screen_) * 8 + long(tab_)) * 100003 + h_ + long(options_from_pause_) * 7, ry, row_h, gy, gh);
+            int sl = row_h * 40 / 100;
+            ribbon(rows_x0 - U(30) - sl / 2, gy, rows_x1 + U(18) - sl, gy + gh, sl, 0.30f, 0.58f, U(6), U(5),
+                   it.enabled ? 1.0f : 0.4f);
+            if (!gliding_) triangle(rows_x0 - U(16), ry + row_h / 2, U(14), +1, POINTER, it.enabled ? 0.95f : 0.4f);
+            row_ribbon = true;
         }
-        hit_.push_back({cx - half_w, y - (spacing - row_px) / 2, cx + half_w, y + row_px + (spacing - row_px) / 2});
-        values_.push_back({it.kind == BUTTON ? -1 : vx0 - U(48), (vx0 + right) / 2});
-        if (slot == 0 && scroll_ > 0) {   // more rows above / below: arrows at the right edge, clickable
-            triangle(cx + half_w + U(16), y - U(4), U(20), -2, GOLD_BOTTOM, 1);
-            more_up_ = {cx + half_w - U(10), y - U(30), cx + half_w + U(44), y + U(16)};
+    }
+    if (!row_ribbon) glide_row_.key = -1;   // next time straight there
+    int y = top, last_shown = scroll_ - 1;
+    for (int k = scroll_; k < n_opts; k++) {
+        if (y + height(k, k == scroll_) > bottom) break;
+        const Item& it = list[size_t(1 + k)];
+        const wchar_t* head = k == scroll_ ? (*group_name[size_t(k)] ? group_name[size_t(k)] : nullptr) : group[size_t(k)];
+        if (head) {
+            if (k != scroll_) y += head_gap;
+            int gw = text(ROW_MEDIUM, U(20), head, rows_x0, y + U(6), 0, {GROUP, GROUP});
+            fill(rows_x0 + gw + U(14), y + U(20), rows_x1, y + U(20) + std::max(1, U(1)), PAGE_LINE, 1);
+            y += head_h;
         }
-        if (slot == shown - 1 && scroll_ + shown < n_opts) {
-            triangle(cx + half_w + U(16), y + row_px + U(8), U(20), 2, GOLD_BOTTOM, 1);
-            more_down_ = {cx + half_w - U(10), y + row_px - U(8), cx + half_w + U(44), y + row_px + U(34)};
+        bool sel = 1 + k == selected_;
+        int cy = y + row_h / 2, ty = cy - (cap0 + cap1) / 2;
+        uint32_t lc = it.enabled ? PAGE_TEXT : PAGE_FAINT;
+        int lw = text(ROW, label_px, it.label, rows_x0, ty, 0,
+                      sel && it.enabled ? Style{WHITE_TOP, WHITE_BOTTOM, 0, 0, 1, U(2)} : Style{lc, lc, 0, 0, 1, it.enabled ? U(2) : 0});
+        auto tag = [&](const wchar_t* t, uint32_t back, uint32_t ink) {   // a small label after the name
+            int tx = rows_x0 + lw + U(14), tw = measure(ROW, U(15), t) + U(16);
+            fill(tx, cy - U(11), tx + tw, cy + U(11), back, 1);
+            text(ROW, U(15), t, tx + tw / 2, cy - U(10), 1, {ink, ink});
+        };
+        if ((it.id == OPT_AA && aa_waits()) || (it.id == OPT_EXPERIENCE && settings.experience != (arcade ? 1 : 0)))
+            tag(L"RESTART", 0x6A3414, 0xFFE0C8);   // changed, waiting for a new start
+        else if (it.id == OPT_RT && it.enabled) tag(L"RT", TAG, TAG_TEXT);   // a graphics card with ray tracing
+        int right = rows_x1 - U(20), vx0;
+        uint32_t vc = it.enabled ? VALUE : PAGE_FAINT;
+        const Style value_style = sel && it.enabled ? gold : Style{vc, vc, 0, 0, 1, it.enabled ? U(2) : 0};
+        if (it.id == OPT_VOLUME) {   // ten segments
+            int seg_w = U(15), sgap = U(5), seg_h = U(20);
+            int lit_n = int(it.frac * 10 + 0.5f);
+            vx0 = right - 10 * seg_w - 9 * sgap;
+            for (int s = 0; s < 10; s++) {
+                int x0 = vx0 + s * (seg_w + sgap);
+                bool on = s < lit_n;
+                uint32_t c = on ? mix(0xFFE8A8, ACCENT, float(s) / 9) : 0x3A3428;
+                fill(x0 - 1, cy - seg_h / 2 - 1, x0 + seg_w + 1, cy + seg_h / 2 + 1, 0x000000, 0.8f);
+                fill(x0, cy - seg_h / 2, x0 + seg_w, cy + seg_h / 2, c, sel || !on ? 1.0f : 0.8f);
+            }
+        } else if (it.kind == SLIDER) {   // a bar, then its value (the bars lined up)
+            text(ROW, label_px, it.value, right, ty, 2, value_style);
+            int bx1 = right - measure(ROW, label_px, L"200%") - U(18), bx0 = bx1 - U(wide ? 230.0f : 150.0f);
+            int bh = U(12), f = bx0 + int(float(bx1 - bx0) * std::clamp(it.frac, 0.0f, 1.0f) + 0.5f);
+            uint32_t bar = !it.enabled ? 0x5A4A30 : sel ? 0xFFB040 : ACCENT;
+            fill(bx0 - 1, cy - bh / 2 - 1, bx1 + 1, cy + bh / 2 + 1, 0x000000, 0.8f);
+            fill(bx0, cy - bh / 2, bx1, cy + bh / 2, 0x3A3428, 1);
+            fill(bx0, cy - bh / 2, f, cy + bh / 2, bar, 1);
+            fill(bx0, cy - bh / 2, f, cy - bh / 2 + std::max(1, bh / 4), 0xFFE0A0, it.enabled ? 0.35f : 0.1f);   // a light along its top
+            vx0 = bx0;
+        } else {
+            vx0 = right - text(ROW, label_px, it.value, right, ty, 2, value_style);
+        }
+        bool changes = !rec && it.kind != BUTTON;   // (a record, and a button, have nothing to step through)
+        if (sel && it.enabled && changes) {
+            triangle(vx0 - U(20), cy, U(14), -1, GOLD_BOTTOM, 1);
+            triangle(right + U(13), cy, U(14), +1, GOLD_BOTTOM, 1);
+        }
+        hit_[size_t(1 + k)] = {rows_x0 - U(18), y, rows_x1 + U(4), y + row_h};
+        if (changes) values_[size_t(1 + k)] = {vx0 - U(40), (vx0 + right) / 2};
+        y += row_h;
+        last_shown = k;
+    }
+    if (scroll_ > 0) {   // more rows above / below: arrows past the right end of the rows
+        triangle(rows_x1 + U(30), top + U(14), U(18), -2, GOLD_BOTTOM, 1);
+        more_up_ = {rows_x1 + U(10), top - U(8), rows_x1 + U(52), top + U(36)};
+    }
+    if (last_shown < n_opts - 1) {
+        triangle(rows_x1 + U(30), bottom - U(14), U(18), 2, GOLD_BOTTOM, 1);
+        more_down_ = {rows_x1 + U(10), bottom - U(36), rows_x1 + U(52), bottom + U(8)};
+    }
+
+    // The panel at the right: what the chosen row is and does
+    const int px1 = w - mx, pad = U(wide ? 36.0f : 26.0f);
+    fill(panel_x0, top - U(8), px1, bottom, PANEL, over_game ? 0.95f : 0.62f);
+    frame(panel_x0, top - U(8), px1, bottom, std::max(1, U(1)), PAGE_LINE, 1);
+    fill(panel_x0, top - U(8), px1, top - U(8) + std::max(2, U(4)), ACCENT, 1);
+    if (selected_ >= 0 && selected_ < n) {
+        const Item& it = list[size_t(selected_)];
+        bool section = it.id == TABS, back = it.id == BACK;
+        int x = panel_x0 + pad, py = top + U(22), inner = px1 - pad - x;
+        const wchar_t* kicker = section ? L"SECTION" : back || n_opts <= 0 ? L"" : group_name[size_t(std::clamp(selected_ - 1, 0, n_opts - 1))];
+        if (*kicker) text(ROW_MEDIUM, U(20), kicker, x, py, 0, {GROUP, GROUP});
+        py += U(30);
+        std::wstring name = section ? std::wstring(tab_label(tab_)) : it.label;
+        Family nf = page_font(name);
+        int name_px = U(60);
+        while (name_px > U(36) && measure(nf, name_px, name) > inner) name_px -= U(4);
+        text(nf, name_px, name, x, py, 0, {WHITE_TOP, WHITE_BOTTOM, INK, U(2), 1, U(3)});
+        py += name_px + U(22);
+        if (it.id == OPT_VOLUME) {
+            text(ROW, U(34), std::to_wstring(settings.volume) + L" / 10", x, py, 0, gold);
+            py += U(52);
+        } else if (!section && !back && !it.value.empty()) {
+            text(ROW, U(34), it.value, x, py, 0, it.enabled ? gold : Style{PAGE_FAINT, PAGE_FAINT});
+            py += U(52);
+        }
+        fill(x, py, px1 - pad, py + std::max(1, U(1)), PAGE_LINE, 1);
+        py += U(24);
+        int text_end = bottom - U(16);
+        if (it.id == REC_ROW && it.index <= 1) {   // an achievement: its badge at the bottom
+            const Picture& badge = achievement_badge(it.enabled);
+            if (badge.w > 0) {
+                int s = U(120);
+                sprite(badge, x, bottom - U(24) - s, s, s);
+                text_end = bottom - U(24) - s - U(20);
+            }
+        }
+        std::wstring about = section ? std::wstring(tab_more(tab_)) + L".  " + it.hint : it.hint;
+        for (const std::wstring& line : wrap(PROSE, U(24), about, inner)) {
+            if (py + U(34) > text_end) break;
+            text(PROSE, U(24), line, x, py, 0, {ABOUT, ABOUT});
+            py += U(34);
         }
     }
 
-    // BACK, centred under them
-    {
-        const Item& it = list.back();
-        bool sel = selected_ == int(list.size()) - 1;
-        if (sel) band(cx, back_y - U(8), back_y + item_px + U(14), half_w, AMBER, 0.22f);
-        int tw = text(display(), item_px, it.label, cx, back_y, 1, sel ? gold : pale);
-        if (sel) {
-            int ty = back_y + item_px * 6 / 10;
-            triangle(cx - tw / 2 - U(34), ty, U(20), +1, GOLD_BOTTOM, 1);
-            triangle(cx + tw / 2 + U(34), ty, U(20), -1, GOLD_BOTTOM, 1);
-        }
-        hit_.push_back({cx - half_w, back_y - U(8), cx + half_w, back_y + item_px + U(14)});
-        values_.push_back({-1, 0});
-    }
-
-    // The description of the chosen row, centred under BACK (two lines at most)
-    const Item* cur = selected_ < int(list.size()) ? &list[selected_] : nullptr;
-    if (cur) {
-        auto lines = wrap(BODY, U(24), cur->hint, U(1040));
-        if (lines.size() > 2) lines.resize(2);
-        int ly = back_y + item_px + U(34);
-        for (const std::wstring& line : lines) {
-            text(BODY, U(24), line, cx, ly, 1, {HINT, HINT});
-            ly += U(32);
-        }
-    }
-
-    // Beside the card: what the chosen option does, or the crosshairs
-    bool option = cur && cur->id >= OPT_DISPLAY;
-    int side0 = cx + half + U(28), side1 = std::min(w - U(28), side0 + U(440));
-    if (option && side1 - side0 >= U(240)) {
-        int ph = (side1 - side0) * 9 / 16, py = rows_y;
-        bool crosshair_row = cur->id == OPT_CROSS || cur->id == OPT_CROSS_STYLE || cur->id == OPT_CROSS_P1 ||
-                             cur->id == OPT_CROSS_P2;
-        const Picture& pic = preview(cur->id);
-        if (crosshair_row || pic.w > 0) {
-            fill(side0 - U(6), py - U(6), side1 + U(6), py + ph + U(6), PANEL, 0.85f);
-            if (crosshair_row) crosshair_preview(side0, py, side1, py + ph);
-            else picture(pic, side0, py, side1, py + ph);
-            frame(side0, py, side1, py + ph, std::max(1, U(1.5f)), AMBER, 0.45f);
-        }
-    }
-
-    // The key help, centred at the bottom of the card
+    // The key help along the bottom
+    fill(0, h - U(76), w, h, 0x000000, 0.5f);
+    fill(0, h - U(76), w, h - U(76) + std::max(1, U(1)), PAGE_LINE, 1);
     struct Key { const wchar_t *pad, *key, *what; };
     std::vector<Key> keys;
-    if (rec_page) keys = {{L"LS", L"UD", L"SCROLL"}, {L"LB", L"Q", L""}, {L"RB", L"E", L"TAB"}, {L"B", L"ESC", L"BACK"}};
-    else keys = {{L"LS", L"<>", L"CHANGE"}, {L"LB", L"Q", L""}, {L"RB", L"E", L"TAB"}, {L"Y", L"R", L"RESET TO DEFAULTS"},
-                 {L"B", L"ESC", L"BACK"}};
-    int total = 0;
-    for (const Key& k : keys) total += prompt_width(k.pad, k.key, k.what);
-    int x = cx - (total - U(44)) / 2, py = foot_y - U(19);
+    if (pad_prompts) {
+        keys = {{L"LS", nullptr, rec ? L"SELECT" : L"SELECT / CHANGE"}, {L"LB", nullptr, L""}, {L"RB", nullptr, L"SECTION"}};
+        if (!rec) keys.push_back({L"Y", nullptr, L"RESET TO DEFAULTS"});
+        keys.push_back({L"B", nullptr, L"BACK"});
+    } else {
+        keys = {{nullptr, L"UD", L"SELECT"}};
+        if (!rec) keys.push_back({nullptr, L"<>", L"CHANGE"});
+        keys.push_back({nullptr, L"Q / E", L"SECTION"});
+        if (!rec) keys.push_back({nullptr, L"R", L"RESET TO DEFAULTS"});
+        keys.push_back({nullptr, L"ESC", L"BACK"});
+    }
+    int kx = mx, ky = h - U(38) - U(19);
     for (const Key& k : keys) {
-        RECT r = prompt(x, py, k.pad, k.key, k.what);
+        RECT r = prompt(kx, ky, k.pad, k.key, k.what);
         if (k.what == std::wstring(L"RESET TO DEFAULTS")) reset_rect_ = r;
         if (k.what == std::wstring(L"BACK")) back_rect_ = r;
     }
 }
 
-// Both players' crosshairs at the size the game draws them (pictures at their
-// pixels at 1080p, or the rings), side by side over a stretch of the game
-void Frontend::crosshair_preview(int x0, int y0, int x1, int y1) {
-    auto U = [&](float v) { return int(v * u_ + 0.5f); };
-    if (!crosshair_loaded_) {
-        for (int p = 0; p < 2; p++) {
-            Picture& c = crosshair_[p];
-            std::vector<uint8_t> rgba;
-            c = Picture{};
-            if (!crosshair_load(p, c.w, c.h, rgba) || rgba.size() < size_t(c.w) * c.h * 4) {
-                c.w = c.h = 0;
-                continue;
-            }
-            c.px.resize(size_t(c.w) * c.h);
-            for (size_t i = 0; i < c.px.size(); i++)
-                c.px[i] = uint32_t(rgba[i * 4 + 3]) << 24 | uint32_t(rgba[i * 4]) << 16 | uint32_t(rgba[i * 4 + 1]) << 8 |
-                          rgba[i * 4 + 2];
-        }
-        crosshair_loaded_ = true;
+// The achievements' badges (res/achievements, as the pop-up's): lit, or locked
+const Frontend::Picture& Frontend::achievement_badge(bool lit) {
+    Picture& p = badges_[lit ? 0 : 1];
+    if (!badges_loaded_[lit ? 0 : 1]) {
+        badges_loaded_[lit ? 0 : 1] = true;
+        load_image(lit ? L"res/achievements/unlocked.png" : L"res/achievements/locked.png", p.px, p.w, p.h);
     }
-    const Picture& back = preview(OPT_CROSS);
-    if (back.w > 0) picture(back, x0, y0, x1, y1);
-    else fill(x0, y0, x1, y1, 0x1A2016, 1);
-    float k = h_ / 1080.0f;
-    for (int p = 0; p < 2; p++) {
-        int cx = x0 + (x1 - x0) * (p + 1) / 3, cy = (y0 + y1) / 2;
-        const Picture& c = crosshair_[p];
-        if (settings.crosshair_style && c.w > 0) {   // its own picture, centred, nearest pixel
-            int dw = std::max(1, int(c.w * k + 0.5f)), dh = std::max(1, int(c.h * k + 0.5f));
-            for (int j = 0; j < dh; j++)
-                for (int i = 0; i < dw; i++) {
-                    uint32_t q = c.px[size_t(j * c.h / dh) * c.w + size_t(i * c.w / dw)];
-                    int x = cx - dw / 2 + i, y = cy - dh / 2 + j;
-                    if (x >= x0 && x < x1 && y >= y0 && y < y1) blend(x, y, q & 0xFFFFFF, float(q >> 24) / 255.0f);
-                }
-        } else {   // the game's ring: yellow for player 1, cyan for player 2
-            float r = std::max(10.0f, h_ / 60.0f), t = std::max(2.0f, r / 5);
-            uint32_t col = p ? 0x33E6FF : 0xFFF233;
-            int b = int(r + t) + 2;
-            for (int y = cy - b; y <= cy + b; y++)
-                for (int x = cx - b; x <= cx + b; x++) {
-                    float d = std::sqrt(float((x - cx) * (x - cx) + (y - cy) * (y - cy)));
-                    float cov = std::clamp(t * 0.5f - std::abs(d - r) + 0.5f, 0.0f, 1.0f);
-                    if (cov > 0) blend(x, y, col, cov);
-                }
-        }
-        text(ITEM, U(20), p ? L"PLAYER 2" : L"PLAYER 1", cx, y1 - U(34), 1, {WHITE_TOP, WHITE_BOTTOM, INK, U(2)});
-    }
+    return p;
 }
 
 bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
@@ -2748,6 +2827,7 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
         bg_lit_.clear();
     }
     partial_ = false;
+    gliding_ = false;
     menu_frames_++;
     if (screen_ == Screen::Splash) {
         if (draw_splash(out)) {
@@ -2787,7 +2867,7 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
     else {
         if (bg_.empty()) background();
         if (lit && !page && bg_lit_.size() == bg_.size()) relight(out, shade, flash);
-        else out = has_poster() && page ? bg_stone_ : bg_;
+        else out = page && !bg_stone_.empty() ? bg_stone_ : bg_;   // the page: on the backdrop blurred
     }
     px_ = out.data();
     hit_.clear();
@@ -2799,13 +2879,13 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
         gun_page_ = out;   // without the marks
         gun_page_key_ = gun_key();
         draw_gun_marks();
-    } else if (page) draw_options(over_game, list);
+    } else if (page) draw_options_page(over_game, list);
     else draw_menu(over_game, list);
     if (locked_notice_ && screen_ == Screen::Survival) draw_locked_notice();
     if (news_open_ && screen_ == Screen::Main) draw_news();
     if (restart_shown()) draw_restart();
     if (drop_open_ && screen_ == Screen::Options) draw_drop();
-    dirty_ = animating_ && !page && screen_ != Screen::GunTest;   // still moving: again next refresh
+    dirty_ = (animating_ && !page && screen_ != Screen::GunTest) || gliding_;   // still moving: again next refresh
     animating_ = false;
     return true;
 }

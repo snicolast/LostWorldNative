@@ -18,8 +18,9 @@ class GdiText {
 public:
     // Saira and Barlow are bold; Jurassic Park is optional (free for personal
     // use, not in the repository) and without Arimo Windows' own sans-serif
-    // stands in
-    enum Face { SAIRA, BARLOW, MONO, JURASSIC, ARIMO, FACE_COUNT };
+    // stands in. The last three are the settings page's (as Sega Rally 2's):
+    // its rows, its group headings and its descriptions
+    enum Face { SAIRA, BARLOW, MONO, JURASSIC, ARIMO, BARLOW_SEMIBOLD, BARLOW_MEDIUM, BARLOW_REGULAR, FACE_COUNT };
     struct Mask {   // text coverage (0..255) with `pad` pixels around the text box
         int w = 0, h = 0, pad = 0, text_w = 0, text_h = 0;
         int ascent = 0;             // the font's, from the top of the text box to the baseline
