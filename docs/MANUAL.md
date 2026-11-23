@@ -235,7 +235,9 @@ saved games and are not versioned.
 - Dynamic resolution (DLAA and DLSS, always on): when an image takes the
   graphics card nearly all the time until the next one (90% of a refresh with
   vsync, or of the MAX FPS interval), the 3D is drawn a little smaller, down to
-  70% each way, and DLSS still brings it to the full size; it grows back a step
+  70% each way (DLSS QUALITY and BALANCED: down to half the picture shown, the
+  least DLSS takes; PERFORMANCE and ULTRA PERFORMANCE are there already and keep
+  their size), and DLSS still brings it to the full size; it grows back a step
   at a time once there is room. The targets keep their size and the image is
   drawn in their top left part (DLSS's InRenderSubrectDimensions); DLAA's
   feature is made as QUALITY then, since DLAA refuses a smaller part. Not with
@@ -605,7 +607,7 @@ normal behaviour when unset):
 | LW_FRAMELOG=path | Writes a line per present (timings, frames shown) and per game frame, and when each image reached the screen (VK_KHR_present_wait); `python tools/frame_log.py path` reports missed refreshes, uneven motion and latency |
 | LW_SKYLOG=path | Writes the back layers' scroll of each 2D frame, the world camera of each 3D frame and, per present, the pairing and the sub-pixel position drawn; `python tools/sky_log.py path` compares how the sky scrolls with how the camera turns (pixels per radian, how many frames apart) and how smoothly the sky is drawn between frames |
 | LW_NO_DYNRES=1 | No dynamic resolution with DLAA / DLSS: always the full size |
-| LW_DYNRES_SCALE=F | DLAA / DLSS always draw the 3D at that share of the size each way (0.3-1), to look at a smaller image |
+| LW_DYNRES_SCALE=F | DLAA / DLSS always draw the 3D at that share of the size each way (no less than half the picture shown, the least DLSS takes), to look at a smaller image; with --shot too |
 | LW_QUEUE=N | At most N images waiting for the screen (2 by default; 0 = the whole swapchain) |
 | LW_BACKGROUND=1 | The window opens behind all the others and never takes the keyboard (test runs while the computer is in use; with the menu, BACKGROUND FPS then holds it at 30 images a second unless `background_fps = 0`) |
 | LW_WINDOW_POS=x,y | Puts the window there (-30000,0: out of sight) |
