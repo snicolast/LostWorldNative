@@ -1396,10 +1396,7 @@ bool App::init(bool aa_auto) {
             // the logos first (not when a debugging aid drives the menu)
             if (getenv("LW_MENU_KEYS") || getenv("LW_MENU_SHOT") || getenv("LW_MENU_FILM") || getenv("LW_RESTARTED"))
                 frontend.open(Frontend::Screen::Main);
-            else {
-                frontend.open_splash();
-                frontend.check_for_news();   // news.txt on GitHub while the logo plays
-            }
+            else frontend.open_splash();
             g_menu_open = true;
         }
         presenter.input_hook = [this](UINT msg, WPARAM wp, LPARAM lp) -> bool {

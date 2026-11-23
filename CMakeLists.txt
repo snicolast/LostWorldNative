@@ -196,7 +196,6 @@ add_executable(LostWorld WIN32
     src/ui/menu_music.cpp
     src/ui/splash_video.cpp
     src/ui/frontend.cpp
-    src/ui/news.cpp
     src/video/r3d_state.cpp
     src/video/r3d_scene.cpp
     src/video/r3d_screen.cpp
@@ -254,7 +253,7 @@ file(CONFIGURE OUTPUT ${ICONS_DIR}/achievement_icons.h CONTENT "${icons_h}")
 target_include_directories(LostWorld PRIVATE ${ICONS_DIR})
 # volk loads vulkan-1.dll at runtime: the SDK is not needed
 target_compile_definitions(LostWorld PRIVATE VK_NO_PROTOTYPES VK_USE_PLATFORM_WIN32_KHR)
-target_link_libraries(LostWorld PRIVATE SDL3::SDL3-static winmm ole32 oleaut32 windowscodecs mfplat mfuuid gdi32 dwmapi comdlg32 shell32 hid winhttp
+target_link_libraries(LostWorld PRIVATE SDL3::SDL3-static winmm ole32 oleaut32 windowscodecs mfplat mfuuid gdi32 dwmapi comdlg32 shell32 hid
     ${DLSS_LIB})
 
 if(MSVC)
@@ -301,7 +300,6 @@ if(LW_TESTS)
     add_executable(settings_bridge_test tests/settings_bridge_test.cpp src/runtime/settings_bridge.cpp)
     add_executable(pack2d_test tests/pack2d_test.cpp src/video/pack2d.cpp)
     add_executable(r3d_shelter_test tests/r3d_shelter_test.cpp src/video/r3d_shelter.cpp)
-    add_executable(news_test tests/news_test.cpp src/ui/news.cpp)
     add_executable(menu_music_test tests/menu_music_test.cpp src/ui/menu_music.cpp)
     target_include_directories(menu_music_test PRIVATE third_party/minimp3)
     add_executable(achievements_csv_test tests/achievements_csv_test.cpp src/runtime/achievements_csv.cpp src/runtime/disk_writer.cpp)
@@ -309,7 +307,7 @@ if(LW_TESTS)
     add_executable(disk_writer_test tests/disk_writer_test.cpp src/runtime/disk_writer.cpp)
     foreach(t tilegen_test fnv_test options_test sky_motion_test audio_stream_test rom_zip_test encounter_script_test
               scsp_state_test weather_sound_test sky_procedural_test r3d_state_test worker_test settings_bridge_test
-              pack2d_test r3d_shelter_test news_test menu_music_test achievements_csv_test disk_writer_test)
+              pack2d_test r3d_shelter_test menu_music_test achievements_csv_test disk_writer_test)
         target_include_directories(${t} PRIVATE src/video src/common src/runtime src/audio src/ui ${MINIZ_DIR})
         if(MSVC)
             target_compile_options(${t} PRIVATE /W4 /utf-8)
@@ -331,7 +329,6 @@ if(LW_TESTS)
     add_test(NAME settings_bridge COMMAND settings_bridge_test)
     add_test(NAME pack2d COMMAND pack2d_test)
     add_test(NAME r3d_shelter COMMAND r3d_shelter_test)
-    add_test(NAME news COMMAND news_test)
     add_test(NAME menu_music COMMAND menu_music_test ${CMAKE_SOURCE_DIR}/res/menu/music.mp3)
     add_test(NAME achievements_csv COMMAND achievements_csv_test)
     add_test(NAME disk_writer COMMAND disk_writer_test)
