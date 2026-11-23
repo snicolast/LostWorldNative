@@ -1,8 +1,9 @@
 // PC front end: main menu (Play, Options, Quit) shown at launch instead of
 // the arcade attract loop, and the pause menu Esc opens during the game.
-// Menus are a column of entries at the left (the logo or the screen's title
-// above); the settings and the records are a card in the middle (the tab row,
-// a row per option, the description under them), as in the other ports.
+// Menus are a column of entries at the right (the logo above). The settings
+// and the records are a page as Sega Rally 2's: the sections in a column at the
+// left, the open one's rows in groups, a panel at the right with what the
+// chosen row is and does, the keys along the bottom.
 //
 // Drawn on the CPU into a full-window BGRA picture (premultiplied alpha) with
 // the OFL fonts in third_party/fonts and the game's yellow-to-orange letter
@@ -137,6 +138,8 @@ private:
     enum Id {
         PLAY, OPTIONS, QUIT, ARCADE, BOSS, BACK, RESUME, SETTINGS, QUIT_TO_MENU, TABS,
         BOSS_ENTRY, PREPARE, RETRY, BOSS_LIST, LEAVE_BOSS, RECORDS, SURVIVAL, SURVIVAL_ENTRY, CLASSIC, RANDOM, WEATHER_ENTRY,
+        REC_ROW,   // a row of RECORDS
+        // the settings' rows: OPT_DISPLAY first (key() and wheel(): an option row is one from it on)
         OPT_DISPLAY, OPT_VOLUME, OPT_SPEAKERS, OPT_REAR, OPT_SAMPLES, OPT_AA, OPT_HAZE, OPT_BLOOM, OPT_AO, OPT_SKY, OPT_SUN, OPT_SHADOWS, OPT_SHAFTS, OPT_SOFT, OPT_HDR, OPT_RIM, OPT_SHARPEN, OPT_LIGHTNING, OPT_RAIN, OPT_TEXT, OPT_CROSS, OPT_MICE, OPT_SUBS,
         OPT_SAT, OPT_GAMMA, OPT_MOTION, OPT_PAD_SPEED, OPT_GYRO, OPT_GYRO_SPEED, OPT_VIBRATION, OPT_ASSIST, OPT_TORCH, OPT_RT, OPT_CROSS_HIDE, OPT_FREE_PLAY,
         OPT_SCALE, OPT_MAX_FPS, OPT_BGFPS, OPT_VSYNC,
@@ -152,7 +155,7 @@ private:
         Id id;
         std::wstring label, value, hint;
         bool enabled = true;
-        int index = -1;   // BOSS_ENTRY: which boss
+        int index = -1;   // BOSS_ENTRY: which boss; REC_ROW: its group (RECORD_GROUPS)
         Kind kind = PLAIN;
         int pos = 0, count = 0;   // CHOICE: which value of how many; TOGGLE: pos 1 = on
         bool levels = false;      // CHOICE: low to high (the dots up to it lit)
@@ -166,9 +169,13 @@ private:
         float alpha = 1;
         int shadow = 0;         // drop shadow offset (pixels), black
     };
-    enum Family { TITLE, ITEM, MONO, JURASSIC, BODY };   // in the order of GdiText::Face
+    // In the order of GdiText::Face. ROW, ROW_MEDIUM and PROSE: the settings
+    // page's rows, group headings and descriptions (Barlow, as Sega Rally 2's)
+    enum Family { TITLE, ITEM, MONO, JURASSIC, BODY, ROW, ROW_MEDIUM, PROSE };
     // Titles and menu entries: the Jurassic Park font when it is installed
     Family display() const { return jurassic_ ? JURASSIC : TITLE; }
+    // The same for a name on the settings page: Saira for one with digits (the Jurassic font has none)
+    Family page_font(const std::wstring& s) const;
 
     std::vector<Item> items() const;
     // Every setting: where save/settings.ini keeps it and its row in the
@@ -203,8 +210,20 @@ private:
     void background();
     // The screens: the column of entries, and the settings / records page
     void draw_menu(bool over_game, const std::vector<Item>& list);
-    void draw_options(bool over_game, const std::vector<Item>& list);
-    int draw_value(const Item& it, bool sel, int x1, int y, int item_px);   // where the value starts
+    // OPTIONS, SETTINGS (over the paused game) and RECORDS, as Sega Rally 2's page
+    void draw_options_page(bool over_game, const std::vector<Item>& list);
+    // The page's ribbons behind the open section and the chosen row: amber from
+    // a0 at the left to a1 at the right, leaning, a stripe before them
+    void ribbon(int x0, int y0, int x1, int y1, int slant, float a0, float a1, int gap, int sw, float alpha);
+    // They glide from one row (or section) to the next
+    struct Glide {
+        float from = 0, to = 0, from_h = 0, to_h = 0;
+        double t0 = -1;
+        long key = -1;
+    };
+    Glide glide_tab_, glide_row_;
+    bool gliding_ = false;   // one of them is moving (this picture)
+    void glide(Glide& g, long key, int y, int h, int& gy, int& gh);
     void draw_gun_test(bool over_game);
     int gun_step_ = 0;   // GUN TEST: 0 watching, 1 waiting for player 1's gun to fire, 2 for player 2's
     int gun_player(const GunView& g, bool& picked) const;   // whose gun it is, and whether GUN TEST picked it
@@ -293,32 +312,29 @@ private:
     bool wrap_ = false;
     std::vector<Item> defaults_;   // option_items(FrontendSettings{}), made once (again if rt_available changes)
     bool defaults_rt_ = false;
-    // Settings tabs (setting_table says where each option goes)
+    // The settings' sections (setting_table says where each option goes,
+    // ROW_GROUPS in frontend.cpp the headings over its rows)
     enum { DISPLAY_TAB, LIGHTING_TAB, AUDIO_TAB, CONTROLS_TAB, GAME_TAB };   // LIGHTING_TAB is shown as GRAPHICS
     static constexpr int TAB_COUNT = 5;
     static const wchar_t* const TAB_NAMES[TAB_COUNT];
+    static const wchar_t* group_of(Id id);   // the heading over that option's row, if it starts a group
     void set_tab(int t);
-    int tab_ = 0;   // open tab of the settings, or of the records
-    // The tab row of the screen on: settings tabs, or ACHIEVEMENTS / STATS
+    int tab_ = 0;   // open section of the settings, or of the records
+    // The sections of the page on: the settings', or ACHIEVEMENTS / STATS
     static constexpr int RECORD_TAB_COUNT = 2;
     static const wchar_t* const RECORD_TAB_NAMES[RECORD_TAB_COUNT];
     int tab_count() const { return screen_ == Screen::Records ? RECORD_TAB_COUNT : TAB_COUNT; }
-    const wchar_t* tab_name(int t) const { return screen_ == Screen::Records ? RECORD_TAB_NAMES[t] : TAB_NAMES[t]; }
-    // Records: the rows of the open tab and the first one shown
+    // Records: the rows of the open section (REC_ROW entries of items())
     struct RecordRow {
         std::wstring label, detail, value;
         bool lit = true;   // an achievement: unlocked
+        int group = 0;     // RECORD_GROUPS: UNLOCKED, LOCKED, TOTALS, BEST SCORES, BEST STAGES, BOSSES, SURVIVAL
     };
     std::vector<RecordRow> record_rows() const;
-    int visible_records_ = 7;   // as many as fit the window
-    int record_scroll_ = 0;
-    void scroll_records(int by);
-    void draw_records(int x0, int x1, int y0, int row_h);
-    // A settings tab shows as many options as fit the card; the rest scroll
-    int visible_opts_ = 12;
-    int scroll_ = 0;           // first option shown
-    RECT more_up_{}, more_down_{};   // clickable "more" arrows of a scrolled tab
-    std::vector<RECT> tab_rects_;   // a step past the end starts again (clicks on the label)
+    int scroll_ = 0;                // first row shown
+    bool options_scroll_ = false;   // the open section's rows do not all fit (the last draw)
+    RECT more_up_{}, more_down_{};  // clickable "more" arrows of a scrolled section
+    std::vector<RECT> tab_rects_;   // the sections in the column at the left (clicks)
     int mouse_x_ = -1, mouse_y_ = -1;
 
     GdiText* gdi_ = nullptr;
@@ -326,29 +342,24 @@ private:
 
     float u_ = 1;   // pixels per unit of a 1920x1080 layout
     std::vector<uint32_t> bg_;   // main menu backdrop for the current size
-    std::vector<uint32_t> bg_stone_;   // with a poster: its stone only, without the logo (options)
+    std::vector<uint32_t> bg_stone_;   // behind the settings page: the backdrop blurred and darker (a poster: its stone)
     // Optional poster (third_party/menu/cover.png, not in the repository):
     // portrait picture with the logo at the top and plain dark stone below.
     // It becomes the backdrop and the title; its stone continues at the sides.
     std::vector<uint32_t> poster_;
     int poster_w_ = 0, poster_h_ = 0;
     bool load_poster(const std::wstring& path);
-    // Optional pictures of what an option does (res/preview/<name>.jpg),
-    // loaded the first time their option is selected; w = 0: none
     struct Picture { std::vector<uint32_t> px; int w = 0, h = 0; };
-    std::map<int, Picture> previews_;
-    const Picture& preview(Id id);
     void picture(const Picture& p, int x0, int y0, int x1, int y1);   // scaled to fill the box, cropped
     void sprite(const Picture& p, int x0, int y0, int w, int h);      // scaled to w x h, its own transparency kept
     // The gamepad's buttons in the key help (res/pad/<button>.png, CC0); w = 0:
     // none, the drawn disc or pill instead
     std::map<std::wstring, Picture> pad_icons_;
     const Picture& pad_icon(const std::wstring& button);
-    // The players' crosshairs as the game draws them (their pictures, or the
-    // rings), over a stretch of the game: the panel of the crosshair rows
-    Picture crosshair_[2];
-    bool crosshair_loaded_ = false;
-    void crosshair_preview(int x0, int y0, int x1, int y1);
+    // The achievements' badges on the records page (res/achievements): lit, locked
+    Picture badges_[2];
+    bool badges_loaded_[2] = {};
+    const Picture& achievement_badge(bool lit);
     // Picture behind the menus (third_party/menu/background.png or .jpg, else res/menu/background.png):
     // the menus go to the right, the poster's logo above them; blurred behind
     // the options

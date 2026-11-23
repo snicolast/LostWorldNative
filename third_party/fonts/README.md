@@ -13,6 +13,9 @@ Fonts, bajo la SIL Open Font License 1.1 (se pueden redistribuir):
   resultados.
 - ArchivoBlack-Regular.ttf: Archivo Black, de Omnibus-Type (OFL-ArchivoBlack.txt).
   Lema de la pantalla del FBI.
+- BarlowCondensed-SemiBold.ttf, BarlowCondensed-Medium.ttf, Barlow-Regular.ttf:
+  Barlow (OFL-Barlow.txt). Filas, títulos de grupo y descripciones de las
+  páginas OPTIONS / RECORDS (las de Sega Rally 2).
 - Arimo[wght].ttf: Arimo, de Steve Matteson (OFL-Arimo.txt). Frases del tutorial.
 - ShareTechMono-Regular.ttf: Share Tech Mono, de Carrois Type Design
   (OFL-ShareTechMono.txt). Menús de test y avisos.
