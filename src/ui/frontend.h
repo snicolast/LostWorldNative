@@ -314,8 +314,8 @@ private:
     bool defaults_rt_ = false;
     // The settings' sections (setting_table says where each option goes,
     // ROW_GROUPS in frontend.cpp the headings over its rows)
-    enum { EXPERIENCE_TAB, DISPLAY_TAB, LIGHTING_TAB, AUDIO_TAB, CONTROLS_TAB };   // LIGHTING_TAB is shown as GRAPHICS
-    static constexpr int TAB_COUNT = 5;
+    enum { EXPERIENCE_TAB, DISPLAY_TAB, LIGHTING_TAB, AUDIO_TAB, CONTROLS_TAB, GAME_TAB };   // LIGHTING_TAB is shown as GRAPHICS
+    static constexpr int TAB_COUNT = 6;
     static const wchar_t* const TAB_NAMES[TAB_COUNT];
     static const wchar_t* group_of(Id id);   // the heading over that option's row, if it starts a group
     void set_tab(int t);

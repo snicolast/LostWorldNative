@@ -121,7 +121,7 @@ struct FrontendSettings {
         smooth = true;              // MOTION SMOOTH (as PC EDITION)
         subtitles = 0;
         saturation = gamma = 100;
-        free_play = true;           // the pause's CREDIT (or EXPERIENCE > FREE PLAY): a coin per game instead
+        free_play = true;           // the pause's CREDIT (or GAME > FREE PLAY): a coin per game instead
     }
 
     static constexpr int SCALES[9] = {50, 67, 75, 85, 100, 125, 150, 175, 200};   // RENDER SCALE's steps (above 100: supersampling)

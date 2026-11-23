@@ -78,7 +78,7 @@ something new. In a folder cloned with git it runs `git pull` instead.
 
 The game also checks at launch: when there is news of a new version (`news.txt` on GitHub), the main
 menu shows what is new with an **UPDATE NOW** button, which closes the game, runs `update.bat` and
-starts the game again once it is rebuilt. Turn it off in OPTIONS > EXPERIENCE > CHECK FOR UPDATES.
+starts the game again once it is rebuilt. Turn it off in OPTIONS > GAME > CHECK FOR UPDATES.
 
 Got the game before the updater existed? Download the repository once more as a ZIP and copy
 `update.bat` and `tools\update.ps1` into your folder.
@@ -99,7 +99,7 @@ fullscreen and the resolution. Everything else is in **Options**.
 Light guns that Windows sees as a mouse (Sinden, Gun4IR and the like) work as is; for a Sinden, keep
 its software running for the white border. The guns aim over the whole widescreen picture, side
 bands included, and shooting off the picture reloads. **Options >
-Experience > Free play** turns on the arcade's own free play: 1 / 2 (a gun's start button) start and continue with no coins, and
+Game > Free play** turns on the arcade's own free play: 1 / 2 (a gun's start button) start and continue with no coins, and
 **Controls > Hide idle crosshair** clears a crosshair whose gun has not been used for a few seconds.
 **Controls > Gun test** shows every mouse and gun Windows sees and what each one does; fire player 1's
 gun and then player 2's there to keep them as those players' guns from then on.
