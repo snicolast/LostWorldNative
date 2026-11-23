@@ -279,14 +279,25 @@ private:
     bool restart_key(int vk);
     void restart_choose(int button);
     void draw_restart();
-    // RESOLUTION's list: a card over the settings with the monitor's modes,
-    // largest first; Enter (or a click) applies one at once
+    // A setting's list of values, a card over the settings: Enter (A) or a click on
+    // the row away from its arrows opens it, Enter (or a click) applies one at once.
+    // Each entry holds the settings as they would be with that value, made by
+    // stepping the row with activate() from its first value. RESOLUTION: the
+    // monitor's modes, largest first
+    struct DropEntry {
+        std::wstring label;
+        FrontendSettings s;   // settings with this value
+    };
     bool drop_open_ = false;
-    int drop_sel_ = 0, drop_top_ = 0;   // the one lit and the first shown, counted from the top (largest)
+    Id drop_id_ = OPT_DISPLAY;          // the row the list belongs to
+    std::vector<DropEntry> drop_;
+    Action drop_action_ = Action::SettingsChanged;   // what picking one pushes (as activate does)
+    int drop_sel_ = 0, drop_top_ = 0, drop_in_use_ = -1;   // the one lit, the first shown, the value now
     std::vector<RECT> drop_rects_;
     int resolution_index() const;   // the mode in use (nearest), into resolutions
-    void open_drop();
-    void drop_pick(int i);          // i: into resolutions
+    void first_value(Id id);        // the row's setting at the first of its values (the list's order)
+    bool open_drop(Id id);          // false: not a row with a list (fewer than two values)
+    void drop_pick(int i);
     bool drop_key(int vk);
     void draw_drop();
 
@@ -307,7 +318,8 @@ private:
     bool animating_ = false;
     std::vector<Action> actions_;
     std::vector<RECT> hit_;   // item rectangles of the last draw
-    struct ValueArea { int left, middle; };   // option rows: value column (left < 0: none)
+    // option rows: from `left` the left arrow, from `value` the value, from `right` the right arrow (left < 0: none)
+    struct ValueArea { int left, value, right; };
     std::vector<ValueArea> values_;
     bool wrap_ = false;
     std::vector<Item> defaults_;   // option_items(FrontendSettings{}), made once (again if rt_available changes)

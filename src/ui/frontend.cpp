@@ -1014,14 +1014,12 @@ void Frontend::activate(const Item& it, int dir) {
         push(Action::SettingsChanged);
         break;
     }
-    case OPT_RESOLUTION: {   // a click on the label: the list; else the monitor's next mode from the chosen one
+    case OPT_RESOLUTION: {   // the monitor's next mode from the chosen one
         if (settings.display_mode == 1 || resolutions.empty()) break;
-        if (wrap_) {
-            open_drop();
-            break;
-        }
-        int n = int(resolutions.size());
-        drop_pick((resolution_index() + dir + n) % n);
+        int n = int(resolutions.size()), i = (resolution_index() + dir + n) % n;
+        settings.res_w = resolutions[size_t(i)].first;   // applied at once
+        settings.res_h = resolutions[size_t(i)].second;
+        push(Action::DisplayChanged);
         break;
     }
     case OPT_CROSS_P1:
@@ -1168,10 +1166,7 @@ bool Frontend::key(int vk) {
         return true;
     case VK_RETURN: case VK_SPACE:
         hovered_ = -1;
-        if (selected_ < n && list[selected_].id == OPT_RESOLUTION) {   // its list
-            if (list[selected_].enabled) open_drop();
-            return true;
-        }
+        if (option_row && list[selected_].enabled && open_drop(list[selected_].id)) return true;   // its list
         if (selected_ < n && list[selected_].enabled) activate(list[selected_], +1);
         return true;
     case VK_ESCAPE: case VK_BACK: back(); return true;
@@ -1348,24 +1343,82 @@ int Frontend::resolution_index() const {
     return best;
 }
 
-void Frontend::open_drop() {
-    if (resolutions.empty()) return;
-    drop_sel_ = int(resolutions.size()) - 1 - resolution_index();   // (the list is largest first)
-    drop_top_ = 0;
-    drop_open_ = dirty_ = true;
+void Frontend::first_value(Id id) {
+    switch (id) {
+    case OPT_DISPLAY: settings.display_mode = 0; break;
+    case OPT_MAX_FPS: settings.max_fps = 0; break;   // MONITOR first, UNLIMITED last
+    default:
+        if (const Setting* d = setting_of(id)) {
+            if (d->kind == TOGGLE) d->set(settings, 1);   // ON, OFF
+            else if (!d->steps.empty()) d->set(settings, d->steps[0]);
+            else d->set(settings, d->kind == SLIDER ? d->lo : 0);
+        }
+        break;
+    }
 }
 
-void Frontend::drop_pick(int i) {
+bool Frontend::open_drop(Id id) {
+    auto value_of = [&](const FrontendSettings& s) {   // the row's value as its row shows it
+        for (const Item& it : option_items(s))
+            if (it.id == id) return it.value;
+        return std::wstring();
+    };
+    drop_.clear();
+    drop_in_use_ = -1;
+    const Setting* d = setting_of(id);
+    if (id == OPT_RESOLUTION) {
+        if (settings.display_mode == 1 || resolutions.empty()) return false;
+        int n = int(resolutions.size());
+        for (int k = 0; k < n; k++) {   // largest first
+            const auto& r = resolutions[size_t(n - 1 - k)];
+            DropEntry e{std::to_wstring(r.first) + L" x " + std::to_wstring(r.second), settings};
+            e.s.res_w = r.first;
+            e.s.res_h = r.second;
+            drop_.push_back(e);
+        }
+        drop_in_use_ = n - 1 - resolution_index();
+        drop_action_ = Action::DisplayChanged;
+    } else if (id == OPT_DISPLAY || id == OPT_MAX_FPS || (d && d->kind != BUTTON && d->kind != PLAIN)) {
+        // stepped up from its first value until a value comes again
+        const FrontendSettings keep = settings;
+        const std::wstring now = value_of(settings);
+        std::vector<Action> pushed;
+        pushed.swap(actions_);
+        first_value(id);
+        for (int k = 0; k < 64; k++) {
+            std::wstring v = value_of(settings);
+            if (v.empty() || std::any_of(drop_.begin(), drop_.end(), [&](const DropEntry& e) { return e.label == v; })) break;
+            if (v == now) drop_in_use_ = int(drop_.size());
+            drop_.push_back({v, settings});
+            activate(Item{id}, +1);
+        }
+        drop_action_ = actions_.empty() ? Action::SettingsChanged : actions_.back();
+        actions_.swap(pushed);
+        settings = keep;
+    }
+    if (drop_.size() < 2) {
+        drop_.clear();
+        return false;
+    }
+    drop_id_ = id;
+    drop_sel_ = std::max(drop_in_use_, 0);
+    drop_top_ = 0;
+    drop_open_ = dirty_ = true;
+    return true;
+}
+
+void Frontend::drop_pick(int i) {   // applied at once
     drop_open_ = false;
     dirty_ = true;
-    if (i < 0 || i >= int(resolutions.size())) return;
-    settings.res_w = resolutions[size_t(i)].first;   // applied at once
-    settings.res_h = resolutions[size_t(i)].second;
-    push(Action::DisplayChanged);
+    if (i >= 0 && i < int(drop_.size()) && i != drop_in_use_) {
+        settings = drop_[size_t(i)].s;
+        push(drop_action_);
+    }
+    drop_.clear();
 }
 
 bool Frontend::drop_key(int vk) {
-    int n = int(resolutions.size());
+    int n = int(drop_.size());
     if (n == 0) {
         drop_open_ = false;
         return true;
@@ -1375,8 +1428,8 @@ bool Frontend::drop_key(int vk) {
     case VK_DOWN: case 'S': drop_sel_ = (drop_sel_ + 1) % n; break;
     case VK_PRIOR: case 'Q': drop_sel_ = std::max(0, drop_sel_ - 8); break;
     case VK_NEXT: case 'E': drop_sel_ = std::min(n - 1, drop_sel_ + 8); break;
-    case VK_RETURN: case VK_SPACE: drop_pick(n - 1 - drop_sel_); return true;
-    case VK_ESCAPE: case VK_BACK: drop_open_ = false; break;
+    case VK_RETURN: case VK_SPACE: drop_pick(drop_sel_); return true;
+    case VK_ESCAPE: case VK_BACK: drop_open_ = false; drop_.clear(); break;
     default: return true;   // nothing else while it is open
     }
     dirty_ = true;
@@ -1439,14 +1492,14 @@ void Frontend::click(int x, int y) {
             if (PtInRect(&restart_buttons_[b], p)) restart_choose(b);
         return;
     }
-    if (drop_open_ && screen_ == Screen::Options) {   // a resolution, or away from the list: closed
-        int n = int(resolutions.size());
+    if (drop_open_ && screen_ == Screen::Options) {   // a value, or away from the list: closed
         for (int k = 0; k < int(drop_rects_.size()); k++)
             if (PtInRect(&drop_rects_[k], p)) {
-                drop_pick(n - 1 - (drop_top_ + k));
+                drop_pick(drop_top_ + k);
                 return;
             }
         drop_open_ = false;
+        drop_.clear();
         dirty_ = true;
         return;
     }
@@ -1482,13 +1535,17 @@ void Frontend::click(int x, int y) {
         return;
     }
     if (list[hovered_].id == REC_ROW) return;   // a record: nothing to change
-    // Option rows: a click on the value side goes down left of the middle of the
-    // value and up right of it (the arrows); on the label it steps up and wraps around
-    int dir = +1;
-    if (hovered_ < int(values_.size()) && values_[hovered_].left >= 0 && x >= values_[hovered_].left)
-        dir = x < values_[hovered_].middle ? -1 : +1;
-    else wrap_ = true;
-    activate(list[hovered_], dir);
+    // Option rows: the arrows step down and up; anywhere else the list of values
+    // opens (a row without one, a button, does what it does)
+    int dir = 0;
+    if (hovered_ < int(values_.size()) && values_[hovered_].left >= 0) {
+        const ValueArea& v = values_[size_t(hovered_)];
+        if (x >= v.left && x < v.value) dir = -1;
+        else if (x >= v.right) dir = +1;
+    }
+    if (dir == 0 && list[hovered_].id >= OPT_DISPLAY && open_drop(list[hovered_].id)) return;
+    wrap_ = dir == 0;
+    activate(list[hovered_], dir == 0 ? +1 : dir);
     wrap_ = false;
 }
 
@@ -2423,7 +2480,7 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
                  ry + rh / 2 - (v0 + v1) / 2, 2, {0xF4D27A, 0xE0A848, 0, 0, reveal_});
         }
         hit_.push_back({band0, ry, band1, ry + rh});
-        values_.push_back({-1, 0});
+        values_.push_back({-1, 0, 0});
         // Its description: fading in as it opens, sliding down a little; the
         // lines that do not fit the opening yet are left out
         float o = desc_open_[size_t(i)];
@@ -2558,7 +2615,7 @@ void Frontend::draw_options_page(bool over_game, const std::vector<Item>& list) 
     }
 
     hit_.assign(size_t(n), RECT{});
-    values_.assign(size_t(n), ValueArea{-1, 0});
+    values_.assign(size_t(n), ValueArea{-1, 0, 0});
 
     // The sections, one under the other; the open one with a ribbon
     const int sec_h = U(92);
@@ -2711,7 +2768,7 @@ void Frontend::draw_options_page(bool over_game, const std::vector<Item>& list) 
             triangle(right + U(13), cy, U(14), +1, GOLD_BOTTOM, 1);
         }
         hit_[size_t(1 + k)] = {rows_x0 - U(18), y, rows_x1 + U(4), y + row_h};
-        if (changes) values_[size_t(1 + k)] = {vx0 - U(40), (vx0 + right) / 2};
+        if (changes) values_[size_t(1 + k)] = {vx0 - U(40), vx0 - U(4), right + U(2)};
         y += row_h;
         last_shown = k;
     }
@@ -2774,12 +2831,15 @@ void Frontend::draw_options_page(bool over_game, const std::vector<Item>& list) 
     struct Key { const wchar_t *pad, *key, *what; };
     std::vector<Key> keys;
     if (pad_prompts) {
-        keys = {{L"LS", nullptr, rec ? L"SELECT" : L"SELECT / CHANGE"}, {L"LB", nullptr, L""}, {L"RB", nullptr, L"SECTION"}};
+        keys = {{L"LS", nullptr, rec ? L"SELECT" : L"SELECT / CHANGE"}};
+        if (!rec) keys.push_back({L"A", nullptr, L"LIST"});
+        keys.insert(keys.end(), {{L"LB", nullptr, L""}, {L"RB", nullptr, L"SECTION"}});
         if (!rec) keys.push_back({L"Y", nullptr, L"RESET TO DEFAULTS"});
         keys.push_back({L"B", nullptr, L"BACK"});
     } else {
         keys = {{nullptr, L"UD", L"SELECT"}};
         if (!rec) keys.push_back({nullptr, L"<>", L"CHANGE"});
+        if (!rec) keys.push_back({nullptr, L"ENTER", L"LIST"});
         keys.push_back({nullptr, L"Q / E", L"SECTION"});
         if (!rec) keys.push_back({nullptr, L"R", L"RESET TO DEFAULTS"});
         keys.push_back({nullptr, L"ESC", L"BACK"});
@@ -3173,13 +3233,13 @@ void Frontend::draw_restart() {
     text(ITEM, U(22), about, cx, by + bh + U(26), 1, {HINT, HINT});
 }
 
-// RESOLUTION's list: a card over the darkened settings, the monitor's modes
-// largest first (as many as fit, arrows for the rest), the one in use marked
+// A setting's list: a card over the darkened settings with the row's name and its
+// values (as many as fit, arrows for the rest), the one in use marked
 void Frontend::draw_drop() {
     auto U = [&](float v) { return int(v * u_ + 0.5f); };
     int w = w_, h = h_, cx = w / 2;
     fill(0, 0, w, h, 0x000000, 0.62f);
-    int n = int(resolutions.size());
+    int n = int(drop_.size());
     int half = std::min(U(360), w / 2 - U(16)), row = U(50), head = U(130), foot = U(80);
     int shown = std::max(1, std::min(n, (h - U(32) - head - foot) / row));
     if (drop_sel_ < drop_top_) drop_top_ = drop_sel_;
@@ -3189,20 +3249,20 @@ void Frontend::draw_drop() {
     int top = std::max(U(16), (h - card_h) / 2), bottom = top + card_h;
     fill(cx - half, top, cx + half, bottom, PANEL, 0.96f);
     frame(cx - half, top, cx + half, bottom, std::max(1, U(2)), AMBER, 0.9f);
-    text(display(), U(56), L"RESOLUTION", cx, top + U(32), 1, {GOLD_TOP, GOLD_BOTTOM, EDGE, U(3), 1, U(4)});
+    std::wstring title;
+    for (const Item& it : option_items(settings))
+        if (it.id == drop_id_) title = it.label;
+    text(display(), U(56), title, cx, top + U(32), 1, {GOLD_TOP, GOLD_BOTTOM, EDGE, U(3), 1, U(4)});
     drop_rects_.clear();
-    const int in_use = n - 1 - resolution_index();
     int row_px = U(30);
     for (int k = 0; k < shown && drop_top_ + k < n; k++) {
         int i = drop_top_ + k, y = top + head + k * row;
-        const auto& r = resolutions[size_t(n - 1 - i)];
         bool sel = i == drop_sel_;
         if (sel) band(cx, y, y + row, half - U(24), AMBER, 0.22f);
         int ty = y + (row - row_px) / 2 - U(4);
-        std::wstring label = std::to_wstring(r.first) + L" x " + std::to_wstring(r.second);
-        text(ITEM, row_px, label, cx - half + U(60), ty, 0,
+        text(ITEM, row_px, drop_[size_t(i)].label, cx - half + U(60), ty, 0,
              sel ? Style{GOLD_TOP, GOLD_BOTTOM, EDGE, U(3)} : Style{PALE_TOP, PALE_BOTTOM, INK, U(2), 0.95f});
-        if (i == in_use) text(ITEM, U(22), L"IN USE", cx + half - U(60), y + (row - U(22)) / 2 - U(2), 2, {AMBER, AMBER});
+        if (i == drop_in_use_) text(ITEM, U(22), L"IN USE", cx + half - U(60), y + (row - U(22)) / 2 - U(2), 2, {AMBER, AMBER});
         drop_rects_.push_back({cx - half, y, cx + half, y + row});
     }
     if (drop_top_ > 0) triangle(cx, top + head - U(18), U(18), -2, GOLD_BOTTOM, 1);
