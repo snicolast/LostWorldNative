@@ -71,7 +71,7 @@ over the whole 3D view, also the side bands of a 16:9, 21:9 or 32:9 picture, and
 there can be shot (except on the stage select screen, which stays 4:3). A shot outside the 3D
 view (the black bars of a window wider than it) or on its very edge (where a light gun parks an
 off-screen shot) reloads, as on the cabinet. Disable it in Settings > Controls >
-Second mouse or with `--one-mouse`. Settings > Experience > FREE PLAY (`--free-play`) turns on the
+Second mouse or with `--one-mouse`. Settings > Game > FREE PLAY (`--free-play`) turns on the
 game's own free play (as FREE PLAY in its test menu's coin settings would): 1 and 2 alone, or a
 light gun's start button, start and continue with no credit, and the screen says FREE PLAY;
 Settings > Controls > HIDE IDLE CROSSHAIR (`--crosshair-hide N`) hides a player's crosshair
