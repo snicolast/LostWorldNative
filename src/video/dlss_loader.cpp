@@ -75,12 +75,13 @@ bool Dlaa::init(VkInstance instance, VkPhysicalDevice gpu, VkDevice device) {
 
 bool Dlaa::evaluate(VkCommandBuffer cmd, const Image& color, const Image& depth, const Image& motion,
                     const Image& output, uint32_t width, uint32_t height, uint32_t out_width, uint32_t out_height,
-                    float jitter_x, float jitter_y, bool reset, int channel) {
+                    float jitter_x, float jitter_y, bool reset, int channel, uint32_t draw_width,
+                    uint32_t draw_height) {
     if (!bridge_ || failed_) return false;
     DlssBridgeImage c = image(color), d = image(depth), m = image(motion), o = image(output);
     // The bridge only refuses once DLSS has stopped working, and it stays so
     if (!bridge()->evaluate(bridge_, cmd, &c, &d, &m, &o, width, height, out_width, out_height, jitter_x, jitter_y,
-                            reset ? 1 : 0, channel))
+                            reset ? 1 : 0, channel, draw_width, draw_height))
         failed_ = true;
     return !failed_;
 }
@@ -88,7 +89,7 @@ bool Dlaa::evaluate(VkCommandBuffer cmd, const Image& color, const Image& depth,
 void Dlaa::configure(int mode, int preset) {
     mode_ = mode;
     preset_ = preset;
-    if (bridge_) bridge()->configure(bridge_, mode, preset);
+    if (bridge_) bridge()->configure(bridge_, mode, preset, dynamic_ ? 1 : 0);
 }
 
 void Dlaa::shutdown() {

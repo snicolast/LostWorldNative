@@ -9,7 +9,7 @@
 #include "vk_presenter.h"
 
 // Bumped with any change to this file. A DLL of another version is refused.
-#define DLSS_BRIDGE_ABI 3
+#define DLSS_BRIDGE_ABI 4
 #define DLSS_BRIDGE_FILE L"dlss_bridge.dll"
 
 struct DlssBridgeImage {
@@ -30,10 +30,11 @@ struct DlssBridgeApi {
     // As dlss::Dlaa::evaluate. 0 once it has stopped working
     int (*evaluate)(void* dlaa, VkCommandBuffer cmd, const DlssBridgeImage* color, const DlssBridgeImage* depth,
                     const DlssBridgeImage* motion, const DlssBridgeImage* output, uint32_t width, uint32_t height,
-                    uint32_t out_width, uint32_t out_height, float jitter_x, float jitter_y, int reset, int channel);
+                    uint32_t out_width, uint32_t out_height, float jitter_x, float jitter_y, int reset, int channel,
+                    uint32_t draw_width, uint32_t draw_height);
     void (*destroy)(void* dlaa);
-    // As dlss::Dlaa::configure
-    void (*configure)(void* dlaa, int mode, int preset);
+    // As dlss::Dlaa::set_dynamic (dynamic: 0 or 1), then dlss::Dlaa::configure
+    void (*configure)(void* dlaa, int mode, int preset, int dynamic);
 };
 
 // The only export of the DLL. nullptr if abi is not the one it was built with.
