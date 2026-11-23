@@ -108,7 +108,7 @@ bool load_image(const std::wstring& path, std::vector<uint32_t>& px, int& w_out,
 // (options_from_settings) and back (settings_from_options).
 struct Frontend::Setting {
     Id id;                    // its row (NO_ROW: only kept in the file)
-    int tab = GAME_TAB;
+    int tab = EXPERIENCE_TAB;
     const wchar_t* label = L"";
     const char* key = nullptr;                        // in the file (nullptr: not kept)
     bool FrontendSettings::*flag = nullptr;           // what it sets: on / off,
@@ -390,20 +390,20 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         {.id = OPT_GUN_TEST, .tab = CONTROLS_TAB, .label = L"GUN TEST", .kind = BUTTON, .shown = {L"OPEN..."},
          .hint = L"Every mouse and light gun Windows sees, what each one is doing and which player it is.  "
                  L"Fire each gun to make it player 1's or player 2's for good"},
-        // GAME
+        // EXPERIENCE (the first section, as in Sega Rally 2 and Star Wars Trilogy)
         // (settings.ini's first section only: the keys of the whole game, FrontendSettings::copy_whole_game)
-        {.id = OPT_EXPERIENCE, .tab = GAME_TAB, .label = L"EXPERIENCE", .key = "experience", .number = &FS::experience,
+        {.id = OPT_EXPERIENCE, .tab = EXPERIENCE_TAB, .label = L"EXPERIENCE", .key = "experience", .number = &FS::experience,
          .words = {"pc", "arcade"}, .kind = CHOICE, .shown = {L"PC EDITION", L"ARCADE ORIGINAL"},
          .hints = {L"The PC version: the main menu, every mode, the achievements on screen and the new graphics.  "
                    L"Each experience keeps its own settings",
                    L"The arcade game as it was: no menu, straight to the attract, START (1 or a gamepad) to play, the "
                    L"original 4:3 look.  Esc pauses.  Each experience keeps its own settings"}},
-        {.id = OPT_FREE_PLAY, .tab = GAME_TAB, .label = L"FREE PLAY", .key = "free_play", .flag = &FS::free_play,
+        {.id = OPT_FREE_PLAY, .tab = EXPERIENCE_TAB, .label = L"FREE PLAY", .key = "free_play", .flag = &FS::free_play,
          .kind = TOGGLE, .hint = L"The arcade's own free play: start and continue with 1 / 2 or a light gun's start button, no coins"},
-        {.id = OPT_SUBS, .tab = GAME_TAB, .label = L"SUBTITLES", .key = "subtitles", .number = &FS::subtitles,
+        {.id = OPT_SUBS, .tab = EXPERIENCE_TAB, .label = L"SUBTITLES", .key = "subtitles", .number = &FS::subtitles,
          .words = {"off", "english", "japanese"}, .kind = CHOICE, .shown = {L"OFF", L"ENGLISH", L"JAPANESE"},
          .hint = L"Captions of what the characters say"},
-        {.id = OPT_UPDATES, .tab = GAME_TAB, .label = L"CHECK FOR UPDATES", .key = "check_updates", .flag = &FS::check_updates,
+        {.id = OPT_UPDATES, .tab = EXPERIENCE_TAB, .label = L"CHECK FOR UPDATES", .key = "check_updates", .flag = &FS::check_updates,
          .kind = TOGGLE, .hint = L"At launch, look on GitHub for a new version and show what is new in it"},
         // Only in the file: the WEATHER last picked before a run (in WEATHER_CHOICES' order)
         {.id = NO_ROW, .key = "run_weather", .number = &FS::run_weather,
@@ -590,19 +590,19 @@ const Frontend::Picture& Frontend::pad_icon(const std::wstring& button) {
 
 // ---- Menu contents and navigation ----
 
-const wchar_t* const Frontend::TAB_NAMES[Frontend::TAB_COUNT] = {L"DISPLAY", L"GRAPHICS", L"AUDIO", L"CONTROLS", L"GAME"};
+const wchar_t* const Frontend::TAB_NAMES[Frontend::TAB_COUNT] = {L"EXPERIENCE", L"DISPLAY", L"GRAPHICS", L"AUDIO", L"CONTROLS"};
 
 namespace {
 // Under each section's name in the column at the left, and in the panel when
 // the column is chosen
-const wchar_t* const TAB_ABOUT[] = {L"Screen, frame rate, picture", L"Lighting, ray tracing, weather",
-                                    L"Volume, speakers, sound", L"Gamepad, sight, guns", L"Edition, free play, updates"};
+const wchar_t* const TAB_ABOUT[] = {L"Edition, free play, updates", L"Screen, frame rate, picture",
+                                    L"Lighting, ray tracing, weather", L"Volume, speakers, sound", L"Gamepad, sight, guns"};
 const wchar_t* const TAB_MORE[] = {
+    L"PC edition or the arcade as it was, free play, subtitles and updates",
     L"Window or full screen, resolution, widescreen, vsync and the frame rate, the edge smoothing and the colours",
     L"The sun and its shadows, ray tracing, glow and rim light, the sky, haze, lightning and rain",
     L"The volume, the menu music, stereo, surround or headphones, the rear speakers and the weather",
-    L"The gamepad's sticks, gyro and rumble, the aim assist, the crosshairs and the light guns",
-    L"PC edition or the arcade as it was, free play, subtitles and updates"};
+    L"The gamepad's sticks, gyro and rumble, the aim assist, the crosshairs and the light guns"};
 const wchar_t* const RECORD_TAB_ABOUT[] = {L"Unlocked and still to get", L"Totals, best scores and times"};
 const wchar_t* const RECORD_TAB_MORE[] = {L"Newest first, then the ones still to get with how far you are",
                                           L"What you have played, your best scores and your fastest stages and bosses"};
@@ -977,7 +977,7 @@ void Frontend::activate(const Item& it, int dir) {
     case LEAVE_BOSS: push(Action::LeaveBossMode); break;
     case BACK: back(); break;
     case RESUME: push(Action::Resume); break;
-    case PAUSE_CREDIT:   // (GAME > FREE PLAY too)
+    case PAUSE_CREDIT:   // (EXPERIENCE > FREE PLAY too)
         settings.free_play = !settings.free_play;
         push(Action::SettingsChanged);
         break;

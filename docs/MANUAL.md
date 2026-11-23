@@ -46,7 +46,7 @@ it to the menu. A window wider or taller than the video is filled with its
 background colour around it.
 `splash_screens = 0` in save/settings.ini goes straight to the menu.
 
-Settings > Game > EXPERIENCE picks how the game starts, from the next launch (RESTART NOW is
+Settings > EXPERIENCE (the first section) picks how the game starts, from the next launch (RESTART NOW is
 offered when you leave the settings): PC EDITION (the default) is all of the above; ARCADE
 ORIGINAL is the cabinet: no logo or main menu, the game boots into its own attract (title,
 rankings, demo) and comes back to it after each game, START (1 / 2, a gamepad's START, a light
@@ -71,7 +71,7 @@ over the whole 3D view, also the side bands of a 16:9, 21:9 or 32:9 picture, and
 there can be shot (except on the stage select screen, which stays 4:3). A shot outside the 3D
 view (the black bars of a window wider than it) or on its very edge (where a light gun parks an
 off-screen shot) reloads, as on the cabinet. Disable it in Settings > Controls >
-Second mouse or with `--one-mouse`. Settings > Game > FREE PLAY (`--free-play`) turns on the
+Second mouse or with `--one-mouse`. Settings > Experience > FREE PLAY (`--free-play`) turns on the
 game's own free play (as FREE PLAY in its test menu's coin settings would): 1 and 2 alone, or a
 light gun's start button, start and continue with no credit, and the screen says FREE PLAY;
 Settings > Controls > HIDE IDLE CROSSHAIR (`--crosshair-hide N`) hides a player's crosshair
