@@ -11,6 +11,14 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[23] 2026-11-24
+- DLAA and DLSS: when the graphics card runs short of time, the 3D is drawn a little smaller and DLSS brings it back to full size, so the frame rate holds
+- OPTIONS, RECORDS and the pause SETTINGS have a new page layout: sections on the left, the settings in groups, the description on the right
+- Every setting opens a list of all its values: Enter, A on a pad, or a click on the row
+- OPTIONS > EXPERIENCE (PC EDITION or ARCADE ORIGINAL) is now the first section
+- FREE PLAY and SUBTITLES are in OPTIONS > GAME, the last section
+- The game no longer checks for updates itself: update with NicoLauncher, or update.bat if you installed by hand
+
 [22] 2026-11-21
 - GAME > EXPERIENCE: ARCADE ORIGINAL, the cabinet as it was (attract, START, 4:3)
 - Display: window, borderless or exclusive fullscreen, and a RESOLUTION list
