@@ -2436,12 +2436,24 @@ void R3DRenderer::record(VkCommandBuffer cmd, VkImageView target, VkExtent2D ext
     // Dynamic resolution: this image drawn in the top left part of the
     // targets. (The height from the width's share: the same shape, for the
     // passes that take one share for both)
-    // (LW_DYNRES_SCALE=F: debugging aid, always that share, to look at a smaller image)
+    // Never below what DLSS takes: half of its output each way (NGX's
+    // dynamic minimum, the same for DLAA made as QUALITY; a smaller part is
+    // refused, 0xBAD00005, and DLSS stops for good), nor below 70% of the full
+    // size. DLSS PERFORMANCE and ULTRA PERFORMANCE are there already: always
+    // the full size
+    uint32_t min_w = std::min(f.full_w, (f.up_w + 1) / 2), min_h = std::min(f.full_h, (f.up_h + 1) / 2);
+    dyn_min_ = std::max(float(min_w) / float(f.full_w), 0.7f);
+    dyn_fixed_ms_ = std::max(1.0, 2.0 * double(f.up_w) * double(f.up_h) / (2560.0 * 1440.0));
+    // (LW_DYNRES_SCALE=F: debugging aid, always that share, to look at a
+    // smaller image; also with --shot)
     static const float forced = getenv("LW_DYNRES_SCALE") ? float(atof(getenv("LW_DYNRES_SCALE"))) : 0.0f;
-    if (!dynamic_resolution()) dyn_scale_ = 1.0f;
-    else if (forced > 0.0f) dyn_scale_ = std::clamp(forced, 0.3f, 1.0f);
-    f.out_w = std::clamp(uint32_t(float(f.full_w) * dyn_scale_ + 0.5f), 1u, f.full_w);
-    f.out_h = std::clamp(uint32_t(float(f.full_h) * float(f.out_w) / float(f.full_w) + 0.5f), 1u, f.full_h);
+    static const bool off = getenv("LW_NO_DYNRES") != nullptr;
+    if (forced > 0.0f && !off && dlaa_.dynamic_resolution() && motion_pass_)
+        dyn_scale_ = std::clamp(forced, float(min_w) / float(f.full_w), 1.0f);   // (down to DLSS's own minimum)
+    else if (!dynamic_resolution()) dyn_scale_ = 1.0f;
+    else dyn_scale_ = std::clamp(dyn_scale_, dyn_min_, 1.0f);
+    f.out_w = std::clamp(uint32_t(float(f.full_w) * dyn_scale_ + 0.5f), min_w, f.full_w);
+    f.out_h = std::clamp(uint32_t(float(f.full_h) * float(f.out_w) / float(f.full_w) + 0.5f), min_h, f.full_h);
     f.vcount = scene_ ? scene_->vertices.size() : 0;
     // Our rain, in the world viewport's view space, after the scene's vertices
     rain_vertices_.clear();
@@ -2592,14 +2604,14 @@ bool R3DRenderer::dynamic_resolution() const {
 // straight to the smallest size for a dozen images); back up a step at a
 // time once there is room, never to where the estimate is over 85%. The
 // estimate: what does not change with the size (DLAA's own share, the traced
-// structure, the composition: some 2 ms at 1440p) plus the rest as the
-// pixels drawn. Never below 70% each way (half the pixels): DLSS QUALITY
-// draws two thirds
+// structure, the composition: some 2 ms at 1440p, more as the picture shown
+// grows: dyn_fixed_ms_) plus the rest as the pixels drawn. Never below 70%
+// each way (half the pixels), nor below what DLSS takes (dyn_min_, record)
 void R3DRenderer::update_dynamic_scale(double gpu_ms) {
     if (getenv("LW_DYNRES_SCALE")) return;   // (fixed: record)
     if (!dynamic_resolution() || gpu_ms <= 0.0 || gpu_ms > 200.0) return;
-    const double budget = gpu_budget_ms_, fixed = 2.0;
-    const float MIN_SCALE = 0.7f;
+    const double budget = gpu_budget_ms_, fixed = dyn_fixed_ms_;
+    const float MIN_SCALE = dyn_min_;
     double per_pixel = std::max(gpu_ms - fixed, 0.5) / (double(dyn_scale_) * dyn_scale_);   // at the full size
     auto estimate = [&](float s) { return fixed + per_pixel * s * s; };
     if (gpu_ms > 0.9 * budget) {
