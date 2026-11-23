@@ -67,8 +67,6 @@ struct FrontendSettings {
     bool splash = true;     // the snicolast logo before the main menu (only in the file: splash_screens)
     int run_weather = 0;    // RANDOM SPAWNS and survival: the WEATHER last picked before a run (frontend.cpp)
     std::string gun_p1, gun_p2; // the guns picked in GUN TEST: device paths ("" = the first and second to fire)
-    bool check_updates = true;  // at launch, news.txt on GitHub: a window with what is new and UPDATE NOW
-    int news_seen = 0;          // the newest news.txt entry the player closed with LATER
     // EXPERIENCE (the file's first section only): 0 PC EDITION, 1 ARCADE ORIGINAL (no main
     // menu: the attract, coins and START, the original look; Esc pauses). Each experience
     // keeps its own settings: PC EDITION's at the top of the file, ARCADE ORIGINAL's in [arcade]
@@ -86,10 +84,10 @@ struct FrontendSettings {
     // them), ARCADE ORIGINAL's in [arcade] when `arcade` is given
     static void save_both(const char* path, const FrontendSettings& pc, const FrontendSettings* arcade,
                           const FrontendSettings& whole);
-    // The keys of the whole game (whatever the experience): EXPERIENCE, the update
-    // check, the guns picked in GUN TEST, the logos, the WEATHER last picked
+    // The keys of the whole game (whatever the experience): EXPERIENCE, the guns
+    // picked in GUN TEST, the logos, the WEATHER last picked
     void copy_whole_game(const FrontendSettings& from) {
-        experience = from.experience, check_updates = from.check_updates, news_seen = from.news_seen;
+        experience = from.experience;
         gun_p1 = from.gun_p1, gun_p2 = from.gun_p2, splash = from.splash, run_weather = from.run_weather;
     }
 

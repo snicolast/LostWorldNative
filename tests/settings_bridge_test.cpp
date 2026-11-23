@@ -159,9 +159,9 @@ static void test_arcade_base() {
     // the keys of the whole game come from the experience running
     FrontendSettings top;
     FrontendSettings run = a;
-    run.experience = 0, run.check_updates = false, run.news_seen = 22, run.gun_p2 = "two", run.splash = false, run.run_weather = 3;
+    run.experience = 0, run.gun_p2 = "two", run.splash = false, run.run_weather = 3;
     top.copy_whole_game(run);
-    CHECK(top.experience == 0 && !top.check_updates && top.news_seen == 22 && top.gun_p1 == "gun" && top.gun_p2 == "two");
+    CHECK(top.experience == 0 && top.gun_p1 == "gun" && top.gun_p2 == "two");
     CHECK(!top.splash && top.run_weather == 3 && top.aa == FrontendSettings{}.aa);
 }
 

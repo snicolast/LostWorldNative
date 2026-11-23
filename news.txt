@@ -1,10 +1,8 @@
 # The Lost World Native: what is new, for the players.
 #
-# The game reads this file from GitHub (master branch) at launch. When it has an
-# entry with a higher number than the news.txt in the player's folder, the main
-# menu shows those entries in an UPDATE AVAILABLE window with UPDATE NOW
-# (update.bat) and LATER. Commits that do not add an entry show nothing, so
-# several fixes can go out together: add the entry when they are all in.
+# NicoLauncher shows this file from GitHub (master branch, hub.toml: news) and
+# offers the update. Commits that do not add an entry show nothing, so several
+# fixes can go out together: add the entry when they are all in.
 #
 # Format:
 #   [N] title      starts entry N (a number one higher than the last; the
