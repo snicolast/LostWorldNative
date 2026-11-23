@@ -2427,6 +2427,18 @@ bool App::present_frame(double loop_from) {
         snprintf(path, sizeof(path), "out/film_out/%04zu.bmp", film_pos);
         presenter.capture_next(path);
     }
+    {   // Dynamic resolution (DLAA / DLSS): the graphics card's time for this
+        // image should stay within the time until the next one (with vsync its
+        // refreshes, without it MAX FPS; UNLIMITED: none to keep to, always the
+        // full size; nor for --shot, --replay and films: the same picture each time)
+        double budget = !g_opt.interp || g_opt.max_fps == 0 ? display_clock.period
+                        : g_opt.max_fps > 0                 ? 1.0 / g_opt.max_fps
+                                                            : 0;
+        if (g_opt.vsync) budget = display_clock.period * refreshes;
+        if (in_background) budget = std::max(budget, 1.0 / 30);
+        if (!g_opt.replay.empty() || g_opt.shot_frame || !film.empty()) budget = 0;
+        renderer.set_gpu_budget(float(budget * 1000.0));
+    }
     presenter.frame([&](VkCommandBuffer cmd, VkImageView view, VkExtent2D extent) {
         renderer.record(cmd, view, extent);
         if (survival_shown) survival_layer.record(cmd, view, extent);

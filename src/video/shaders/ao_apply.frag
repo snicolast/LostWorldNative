@@ -16,7 +16,9 @@ void main() {
         return;
     }
     float z = AO_NEAR / d;
-    ivec2 size = textureSize(ao_tex, 0), full = textureSize(depth_tex, 0);
+    // (only the part drawn this image: dynamic resolution)
+    ivec2 full = min(textureSize(depth_tex, 0), ivec2(ao.drawn.xy));
+    ivec2 size = min(textureSize(ao_tex, 0), (full + 1) / 2);
     // Texel i holds full-resolution pixel 2i: the four each way whose pixels
     // are nearest this one (centred on odd pixels, one pixel off on even ones)
     ivec2 first = (ivec2(frag) - 3) >> 1;

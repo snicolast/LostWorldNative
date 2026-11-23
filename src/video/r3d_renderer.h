@@ -109,6 +109,11 @@ public:
     void set_crosshair_picture(int player, int w, int h, const std::vector<uint8_t>& rgba);
 
     void record(VkCommandBuffer cmd, VkImageView target, VkExtent2D extent);
+    // Dynamic resolution (DLAA and DLSS): the graphics card's time for an
+    // image, in ms, it should stay within (the time between images drawn; 0:
+    // none). Where an image takes nearly all of it the 3D is drawn a little
+    // smaller for a while, and DLSS brings it to the full size
+    void set_gpu_budget(float ms) { gpu_budget_ms_ = ms; }
     // The image of the last record() composed again, with the crosshairs where
     // they are now and nothing else redrawn (HALF FRAME RATE: every other
     // refresh of a fast monitor); a full record() if there is none to repeat
@@ -248,7 +253,8 @@ private:
     };
     VkPipeline make_pipeline(const PipelineDesc& d);
     void bind_scene_image(VkImageView view, VkImageView alpha);
-    void update_atmosphere(const ScreenLayout& lay, uint32_t target_w, uint32_t target_h);
+    // target_w, target_h: the 3D image drawn; shown_w: the width DLSS makes of it
+    void update_atmosphere(const ScreenLayout& lay, uint32_t target_w, uint32_t target_h, uint32_t shown_w);
     bool back_layer_extended() const;
     // w, h: the 3D image as drawn; up_w, up_h: as DLSS hands it on (the same but with DLSS upscaling)
     void ensure_targets(uint32_t w, uint32_t h, uint32_t up_w, uint32_t up_h);
@@ -276,8 +282,10 @@ private:
         VkCommandBuffer cmd;
         VkExtent2D extent;       // the window
         ScreenLayout lay;        // placement of the game screen in it
-        uint32_t out_w, out_h;   // internal 3D resolution
-        uint32_t up_w, up_h;     // ... and what DLSS makes of it (the same, but with DLSS upscaling)
+        uint32_t out_w, out_h;   // internal 3D resolution: what is drawn this image
+        uint32_t full_w, full_h; // ... and the targets' size: the same, or larger with dynamic resolution
+                                 // (the image in their top left corner)
+        uint32_t up_w, up_h;     // what DLSS makes of it (the same as full, but with DLSS upscaling)
         size_t vcount;           // vertices of the scene
         float before;            // motion vectors: how far back the previously displayed image was
         float jitter_x, jitter_y, alpha_seed;   // DLAA: sub-pixel shift and alpha-test noise seed
@@ -356,14 +364,22 @@ private:
     const R3DViewport* rt_world_ = nullptr;   // the world viewport they are traced in
     uint32_t rt_generation_ = 0;       // R3DRayTracer::generation() the descriptors point to
     void record_ray_tracing(const Frame& f);
-    // Debugging aid (LW_GPUTIME): GPU time of each pass and of the whole
-    // frame, averaged over 300 images and printed (names in record())
+    // GPU time of each pass and of the whole frame: the whole frame's for
+    // the dynamic resolution; LW_GPUTIME (debugging aid) also prints each
+    // pass's, averaged over 300 images (names in record())
     static constexpr int GPU_MARKS = 13;
     VkQueryPool gpu_times_ = VK_NULL_HANDLE;
     float timestamp_period_ = 1;
     double gpu_sum_[GPU_MARKS] = {};
     int gpu_frames_ = 0;
     bool gpu_pending_ = false;
+    // Dynamic resolution: the share of the full 3D size drawn each way (1:
+    // all of it), from the graphics card's time for the last images
+    bool dynamic_resolution() const;
+    void update_dynamic_scale(double gpu_ms);
+    float gpu_budget_ms_ = 0.0f;
+    float dyn_scale_ = 1.0f;
+    int dyn_calm_ = 0;   // images in a row with room to spare
     void gpu_time_mark(VkCommandBuffer cmd, uint32_t index);
     // Light shafts: mask, then smeared towards the sun (quarter size). rays_a_
     // is also where bloom's first step and the diffusion's scene are drawn

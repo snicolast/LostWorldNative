@@ -11,6 +11,8 @@ layout(push_constant) uniform AmbientOcclusion {
     vec4 misc;     // x: noise seed, y: largest radius in pixels, z: rays per pixel when traced (0 = from the depth),
                    // w: 1 = traced on the left half only (LW_RTSPLIT)
     vec4 up;       // world up in view space, camera height above the ground (0, 0, 0, 0: unknown)
+    vec4 drawn;    // xy: the part of the targets drawn this image, from their top left corner, in pixels
+                   // (smaller than them with the dynamic resolution: what lies beyond is an older image's)
 } ao;
 
 const float AO_NEAR = 1e-3;   // r3d_scene.cpp projection
@@ -31,6 +33,7 @@ float ao_low(vec3 p) {
 
 // View-space position of the surface at a target pixel; z >= 0: no surface
 vec3 ao_view_pos(vec2 frag) {
+    if (any(lessThan(frag, vec2(0.0))) || any(greaterThanEqual(frag, ao.drawn.xy))) return vec3(0.0, 0.0, 1.0);
     float d = texelFetch(depth_tex, ivec2(frag), 0).r;
     if (d <= 0.0) return vec3(0.0, 0.0, 1.0);
     float z = -AO_NEAR / d;

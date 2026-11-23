@@ -61,12 +61,13 @@ void* create(PFN_vkGetInstanceProcAddr loader, VkInstance instance, VkPhysicalDe
 
 int evaluate(void* dlaa, VkCommandBuffer cmd, const DlssBridgeImage* color, const DlssBridgeImage* depth,
              const DlssBridgeImage* motion, const DlssBridgeImage* output, uint32_t width, uint32_t height,
-             uint32_t out_width, uint32_t out_height, float jitter_x, float jitter_y, int reset, int channel) {
+             uint32_t out_width, uint32_t out_height, float jitter_x, float jitter_y, int reset, int channel,
+             uint32_t draw_width, uint32_t draw_height) {
     if (!dlaa || channel < 0 || channel > 1) return 0;
     try {
         return static_cast<dlss::Dlaa*>(dlaa)->evaluate(cmd, image(color), image(depth), image(motion), image(output),
                                                         width, height, out_width, out_height, jitter_x, jitter_y,
-                                                        reset != 0, channel);
+                                                        reset != 0, channel, draw_width, draw_height);
     } catch (...) {
         return 0;
     }
@@ -81,8 +82,10 @@ void destroy(void* dlaa) {
     delete static_cast<dlss::Dlaa*>(dlaa);
 }
 
-void configure(void* dlaa, int mode, int preset) {
-    if (dlaa) static_cast<dlss::Dlaa*>(dlaa)->configure(mode, preset);
+void configure(void* dlaa, int mode, int preset, int dynamic) {
+    if (!dlaa) return;
+    static_cast<dlss::Dlaa*>(dlaa)->set_dynamic(dynamic != 0);
+    static_cast<dlss::Dlaa*>(dlaa)->configure(mode, preset);
 }
 
 const DlssBridgeApi kApi = {instance_extensions, device_extensions, create, evaluate, destroy, configure};

@@ -10,14 +10,16 @@ layout(set = 0, binding = 0) uniform sampler2D src;
 
 layout(push_constant) uniform Bloom {
     vec4 p;   // xy: texel size of the source; z: 0 = reduce 4x4, 1 = horizontal blur, 2 = vertical blur;
-              // w: spread of the blur taps
+              // w: spread of the blur taps; reducing: the share of the source drawn, from
+              // its top left corner (the 3D's dynamic resolution), 0 = all of it
 } pc;
 
 void main() {
     vec2 t = pc.p.xy;
     if (pc.p.z < 0.5) {   // four bilinear taps cover a 4x4 block
-        color = 0.25 * (texture(src, uv + t * vec2(-1.0, -1.0)) + texture(src, uv + t * vec2(1.0, -1.0)) +
-                        texture(src, uv + t * vec2(-1.0, 1.0)) + texture(src, uv + t * vec2(1.0, 1.0)));
+        vec2 at = uv * (pc.p.w > 0.0 ? pc.p.w : 1.0);
+        color = 0.25 * (texture(src, at + t * vec2(-1.0, -1.0)) + texture(src, at + t * vec2(1.0, -1.0)) +
+                        texture(src, at + t * vec2(-1.0, 1.0)) + texture(src, at + t * vec2(1.0, 1.0)));
         return;
     }
     // Gaussian over 17 texels in 9 bilinear taps, spread a little wider

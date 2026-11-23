@@ -49,6 +49,12 @@ public:
     void configure(int mode, int preset);
     // false if it never started or stopped working
     bool ready() const { return (params_ != nullptr || bridge_ != nullptr) && !failed_; }
+    // Whether evaluate takes a smaller part of the inputs (draw_width):
+    // through dlss_bridge.dll too, since its ABI 4
+    bool dynamic_resolution() const { return ready(); }
+    // Before configure: the inputs may be drawn smaller from image to image
+    // (draw_width) at DLAA's size too
+    void set_dynamic(bool on) { dynamic_ = on; }
 
     // Records the evaluation. Inputs in SHADER_READ_ONLY layout, output in
     // GENERAL with storage usage. jitter: sub-pixel offset of the projection
@@ -58,9 +64,13 @@ public:
     // alpha_taa.frag, for a fraction of the cost).
     // width, height: the inputs' size; out_width, out_height: the output's
     // (the same: DLAA; larger: DLSS at its quality setting)
+    // draw_width, draw_height: the part of the inputs drawn this image, from
+    // their top left corner (dynamic resolution: smaller where the graphics
+    // card would miss the refresh); 0: all of them
     bool evaluate(VkCommandBuffer cmd, const Image& color, const Image& depth, const Image& motion,
                   const Image& output, uint32_t width, uint32_t height, uint32_t out_width, uint32_t out_height,
-                  float jitter_x, float jitter_y, bool reset, int channel = 0);
+                  float jitter_x, float jitter_y, bool reset, int channel = 0, uint32_t draw_width = 0,
+                  uint32_t draw_height = 0);
 
 private:
     bool ensure_feature(VkCommandBuffer cmd, uint32_t width, uint32_t height, uint32_t out_width, uint32_t out_height,
@@ -72,6 +82,7 @@ private:
     uint32_t width_[2] = {}, height_[2] = {}, out_width_[2] = {}, out_height_[2] = {};
     bool failed_ = false;
     int mode_ = 0, preset_ = 0;
+    bool dynamic_ = false;
     // dlss_loader.cpp: the Dlaa inside dlss_bridge.dll that does the work
     void* bridge_ = nullptr;
 };
