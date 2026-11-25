@@ -21,6 +21,7 @@
 #include <thread>
 
 #include "bosses.h"
+#include "game_flow.h"
 #include "game_ram.h"
 #include "../common/game_hz.h"
 #include "disk_writer.h"
@@ -124,6 +125,8 @@ std::atomic<bool> g_quit{false}, g_parked{false};
 // --subtitles off|en|jp / settings: 0 none, 1 English, 2 Japanese (the board's own)
 std::atomic<int> g_subtitles{0};
 
+uint64_t g_frame = 0;   // vblanks since power-on (game_flow.h)
+
 namespace {
 
 constexpr uint64_t CPU_HZ = 100000000;      // PowerPC 603e at 100 MHz
@@ -131,7 +134,7 @@ constexpr uint64_t FRAME_CYCLES = uint64_t(CPU_HZ / GAME_HZ);
 constexpr uint64_t SAMPLE_CYCLES = 200000;  // sampling profiler
 constexpr uint32_t MSR_EE = 0x8000, MSR_IP = 0x40;
 
-uint64_t g_frame = 0, g_next_sample = SAMPLE_CYCLES;
+uint64_t g_next_sample = SAMPLE_CYCLES;
 // Frame timeline (424 lines: 40 of VBlank, then 384 active; spec section 8)
 constexpr uint64_t LINE_CYCLES = FRAME_CYCLES / 424;
 uint64_t g_frame_start = 0, g_next_phase = 0;
@@ -152,7 +155,6 @@ uint64_t g_dec_base = 0;
 bool g_dec_armed = false;
 uint64_t g_dec_irqs = 0;
 
-[[noreturn]] void exit_from_game_thread(int code);
 uint8_t g_adc_channel = 0;
 Ncr53c810 g_scsi;
 
@@ -819,6 +821,8 @@ void pace_frame() {
 
 double g_boot_s = now_seconds();   // when the process started (the boot skip reports how long it took)
 
+}  // namespace
+
 // Exit from the game thread itself: nothing else pushes audio, so it is
 // stopped here before the process goes away
 [[noreturn]] void exit_from_game_thread(int code) {
@@ -829,6 +833,8 @@ double g_boot_s = now_seconds();   // when the process started (the boot skip re
     console_prompt();
     ExitProcess(code);
 }
+
+namespace {
 
 // The SEGA logo is the first boot screen that fills the screen (grey backdrop);
 // the ones before it are a few lines of text on black
@@ -880,7 +886,9 @@ std::unique_ptr<GameState> g_mark;   // survival: the arena's first stop, where 
 bool g_state_keep_home = false;
 std::atomic<int> g_state_result{0};  // 1 done, -1 failed
 uint64_t g_state_since = 0;   // the frame a load was asked at (it gives up 600 frames later)
+}  // namespace
 bool g_logo_up = false;       // the boot has reached the SEGA logo (the game's main loop) once
+namespace {
 
 // Return addresses saved on the PowerPC stack, innermost first
 std::vector<uint32_t> call_chain(const uint8_t* ram, uint32_t sp) {
@@ -1091,11 +1099,11 @@ bool game_state_has_home() {
     std::lock_guard<std::mutex> lock(g_state_mutex);
     return g_home != nullptr;
 }
-static bool game_state_pending() {
+bool game_state_pending() {
     std::lock_guard<std::mutex> lock(g_state_mutex);
     return g_state_op != 0;
 }
-static bool g_attract_watch_reset = false;   // a state was put back: no game ended there
+bool g_attract_watch_reset = false;   // a state was put back: no game ended there (game_flow.cpp)
 int game_state_result() { return g_state_result; }
 bool game_state_valid(const std::string& path) {   // a state file this build can read
     FILE* f = fopen(path.c_str(), "rb");
@@ -1151,171 +1159,6 @@ void rt_state_point(Ctx& c) {
     }
 }
 
-// The place caption shown as each stage starts ("-Crossing point of rescue
-// parties.") does not go through the subtitle function: it is one more image
-// of the text table at 0x134B28 (16 bytes per text: Japanese image and width
-// in tiles, English image and width). The caption is centred from its width
-// and not drawn when it would start off the screen, so with subtitles off
-// these widths are made too wide to fit; the originals come back when they are
-// turned on again. Checked every frame: the table is reloaded at power-on.
-static void hide_stage_captions(bool hide) {
-    static const uint32_t IDS[] = {5, 18, 20, 46};
-    static uint32_t orig[4][2];
-    for (int i = 0; i < 4; i++)
-        for (int lang = 0; lang < 2; lang++) {
-            uint32_t a = ram::TEXT_TABLE + IDS[i] * 16 + 4 + lang * 8;
-            // not loaded yet (or the power-on RAM test running): leave it alone
-            if (rd32(a - 4) >> 24 != 0xFF) return;
-            uint32_t w = rd32(a);
-            if (w != 0x7E) orig[i][lang] = w < 0x40 ? w : 0;
-            uint32_t want = hide ? 0x7E : orig[i][lang];
-            if (w != want && orig[i][lang]) wr32(a, want);
-        }
-}
-
-// ---- Boss mode: making the boss states ----
-// --make-boss-state N plays by itself from the attract to boss N: it puts a
-// credit in, starts, picks the boss's stage in the course select (the run's
-// stage list at 0x1C2AFC) and keeps shooting, with its lives frozen; when the
-// stage script reaches the fight it clears the score and saves the state.
-int g_boss_maker = -1;   // index in BOSSES, -1 when not making one
-
-static void boss_maker_frame() {
-    const BossInfo& b = BOSSES[g_boss_maker];
-    static uint8_t lives = 0;
-    static bool saving = false;
-    uint64_t f = g_frame;
-    std::string path = boss_state_path(g_boss_maker);
-    if (saving) {
-        int r = game_state_result();
-        if (r == 0) return;
-        bool ok = r > 0 && MoveFileExA((path + ".tmp").c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING);
-        printf("[boss] %ls: %s (frame %llu; %u notes restarted on stopped voices)\n", b.name,
-               ok ? "state saved" : "could not save", (unsigned long long)f, unsigned(Scsp::restarted()));
-        exit_from_game_thread(ok ? 0 : 1);
-    }
-    if (f > 250000) {
-        printf("[boss] %ls: the game did not reach the boss\n", b.name);
-        exit_from_game_thread(1);
-    }
-    if (f < 900) return;   // past the boot (a button held there changes what it does)
-    uint32_t select = rd32(ram::COURSE_SELECT);   // 0 attract, 1-2 choosing, 0xC playing
-    if (select == 0) {                  // a credit and start, again until the course select opens
-        auto_coin_start(g_inputs.p[0], f);
-        return;
-    }
-    g_inputs.p[0].coin = g_inputs.p[0].start = false;
-    if (select != 0xC) {   // the boss's stage first in the run
-        if (int32_t(rd32(ram::PLAYLIST_INDEX)) == -1) wr32(ram::PLAYLIST, uint32_t(b.stage_index));
-        return;
-    }
-    if (!lives) lives = rd8(ram::P1_LIVES_BYTE);
-    if (lives) wr8(ram::P1_LIVES_BYTE, lives);
-    if (rd8(ram::STAGE) == b.stage_index && int32_t(rd32(ram::VM_ENCOUNTER)) == b.label && int32_t(rd32(ram::VM_PC)) >= b.index) {
-        g_inputs.p[0].trigger = g_inputs.p[0].offscreen = false;
-        wr32(ram::P1_SCORE, 0);   // the score starts at zero
-        wr32(ram::P1_STAGE_SCORES + 4 * 2, 0);   // 0x1A8594, stage 3's (the boss's own would be + 4 * b.stage_index)
-        game_state_save(path + ".tmp");
-        saving = true;
-        return;
-    }
-    auto_sweep_fire(g_inputs.p[0], f);
-}
-
-// ---- No attract with the menu on ----
-// The arcade game's attract (title, rankings, the demo that plays by itself)
-// never shows: the main menu stands in for it, as on a game made for the PC.
-//
-// PLAY > CLASSIC (g_arcade_entry, set by app.cpp): the game, at its SEGA logo
-// (the home state) or wherever the menu left it, runs on unseen and muted,
-// with a credit and START every second, until the route selection opens
-// (0x1C2AD8 1-2); then the menu closes on it. The credit is only put in
-// once the home state is kept, so it is not in there (QUIT TO MAIN MENU
-// would put it back as CREDIT 1), and only every 5 s: the route selection
-// can take a few seconds to open after START, and a coin every second left
-// CREDIT 1 on it
-static bool arcade_entry_frame() {
-    static uint64_t from = 0, select_at = 0;
-    PlayerInputs& p = g_inputs.p[0];
-    auto finish = [&](const char* why) {
-        p.coin = p.start = false;
-        printf("[play] %s after %llu frames\n", why, (unsigned long long)(g_frame - from));
-        g_arcade_entry = 0;
-        from = select_at = 0;
-        return true;
-    };
-    if (g_arcade_entry == 1) {
-        g_arcade_entry = 2;
-        from = g_frame, select_at = 0;
-        p.trigger = p.offscreen = false;
-    }
-    uint32_t select = rd32(ram::COURSE_SELECT);   // 0 attract, 1-2 choosing, 0xC playing
-    if (!g_logo_up || game_state_pending()) {   // the boot screens, or a state still being put back
-        p.coin = p.start = false;
-        if (g_frame - from > 20000) return finish("given up (no SEGA logo)");
-        return false;
-    }
-    if (!game_state_has_home()) {   // the home state first (the game at its SEGA logo)
-        game_state_keep_home();
-        p.coin = p.start = false;
-        return false;
-    }
-    if (select == 0xC) return finish("in a game already");
-    if (select == 0) {
-        if (g_frame - from > 9000) return finish("route selection not reached, given up");
-        uint64_t k = (g_frame - from) % 300;
-        p.coin = k < 6;
-        p.start = k % 60 >= 30 && k % 60 < 36;
-        return false;
-    }
-    p.coin = p.start = false;
-    if (!select_at) select_at = g_frame;
-    if (g_frame - select_at < 20) return false;   // its first frames drawn
-    return finish("route selection");
-}
-
-// A game that ends goes on to the attract. The game's mode word (0x1A6164)
-// is 0xB from the route selection to the end of a game: through the CONTINUE
-// count, TOTAL SCORE, the name entry and rankings and GAME OVER; it goes to
-// 0 on the frame the attract's first screen (the parental warning, then
-// FBI and SEGA logos, title, demo) starts (0 logo screens, 1 title, demo and
-// rankings; 0xA a frame or two around a coin or START, and as a stage
-// starts; 0x14 then 0x15 as a stage is cleared, on to the next one: only 0 and 1 end
-// a game, not any value other than 0xB). The route selection
-// (0x1C2AD8) stays at 0xC through the attract, so it cannot tell. On that
-// frame, before its picture is taken, the game stands still, the main menu
-// opens (g_game_over_menu, app.cpp) and the home state (the game at its SEGA
-// logo) is put back, ready for PLAY. Not in survival, boss mode or
-// --make-boss-state, which have their own ends, and only with the menu on
-// (g_skip_attract)
-static void attract_guard_frame() {
-    static bool game_on = false;
-    static uint32_t mode_was = 0;
-    uint32_t mode = rd32(ram::GAME_MODE), select = rd32(ram::COURSE_SELECT);
-    if (mode != mode_was && (mode == 0xB || mode_was == 0xB))
-        printf("[play] game mode %X -> %X (route selection %X, frame %llu)\n", unsigned(mode_was), unsigned(mode),
-               unsigned(select), (unsigned long long)g_frame);
-    mode_was = mode;
-    if (g_attract_watch_reset) {   // a state put back (QUIT TO MAIN MENU, survival, boss mode)
-        g_attract_watch_reset = false;
-        game_on = false;
-    }
-    if (survival_enabled() || g_boss_maker >= 0) {
-        game_on = false;
-        return;
-    }
-    if (mode == 0xB && select == 0xC) game_on = true;   // past the route selection: a game played
-    if (mode != 0 && mode != 1) return;   // still a game (0xA, 0x14 and 0x15 between stages)
-    if (!game_on) return;
-    game_on = false;
-    if (!g_skip_attract || g_arcade_entry || g_boot_skip) return;
-    printf("[play] the game is over: back to the main menu instead of the attract (frame %llu)\n",
-           (unsigned long long)g_frame);
-    g_hold = true;   // it stands still, behind the menu, until PLAY
-    game_state_load_home();
-    g_game_over_menu = true;
-}
-
 static void enemy_marks_frame();
 
 void rt_event(Ctx& c) {
@@ -1339,37 +1182,7 @@ void rt_event(Ctx& c) {
                 last_frame_time = now_s;
                 g_wait_seconds = 0;
             }
-            {   // the game sets its language flag (0x1A6168) once at start: a later
-                // change in the settings is written there so the next text uses it
-                static int applied = g_subtitles;
-                if (g_subtitles != applied) {
-                    applied = g_subtitles;
-                    wr32(ram::LANGUAGE, rt_text_region(rd8(ram::SETTING_COUNTRY)));
-                }
-            }
-            hide_stage_captions(g_subtitles == 0);
-            if (g_frame >= 1000) {   // FREE PLAY, past the boot (game_ram.md: no setting written there)
-                // The flag the game works out of its coin setting (0xFF when
-                // 0x1225 = 0x1A, FREE PLAY in the test menu's COIN ASSIGNMENTS):
-                // START alone starts and continues, a coin adds no credit and
-                // the screen says FREE PLAY. With it the game never goes back
-                // to its attract (a game over leads to the PUSH START screen,
-                // as with credits left), so with the main menu on it is only
-                // set while a player plays or is on the CONTINUE screen
-                // (slot 0-2, a game mode other than the attract's 0 and 1):
-                // a game over still ends in the attract, where the menu comes
-                // back, and PLAY's own credit starts the game. Not in
-                // survival or boss mode, which have no continue. Off, the
-                // test menu's own setting stands (also over a kept state)
-                uint32_t mode = rd32(ram::GAME_MODE);
-                bool in_game = mode != 0 && mode != 1 && (rd8(ram::P1_SLOT) <= 2 || rd8(ram::P2_SLOT) <= 2);
-                bool forced = g_free_play && !survival_enabled() && g_boss_maker < 0 && (!g_skip_attract || in_game);
-                wr8(ram::FREE_PLAY, forced || rd8(ram::SETTING_COIN) == 0x1A ? 0xFF : 0);
-            }
-            for (int p = 0; p < 2; p++) {   // player slots (0x10 bytes each): +0xD = 1 or 2 while playing
-                uint8_t state = rd8(ram::P1_SLOT + 0x10 * p);
-                g_inputs.p[p].playing = state == 1 || state == 2;
-            }
+            game_flow_frame_start();   // language, stage captions, FREE PLAY, who plays (game_flow.cpp)
             if (g_frame % 60 == 0) {
                 static double last_s = now_seconds();
                 double now = now_seconds();
@@ -1379,22 +1192,9 @@ void rt_event(Ctx& c) {
                 fflush(stdout);
             }
             g_auto.apply(g_frame);
-            attract_guard_frame();   // before the frame's picture is taken
-            {   // the attract: game mode 0 or 1 (attract_guard_frame), not survival or boss mode
-                uint32_t mode = rd32(ram::GAME_MODE);
-                g_in_attract = (mode == 0 || mode == 1) && !survival_enabled() && g_boss_maker < 0;
-            }
-            if (survival_frame(c)) g_hold = true;   // survival start and results screens
-            stats_frame();
-            random_spawns_frame();
-            if (g_boss_maker >= 0) boss_maker_frame();
+            game_flow_modes(c);   // the attract, survival, stats, random spawns, boss maker (game_flow.cpp)
             video_snapshot();
             if (!g_logo_up && ((g_frame % 4 == 0 && boot_logo_up()) || g_frame > 3000)) g_logo_up = true;
-            {   // PLAY given up on its way (app.cpp, cancel_play): no coin or START left held
-                static bool entry_was = false;
-                if (entry_was && !g_arcade_entry) g_inputs.p[0].coin = g_inputs.p[0].start = false;
-                entry_was = g_arcade_entry != 0;
-            }
             // Survival mode: on to the chosen stage at full speed, behind its loading screen
             // Boss mode: on to the fight's state, behind the menu (app.cpp, update_boss_mode)
             bool boot_done = survival_enabled() ? !survival_owns_inputs() || g_frame > 200000   // (survival gives up first)
