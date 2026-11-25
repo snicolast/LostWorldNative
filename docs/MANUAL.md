@@ -28,8 +28,8 @@ dropped: those stay (harmless). In a git clone it runs `git pull --ff-only` and 
 (57.5 Hz). It starts in a PC-style main menu (Play, Options, Quit; with
 keyboard or mouse): Play > Classic Arcade goes straight to the arcade game's
 route selection (BEGINNER / EXPERT / SHUFFLE; the credit and start go in by
-themselves; until the first stage begins, Esc or a pad's BACK goes back to
-the main menu instead of the pause, with no credit used), and when a game
+themselves; while LOADING shows on the way there, Esc or a pad's BACK goes
+back to the main menu, with no credit used), and when a game
 ends (no continue, or the ending and its name entry) the main menu comes
 back: the arcade's attract (title, rankings, demo) never shows. Continues and player 2 still use 5 / 6 = coin and
 1 / 2 = start (1 / 2 alone with FREE PLAY). During play Esc pauses the game and the sound (Resume,

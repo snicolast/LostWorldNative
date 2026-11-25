@@ -285,7 +285,7 @@ static bool crosshair_idle(int p, const PlayerAim& aim) {
 // to those of the player pad_player() gives them. The first pad shares player
 // 1 with the mouse, and whichever moved last aims. START joins the game, takes
 // player 1's sight from the mouse or, pressed by the pad that plays, pauses
-// it; BACK pauses. Returns which button asked for the pause menu.
+// it; BACK pauses. Returns true when a pad asks for the pause menu.
 static Gamepads g_pads;
 static GamepadSettings g_pad_settings;
 
@@ -307,8 +307,7 @@ static std::vector<AimTarget> aim_targets() {
     return out;
 }
 
-enum class PadPause { None, Start, Back };
-static PadPause poll_gamepads(HWND hwnd) {
+static bool poll_gamepads(HWND hwnd) {
     bool focused = GetForegroundWindow() == hwnd;
     g_pads.set_targets(aim_targets());
     g_pads.poll(g_pad_settings, focused, g_menu_open);
@@ -325,8 +324,8 @@ static PadPause poll_gamepads(HWND hwnd) {
     for (int i = 0; i < Gamepads::MAX; i++)
         if (connected >> i & 1 && pad_player(i, connected) == 1) g_p2_pad = true;
     if (g_menu_open) std::fill(std::begin(blocked), std::end(blocked), true);   // the button that closes it does not fire
-    if (!focused || g_menu_open || !g_auto.events.empty() || survival_owns_inputs() || g_arcade_entry) return PadPause::None;
-    PadPause pause = PadPause::None;
+    if (!focused || g_menu_open || !g_auto.events.empty() || survival_owns_inputs() || g_arcade_entry) return false;
+    bool pause = false;
     for (int i = 0; i < Gamepads::MAX; i++) {
         const PadState& pad = g_pads.pad(i);
         if (!pad.connected) continue;
@@ -355,11 +354,9 @@ static PadPause poll_gamepads(HWND hwnd) {
             g_pads.rumble_triggers(i, 0.8f, 0.0f, 70);
         }
         fire_was[i] = fire, reload_was[i] = reload;
-        if (pad.back) pause = PadPause::Back;
+        if (pad.back) pause = true;
         if (pad.start) {
-            if (pl.playing && (p == 1 || g_p1_pad == i)) {
-                if (pause == PadPause::None) pause = PadPause::Start;
-            }
+            if (pl.playing && (p == 1 || g_p1_pad == i)) pause = true;
             else if (pl.playing) g_p1_pad = i;   // player 1 plays with the mouse (a pad plugged in mid-game)
             else {
                 if (p == 0) g_p1_pad = i;   // this pad starts player 1's game
@@ -859,13 +856,9 @@ struct App {
     // A run starts from the arcade game at its attract (the home state: kept
     // the first time, put back the next ones), fast-forwarded and muted
     // behind the loading screen; Esc on the results goes back to the menu
-    // PLAY > CLASSIC: the menu stays up while the game runs on to its route
-    // selection unseen (g_arcade_entry, runtime.cpp), then closes on it
+    // PLAY > CLASSIC: the menu shows LOADING while the game runs on to its
+    // route selection unseen (g_arcade_entry, runtime.cpp), then closes on it
     bool play_waits = false;
-    // ...and once it is there, until the first stage begins (the route
-    // selection, then the stage's map): no game played yet, so Esc and the
-    // pad's BACK give PLAY up (cancel_play) instead of pausing
-    bool on_route = false;
     bool survival_cli_pending = false;   // waits for the boot screens
     bool survival_wait_home = false;
     uint64_t survival_audio_at = 0;   // audio frames out when the loading began (it stays silent)
@@ -1676,18 +1669,21 @@ void App::apply_video_options(const Options* was) {
 }
 
 // No attract (runtime.cpp, arcade_entry_frame): PLAY > CLASSIC runs the game
-// on to its route selection behind the menu, which closes once it is there
+// on to its route selection behind the menu (LOADING), which closes once it is there
 void App::start_arcade() {
     g_arcade_entry = 1;
     g_boot_skip = g_fast_idle = true;
     g_sound.set_dsp_enabled(false);
     g_sound.set_muted(true);
     play_waits = true;
+    frontend.starting = true;
+    frontend.invalidate();
 }
 
 // Another mode picked while the game was on its way to the route selection
 void App::cancel_arcade_entry() {
-    play_waits = on_route = false;
+    play_waits = false;
+    frontend.starting = false;
     g_arcade_entry = 0;
 }
 
@@ -1706,12 +1702,11 @@ void App::quit_to_menu() {
     frontend.open(Frontend::Screen::Main);
 }
 
-// PLAY given up before the game began (Esc, the pad's BACK): while the game
-// runs on to its route selection behind the menu, or on the route selection.
-// As QUIT TO MAIN MENU: the home state is from before the credit PLAY put in,
-// so none is left
+// PLAY given up during LOADING (Esc, the pad's B or BACK, the right button),
+// while the game runs on to its route selection behind the menu. As QUIT TO
+// MAIN MENU: the home state is from before the credit PLAY put in, so none is left
 void App::cancel_play() {
-    printf("[play] given up %s: back to the main menu\n", play_waits ? "on the way" : "on the route selection");
+    printf("[play] LOADING given up: back to the main menu\n");
     quit_to_menu();
     g_menu_open = g_hold = true;
 }
@@ -1726,13 +1721,8 @@ bool App::menu_key(int vk) {
     return true;
 }
 
-// Esc in the game: the pause menu; on PLAY's route selection or the first
-// stage's map after it (no game played yet) straight back to the main menu
+// Esc in the game (or a pad's BACK or START): the pause menu, also on the route selection
 void App::game_escape() {
-    if (on_route) {
-        cancel_play();
-        return;
-    }
     frontend.open(Frontend::Screen::Pause);
     g_menu_open = g_hold = true;
 }
@@ -1744,19 +1734,16 @@ void App::update_arcade_entry() {
     // A game over: the main menu instead of the attract, the game back at its
     // home state behind it (attract_guard_frame)
     if (g_game_over_menu.exchange(false)) {
-        play_waits = on_route = false;
+        play_waits = false;
+        frontend.starting = false;
         frontend.open(Frontend::Screen::Main);
         g_menu_open = g_hold = true;
     }
-    // 0 before the first game, 1-2 choosing the route, 9-0xB the first
-    // stage's intro (its map), 0xC playing (stats.cpp counts a game from there)
-    uint32_t select = rd32(0x1C2AD8);
     if (play_waits && !g_arcade_entry && !g_boot_skip) {
         play_waits = false;
-        on_route = select != 0 && select != 0xC;   // (not when it gave up, or found a game on)
+        frontend.starting = false;
         close_menu();
     }
-    if (on_route && (select == 0xC || boss_fight >= 0 || survival_view().mode != SurvivalMode::Off)) on_route = false;
 }
 
 // save/settings.ini: PC EDITION's settings at the top, ARCADE ORIGINAL's in its
@@ -2132,7 +2119,7 @@ void App::update_intro() {
 void App::read_inputs() {
     update_aim_reach(presenter.hwnd());
     poll_keyboard_mouse(presenter.hwnd());
-    PadPause pad_pause = poll_gamepads(presenter.hwnd());
+    bool pad_pause = poll_gamepads(presenter.hwnd());
     if (g_pads.changed()) {   // the CONTROLS tab names the pads
         std::wstring names;
         bool gyro = false;
@@ -2154,11 +2141,9 @@ void App::read_inputs() {
             pad_in_menu = true;
         }
     }
-    if (pad_pause != PadPause::None && g_opt.menu && !frontend.active()) {
-        // PLAY's route selection: BACK leaves it, as Esc; START does nothing there
-        if (!on_route) game_escape();
-        else if (pad_pause == PadPause::Back) cancel_play();
-        if (frontend.active()) pad_in_menu = true;
+    if (pad_pause && g_opt.menu && !frontend.active()) {
+        game_escape();
+        pad_in_menu = true;
     }
     join_update();
     bool f12 = GetForegroundWindow() == presenter.hwnd() && (GetAsyncKeyState(VK_F12) & 0x8000);
