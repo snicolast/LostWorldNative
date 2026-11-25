@@ -161,6 +161,8 @@ endif()
 # terminal it was started from, so the log still shows there
 add_executable(LostWorld WIN32
     src/runtime/runtime.cpp
+    src/runtime/game_flow.cpp
+    src/runtime/boss_maker.cpp
     src/runtime/app.cpp
     src/runtime/app_input.cpp
     src/runtime/boss_mode.cpp

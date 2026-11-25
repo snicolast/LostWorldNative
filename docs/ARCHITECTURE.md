@@ -136,7 +136,11 @@ call chain it was saved in (the main loop), so loads happen at `IDLE` points.
 ## Modes
 
 - **Boss mode** (`bosses.h`, `runtime.cpp`; the window's side in `boss_mode.cpp`): a saved state per boss, made by a
-  helper process; retry from the pause menu.
+  helper process (`--make-boss-state`, `boss_maker.cpp`); retry from the pause menu.
+- **Game flow** (`game_flow.cpp`): what the port adds around the arcade game at
+  each vblank: subtitle language and stage captions, FREE PLAY, who is playing,
+  the menu standing in for the attract, PLAY > CLASSIC's way in, and calling
+  each mode's frame.
 - **Survival** (`survival.cpp`): the game's own encounter machine
   (`encounter_script.h`) is held at one stop and fed waves; laps restore a
   marked state under a fade.
