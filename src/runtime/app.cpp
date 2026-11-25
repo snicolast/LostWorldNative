@@ -26,6 +26,7 @@
 #include <mmsystem.h>   // timeBeginPeriod
 #include <windowsx.h>   // GET_X_LPARAM
 
+#include "app_input.h"
 #include "bosses.h"
 #include "debug_aids.h"
 #include "debug_snapshot.h"
@@ -66,6 +67,11 @@
 #include "../video/vk_presenter.h"
 
 static Options g_opt;   // command line and menu settings (options.h)
+static Controls g_controls;   // keyboard, mice and guns, gamepads (app_input.h)
+
+// EXPERIENCE ARCADE ORIGINAL runs (save/settings.ini's experience = arcade): no main
+// menu, the attract plays, coins and START; Esc opens its own pause (frontend.cpp)
+static bool g_arcade = false;
 
 // The stage select screen marks the gun with a small textured dot in its top
 // viewport; in a stage the game draws an untextured X instead
@@ -88,136 +94,6 @@ static void apply_sound_options(const Options& o) {
     g_audio.set_speakers(AudioStream::Speakers(o.speakers));
 }
 
-// Keyboard and mouse (only while the window is active):
-//   5 = coin, 1 = start, mouse = gun (left button fires, right reloads),
-//   6 / 2 = player 2's coin and start, F2 = test, F3 = service.
-// With FREE PLAY the game itself needs no credit (g_free_play)
-static bool g_menu_open = false;     // a menu has the controls
-// EXPERIENCE ARCADE ORIGINAL runs (save/settings.ini's experience = arcade): no main
-// menu, the attract plays, coins and START; Esc opens its own pause (frontend.cpp)
-static bool g_arcade = false;
-static bool g_block_buttons = false; // after a menu closes: buttons ignored until released
-static int g_p1_pad = -1;            // the gamepad aiming for player 1; -1: the mouse (whichever moved last)
-static bool g_p2_pad = false;        // a gamepad is player 2's (poll_gamepads)
-// While player 2 has a gun of its own (a second mouse, raw_mice.h): the
-// gamepad aiming for player 2 instead, -1: the gun. A pad of player 2's takes
-// the sight only when it aims and the gun has been still for a moment, so a
-// pad that is never touched (a Wii remote that SDL also opens as a gamepad)
-// does not hold player 2's sight where it is
-static int g_p2_pad_aims = -1;
-static double g_p2_gun_moved = -100; // now_seconds() when player 2's gun last moved
-
-// Window pixels -> fraction of the 4:3 game screen (accounting for the black
-// bars; beyond 0..1 in the side bands of a wider 3D view)
-static void aim_at(int player, HWND hwnd, POINT pt) {
-    RECT rc;
-    GetClientRect(hwnd, &rc);
-    ScreenLayout lay = compute_layout(float(rc.right), float(rc.bottom), g_opt.max_aspect);
-    float x = (pt.x - lay.ox - lay.game_x0 * lay.scale) / (SCREEN_W * lay.scale);
-    float y = (pt.y - lay.oy) / (SCREEN_H * lay.scale);
-    set_player_aim(player, x, y);
-}
-
-// The gun covers the whole 3D view, also the side bands of a wide one: how
-// far it reaches beyond the 4:3 screen (each new picture, as the window may
-// change)
-static void update_aim_reach(HWND hwnd) {
-    RECT rc;
-    GetClientRect(hwnd, &rc);
-    if (rc.right <= 0 || rc.bottom <= 0) return;
-    ScreenLayout lay = compute_layout(float(rc.right), float(rc.bottom), g_opt.max_aspect);
-    g_aim_reach = lay.game_x0 / SCREEN_W;
-}
-
-// A shot outside the 3D view (the black bars of a window wider than it) or on
-// its very edge (where a light gun puts a shot that misses the screen)
-// reloads, as on the cabinet, instead of firing at the edge
-static void shot_outside_reloads(int player) {
-    PlayerInputs& pl = g_inputs.p[player];
-    PlayerAim a = player_aim(player);   // the very edge too: where a gun can park an off-screen shot
-    float reach = gun_reach();
-    if (pl.trigger && (a.x <= -reach || a.y <= 0 || a.x >= 1 + reach || a.y >= 1)) {
-        pl.trigger = false;
-        pl.offscreen = true;
-    }
-}
-
-static void poll_keyboard_mouse(HWND hwnd) {
-    // Scripted input (--auto) takes over the controls
-    if (GetForegroundWindow() != hwnd || !g_auto.events.empty() || survival_owns_inputs() || g_arcade_entry) {
-        if (g_auto.events.empty() && !survival_owns_inputs() && !g_arcade_entry)   // in the background: no gun stays held
-            for (PlayerInputs& pl : g_inputs.p) pl.trigger = pl.offscreen = false;
-        raw_mice::update(hwnd, false, false);
-        return;
-    }
-    // A second mouse becomes player 2's when it clicks during a game, also
-    // after player 2 joined with start (a light gun's button) before firing,
-    // unless a gamepad is player 2's
-    const PlayerInputs &in1 = g_inputs.p[0], &in2 = g_inputs.p[1];
-    bool join_allowed = g_opt.several_mice && !g_menu_open && (in1.playing || in2.playing) && !(in2.playing && g_p2_pad);
-    raw_mice::update(hwnd, join_allowed, !g_menu_open);
-    auto down = [](int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; };
-    if (g_menu_open) {
-        g_inputs.test = g_inputs.service = false;
-        for (PlayerInputs& pl : g_inputs.p) pl.coin = pl.start = pl.trigger = pl.offscreen = false;
-        return;
-    }
-    PlayerInputs& p1 = g_inputs.p[0];
-    p1.coin = down('5');
-    g_inputs.p[1].coin = down('6');
-    g_inputs.p[0].start = down('1');
-    g_inputs.p[1].start = down('2');
-    g_inputs.test = down(VK_F2);
-    g_inputs.service = down(VK_F3);
-    POINT cursor;
-    GetCursorPos(&cursor);
-    static POINT last_cursor{-100000, -100000};
-    if (cursor.x != last_cursor.x || cursor.y != last_cursor.y) g_p1_pad = -1;   // the mouse moved: it aims again
-    last_cursor = cursor;
-    if (raw_mice::two_mice()) {   // each mouse its own gun; player 2's click joins while player 1 plays
-        for (int p = 0; p < 2; p++) {
-            raw_mice::Gun g = raw_mice::gun(p, hwnd);
-            PlayerInputs& pl = g_inputs.p[p];
-            if (p == 1 && g.clicked && !pl.playing && p1.playing) player_join(1);
-            pl.trigger = g.trigger;
-            pl.offscreen = g.reload;
-            if (p == 1) {
-                static POINT last{-100000, -100000};
-                if (g.pos.x != last.x || g.pos.y != last.y) {   // the gun moved: it aims again
-                    g_p2_pad_aims = -1;
-                    g_p2_gun_moved = now_seconds();
-                }
-                last = g.pos;
-            }
-            if (p == 1 ? g_p2_pad_aims < 0 : g_p1_pad < 0) {
-                aim_at(p, hwnd, g.pos);
-                shot_outside_reloads(p);
-            }
-        }
-    } else {
-        p1.trigger = down(VK_LBUTTON);
-        p1.offscreen = down(VK_RBUTTON);
-        g_inputs.p[1].trigger = g_inputs.p[1].offscreen = false;   // player 2's pad adds its buttons after this
-        POINT pt;
-        GetCursorPos(&pt);
-        ScreenToClient(hwnd, &pt);
-        if (g_p1_pad < 0) {
-            aim_at(0, hwnd, pt);
-            shot_outside_reloads(0);
-        }
-    }
-    if (g_block_buttons) {   // the click that closed the menu does not fire
-        bool held = false;
-        for (PlayerInputs& pl : g_inputs.p) held |= pl.trigger || pl.offscreen;
-        if (held) for (PlayerInputs& pl : g_inputs.p) pl.trigger = pl.offscreen = false;
-        else g_block_buttons = false;
-    }
-    static bool c_was_down = false;   // C toggles the extra crosshair
-    bool c_down = down('C');
-    if (c_down && !c_was_down) g_opt.show_crosshair = !g_opt.show_crosshair;
-    c_was_down = c_down;
-}
-
 // crosshair.png / crosshair_p2.png beside LostWorld.exe (ui/crosshair_file.h)
 // replace the drawn crosshairs unless Crosshair style is Default; again after
 // the menu picks a new one
@@ -228,120 +104,6 @@ static void load_crosshairs(R3DRenderer& renderer) {
         if (g_opt.custom_crosshair && crosshair_load(p, w, h, rgba)) printf("[video] player %d crosshair: %dx%d picture\n", p + 1, w, h);
         renderer.set_crosshair_picture(p, w, h, rgba);
     }
-}
-
-// Settings > Controls > Hide idle crosshair: a gun that has not moved (more
-// than a hand's tremble, 1% of the screen) nor fired for that many seconds
-// loses its crosshair until it does. A player who joined by mistake (a light
-// gun's start button) leaves no crosshair standing still on the screen
-static bool crosshair_idle(int p, const PlayerAim& aim) {
-    static float at_x[2] = {-9, -9}, at_y[2] = {-9, -9};
-    static double used_at[2] = {};
-    double now = now_seconds();
-    const PlayerInputs& pl = g_inputs.p[p];
-    if (pl.trigger || pl.offscreen || std::fabs(aim.x - at_x[p]) > 0.01f || std::fabs(aim.y - at_y[p]) > 0.01f) {
-        at_x[p] = aim.x, at_y[p] = aim.y;
-        used_at[p] = now;
-    }
-    return g_opt.crosshair_hide > 0 && now - used_at[p] > double(g_opt.crosshair_hide);
-}
-
-// Gamepads (gamepad.h), after the keyboard and mouse: their buttons are added
-// to those of the player pad_player() gives them. The first pad shares player
-// 1 with the mouse, and whichever moved last aims. START joins the game, takes
-// player 1's sight from the mouse or, pressed by the pad that plays, pauses
-// it; BACK pauses. Returns true when a pad asks for the pause menu.
-static Gamepads g_pads;
-static GamepadSettings g_pad_settings;
-
-// The aim assist's targets: a box around each enemy the game placed on
-// screen, from the point it stands on up the body, sized with its distance.
-// In world units (LW_AIM_BOX=up,half_width,half_height to try others)
-static std::vector<AimTarget> aim_targets() {
-    static float up = 7, half_w = 6, half_h = 5;
-    static bool parsed = false;
-    if (!parsed) {
-        parsed = true;
-        if (const char* e = getenv("LW_AIM_BOX")) sscanf(e, "%f,%f,%f", &up, &half_w, &half_h);
-    }
-    std::vector<AimTarget> out;
-    for (const EnemyMark& m : enemy_marks()) {
-        float cy = m.y - up * m.scale, w = half_w * m.scale, h = half_h * m.scale;
-        out.push_back({(m.x - w) / SCREEN_W, (cy - h) / SCREEN_H, (m.x + w) / SCREEN_W, (cy + h) / SCREEN_H});
-    }
-    return out;
-}
-
-static bool poll_gamepads(HWND hwnd) {
-    bool focused = GetForegroundWindow() == hwnd;
-    g_pads.set_targets(aim_targets());
-    g_pads.poll(g_pad_settings, focused, g_menu_open);
-    static bool blocked[Gamepads::MAX] = {}, fire_was[Gamepads::MAX] = {}, reload_was[Gamepads::MAX] = {};
-    static uint32_t lives_was[2] = {};
-    uint32_t connected = 0;
-    for (int i = 0; i < Gamepads::MAX; i++)
-        if (g_pads.pad(i).connected) connected |= 1u << i;
-    if (g_p1_pad >= 0 && !(connected >> g_p1_pad & 1)) g_p1_pad = -1;   // unplugged: the mouse aims again
-    if (g_p2_pad_aims >= 0 && !(connected >> g_p2_pad_aims & 1)) g_p2_pad_aims = -1;
-    bool p2_gun = raw_mice::two_mice();
-    if (!p2_gun) g_p2_pad_aims = -1;
-    g_p2_pad = false;
-    for (int i = 0; i < Gamepads::MAX; i++)
-        if (connected >> i & 1 && pad_player(i, connected) == 1) g_p2_pad = true;
-    if (g_menu_open) std::fill(std::begin(blocked), std::end(blocked), true);   // the button that closes it does not fire
-    if (!focused || g_menu_open || !g_auto.events.empty() || survival_owns_inputs() || g_arcade_entry) return false;
-    bool pause = false;
-    for (int i = 0; i < Gamepads::MAX; i++) {
-        const PadState& pad = g_pads.pad(i);
-        if (!pad.connected) continue;
-        int p = pad_player(i, connected);
-        PlayerInputs& pl = g_inputs.p[p];
-        if (pad.aimed && p == 0) g_p1_pad = i;
-        if (pad.aimed && p == 1 && p2_gun && now_seconds() - g_p2_gun_moved > 0.5) g_p2_pad_aims = i;
-        bool aims = p == 0 ? g_p1_pad == i : !p2_gun || g_p2_pad_aims == i;
-        if (aims) set_player_aim(p, pad.aim_x, pad.aim_y);
-        else {   // the mouse (or player 2's gun) aims: the pad's sight waits where it is
-            PlayerAim a = player_aim(p);
-            g_pads.set_aim(i, a.x, a.y);
-        }
-        bool fire = pad.fire, reload = pad.reload;
-        if (blocked[i]) {
-            if (fire || reload) fire = reload = false;
-            else blocked[i] = false;
-        }
-        if (fire) pl.trigger = true;
-        if (reload) pl.offscreen = true;
-        if (fire && !fire_was[i]) {
-            g_pads.rumble(i, 0.5f, 0.85f, 90);
-            g_pads.rumble_triggers(i, 0.0f, 1.0f, 90);
-        } else if (reload && !reload_was[i]) {
-            g_pads.rumble(i, 0.6f, 0.2f, 70);
-            g_pads.rumble_triggers(i, 0.8f, 0.0f, 70);
-        }
-        fire_was[i] = fire, reload_was[i] = reload;
-        if (pad.back) pause = true;
-        if (pad.start) {
-            if (pl.playing && (p == 1 || g_p1_pad == i)) pause = true;
-            else if (pl.playing) g_p1_pad = i;   // player 1 plays with the mouse (a pad plugged in mid-game)
-            else {
-                if (p == 0) g_p1_pad = i;   // this pad starts player 1's game
-                player_join(p);
-            }
-        }
-    }
-    // A hit takes a life (game_ram.md): the pads of that player that were used
-    // in the last minute rumble
-    for (int p = 0; p < 2; p++) {
-        uint32_t lives = rd32(p ? ram::P2_LIVES : ram::P1_LIVES);
-        if (g_inputs.p[p].playing && lives < lives_was[p])
-            for (int i = 0; i < Gamepads::MAX; i++)
-                if (g_pads.pad(i).connected && pad_player(i, connected) == p && g_pads.now() - g_pads.pad(i).last_used < 60) {
-                    g_pads.rumble(i, 1.0f, 0.9f, 380);
-                    g_pads.rumble_triggers(i, 1.0f, 1.0f, 300);
-                }
-        lives_was[p] = lives;
-    }
-    return pause;
 }
 
 // When the image being recorded will be on screen: with vsync the images go
@@ -838,14 +600,14 @@ void App::survival_to_menu() {
 
 void App::open_menu(Frontend::Screen s) {
     frontend.open(s);
-    g_menu_open = g_hold = true;
+    g_controls.menu_open = g_hold = true;
 }
 
 void App::close_menu() {
     frontend.open(Frontend::Screen::None);
     ui.hide();
-    g_menu_open = g_hold = false;
-    g_block_buttons = true;
+    g_controls.menu_open = g_hold = false;
+    g_controls.block_buttons = true;
 }
 
 // Starts LostWorld.exe --make-boss-state for boss i (see boss_job)
@@ -1096,8 +858,8 @@ bool App::init(bool aa_auto) {
     }
     printf("GPU: %s\n", presenter.device_name().c_str());
     if (aa_auto) g_opt.dlss = screen_height(presenter.hwnd()) > 1440 ? 1 : 0;   // DLSS QUALITY above 1440p
-    g_pads.trigger_rumble = g_opt.trigger_rumble;
-    g_pads.init();
+    g_controls.pads.trigger_rumble = g_opt.trigger_rumble;
+    g_controls.pads.init();
     timeBeginPeriod(1);
     QueryPerformanceFrequency(&g_qpf);
     QueryPerformanceCounter(&g_start_time);
@@ -1246,7 +1008,7 @@ bool App::init(bool aa_auto) {
             if (getenv("LW_MENU_KEYS") || getenv("LW_MENU_SHOT") || getenv("LW_MENU_FILM") || getenv("LW_RESTARTED"))
                 frontend.open(Frontend::Screen::Main);
             else frontend.open_splash();
-            g_menu_open = true;
+            g_controls.menu_open = true;
         }
         presenter.input_hook = [this](UINT msg, WPARAM wp, LPARAM lp) -> bool {
             int x = GET_X_LPARAM(lp), y = GET_Y_LPARAM(lp);
@@ -1403,7 +1165,7 @@ void App::update_survival() {
         if (survival_last == SurvivalMode::Loading && sv.mode != SurvivalMode::Loading)
             printf("[survival] audio during the loading: %llu samples\n",
                    (unsigned long long)(g_sound.frames_out() - survival_audio_at));
-        if (survival_last == SurvivalMode::Loading && sv.mode == SurvivalMode::Off && g_opt.menu && !g_menu_open)
+        if (survival_last == SurvivalMode::Loading && sv.mode == SurvivalMode::Off && g_opt.menu && !g_controls.menu_open)
             survival_to_menu();   // the game never got to the arena: not left running behind the loading screen
         survival_last = sv.mode;
         if (survival_cli_pending) {   // the boot screens: already the loading screen
@@ -1415,7 +1177,7 @@ void App::update_survival() {
         bool fg = GetForegroundWindow() == hw;
         bool down = fg && ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) || (GetAsyncKeyState(VK_RETURN) & 0x8000) ||
                            (GetAsyncKeyState(VK_SPACE) & 0x8000));
-        for (int i = 0; i < Gamepads::MAX; i++) down |= fg && g_pads.pad(i).fire;
+        for (int i = 0; i < Gamepads::MAX; i++) down |= fg && g_controls.pads.pad(i).fire;
         // (the results only after a moment: the player is still shooting when the hunt ends)
         bool waiting = sv.mode == SurvivalMode::Ready ||
                        (sv.mode == SurvivalMode::Results && now_seconds() - sv.results_at > SURVIVAL_RESULTS_DELAY);
@@ -1426,7 +1188,7 @@ void App::update_survival() {
         SurvivalLayout surv_lay{lay.scale, lay.ox, lay.oy, lay.game_x0};
         if (waiting && down && !confirm_was_down && !frontend.active()) {
             survival_go_on(sv);
-            g_block_buttons = true;   // the click does not fire in the game
+            g_controls.block_buttons = true;   // the click does not fire in the game
         }
         confirm_was_down = down;
         // Debugging aid: LW_SURV_SHOTS=1 captures each screen of the mode
@@ -1467,7 +1229,7 @@ void App::update_toast() {
                               L"Play it from PLAY > SURVIVAL");
     // The author's credit over the attract (seen with the menu off, --no-menu)
     toast.set_credit(L"PC port by snicolast", L"github.com/snicolast/LostWorldNative",
-                     g_in_attract && !g_menu_open && !g_boot_skip && !g_arcade_entry && !g_arcade);
+                     g_in_attract && !g_controls.menu_open && !g_boot_skip && !g_arcade_entry && !g_arcade);
     RECT rc;
     GetClientRect(presenter.hwnd(), &rc);
     if (toast.draw(rc.right, rc.bottom, now_seconds(), toast_pixels))
@@ -1558,7 +1320,7 @@ void App::boss_mode_to_menu() {
 void App::cancel_play() {
     printf("[play] LOADING given up: back to the main menu\n");
     quit_to_menu();
-    g_menu_open = g_hold = true;
+    g_controls.menu_open = g_hold = true;
 }
 
 // A key for the menu (the keyboard, a pad's buttons as keys, LW_MENU_KEYS).
@@ -1674,7 +1436,7 @@ void App::handle_menu_actions() {
             else raw_mice::set_saved(s.gun_p1, s.gun_p2);
             g_subtitles = g_opt.subtitles;
             g_free_play = g_opt.free_play;
-            g_pad_settings = {s.pad_speed, s.gyro, s.gyro_speed, s.vibration, s.trigger_rumble, s.aim_assist};
+            g_controls.pad_settings = {s.pad_speed, s.gyro, s.gyro_speed, s.vibration, s.trigger_rumble, s.aim_assist};
             save_settings();
             break;
         }
@@ -1749,7 +1511,7 @@ void App::update_boss_mode() {
             printf("[boss] could not start the fight\n");
             end_boss_mode();
             frontend.open_boss_list(true);
-            g_menu_open = g_hold = true;
+            g_controls.menu_open = g_hold = true;
         }
     }
     if (boss_shown_at > 0 && now_seconds() >= boss_shown_at) {
@@ -1777,7 +1539,7 @@ void App::update_boss_mode() {
         // The next stage starting (its map) is not shown: the menu at once
         if (boss_over_at > 0 && (stage_ended || now_seconds() - boss_over_at > 3)) {
             boss_mode_to_menu();
-            g_menu_open = g_hold = true;
+            g_controls.menu_open = g_hold = true;
         }
     }
 }
@@ -1901,19 +1663,19 @@ void App::update_intro() {
     frontend.open(Frontend::Screen::None);
     ui.hide();
     intro = g_hold = false;
-    g_block_buttons = true;   // the press that hurried it on does not shoot
+    g_controls.block_buttons = true;   // the press that hurried it on does not shoot
 }
 
 // The guns, the keyboard, the gamepads, F12 / F9 and the crosshairs
 void App::read_inputs() {
-    update_aim_reach(presenter.hwnd());
-    poll_keyboard_mouse(presenter.hwnd());
-    bool pad_pause = poll_gamepads(presenter.hwnd());
-    if (g_pads.changed()) {   // the CONTROLS tab names the pads
+    g_controls.update_aim_reach(presenter.hwnd(), g_opt);
+    g_controls.poll_keyboard_mouse(presenter.hwnd(), g_opt);
+    bool pad_pause = g_controls.poll_gamepads(presenter.hwnd());
+    if (g_controls.pads.changed()) {   // the CONTROLS tab names the pads
         std::wstring names;
         bool gyro = false;
         for (int i = 0; i < Gamepads::MAX; i++) {
-            const PadState& pad = g_pads.pad(i);
+            const PadState& pad = g_controls.pads.pad(i);
             if (!pad.connected) continue;
             names += (names.empty() ? L"" : L", ") + std::wstring(pad.name.begin(), pad.name.end());
             gyro |= pad.has_gyro;
@@ -1922,7 +1684,7 @@ void App::read_inputs() {
         frontend.gyro_pad = gyro;
         frontend.invalidate();
     }
-    for (PadKey k : g_pads.take_keys()) {   // the menus, as keys (START resumes from the pause menu)
+    for (PadKey k : g_controls.pads.take_keys()) {   // the menus, as keys (START resumes from the pause menu)
         static const int VK[] = {VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, VK_RETURN, VK_ESCAPE, 'Q', 'E', 'R'};
         bool resume = frontend.screen() == Frontend::Screen::Pause;
         if (frontend.active()) {
@@ -1951,7 +1713,7 @@ void App::read_inputs() {
     if (g_opt.shot_frame && shown != ~0ull && shown + 1 >= g_opt.shot_frame) capture_2d = true;
     for (int p = 0; p < 2; p++) {   // player 2's only while that gun is in use
         PlayerAim aim = player_aim(p);
-        bool used = (p == 0 || g_inputs.p[1].playing) && !crosshair_idle(p, aim);
+        bool used = (p == 0 || g_inputs.p[1].playing) && !g_controls.crosshair_idle(p, aim, g_opt);
         renderer.set_crosshair(p, g_opt.show_crosshair && used && aim.inside && !g_opt.fixed_aim, aim.x, aim.y);
     }
 }
@@ -2299,7 +2061,7 @@ void App::shutdown() {
     survival_ui.shutdown();
     renderer.shutdown();
     presenter.shutdown();
-    g_pads.shutdown();
+    g_controls.pads.shutdown();
     if (g_restart) restart_game();
     console_prompt();
     ExitProcess(0);
@@ -2410,7 +2172,7 @@ int main(int argc, char** argv) {
         if (g_arcade && !other_ini.aa_saved)   // PC EDITION's first start comes in ARCADE ORIGINAL: its pick all the same
             other_ini.aa = nvidia_card() ? 1 : 7;
         options_from_settings(ini, g_opt);
-        g_pad_settings = {ini.pad_speed, ini.gyro, ini.gyro_speed, ini.vibration, ini.trigger_rumble, ini.aim_assist};
+        g_controls.pad_settings = {ini.pad_speed, ini.gyro, ini.gyro_speed, ini.vibration, ini.trigger_rumble, ini.aim_assist};
     }
     // The survival mode's options live in survival.cpp: the table hands them over
     auto extra = [](Options&, const std::string& a, const char* next) -> int {
