@@ -32,10 +32,12 @@
 #include "frame_prep.h"
 #include "debug_aids.h"
 #include "debug_snapshot.h"
+#include "display_clock.h"
 #include "game_ram.h"
 #include "gamepad.h"
 #include "inputs.h"
 #include "options.h"
+#include "pacing_log.h"
 #include "ppc_rt.h"
 #include "raw_mice.h"
 #include "rom_zip.h"
@@ -108,181 +110,27 @@ static void load_crosshairs(R3DRenderer& renderer) {
     }
 }
 
-// When the image being recorded will be on screen: with vsync the images go
-// out once per refresh, evenly, while this thread wakes up for them at uneven
-// moments (it waits for the GPU and the display, then builds the scene). The
-// moment is the next vblank of the monitor, which Windows reports (DWM); if
-// it does not, a clock that advances one refresh per image and follows the
-// earliest wake-ups (never earlier than a vblank). Either way it moves on by
-// whole refreshes, and starts again after a stall (a window drag, a slow frame).
-// DWM's vblanks are those of one monitor (the main one): they are not used
-// when the window's monitor runs at another refresh rate (two monitors at 60
-// and 144 Hz). When the images do not go out one per refresh (VSYNC: OFF or
-// vsync turned off in the driver, G-Sync/FreeSync below the monitor's rate,
-// refreshes missed) they are not tied to vblanks either: each goes out about
-// as soon as it is ready, so its moment is about when this thread prepares
-// it (it waits for the previous presents first, so its wake-ups follow
-// theirs), evened out over the last ones
-struct DisplayClock {
-    enum Mode { Vblanks, Refreshes, Presents };
-    double at = 0, last = 0, period = 1.0 / 60;
-    double interval = 0;      // between wake-ups, averaged over ~100
-    double monitor_hz = 0;    // the refresh rate of the window's monitor (0: unknown)
-    double checked = -100;    // when monitor_hz was read
-    Mode mode = Vblanks;
-    bool told = false;        // the mode was printed
-    double tick(HWND hwnd) {
-        double now = now_seconds();
-        if (last > 0 && now - last < 0.1) {
-            double dt = std::clamp(now - last, 1.0 / 1000, 0.05);
-            interval = interval > 0 ? interval + 0.01 * (dt - interval) : dt;
-        }
-        if (now - checked > 1) {   // the window may have moved to another monitor
-            checked = now;
-            monitor_hz = 0;
-            MONITORINFOEXW mi{};
-            mi.cbSize = sizeof(mi);
-            DEVMODEW dm{};
-            dm.dmSize = sizeof(dm);
-            if (GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mi) &&
-                EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm) && dm.dmDisplayFrequency > 1)
-                monitor_hz = dm.dmDisplayFrequency;
-        }
-        DWM_TIMING_INFO info{};
-        info.cbSize = sizeof(info);
-        bool dwm = SUCCEEDED(DwmGetCompositionTimingInfo(nullptr, &info)) && info.qpcRefreshPeriod > 0;
-        double f = double(g_qpf.QuadPart), dwm_period = dwm ? double(info.qpcRefreshPeriod) / f : 0;
-        // (59 for 59.94 Hz: whole numbers)
-        bool other_monitor = dwm && monitor_hz > 0 && std::abs(1 / dwm_period - monitor_hz) > 1.5;
-        double refresh = dwm && !other_monitor ? dwm_period : monitor_hz > 0 ? 1 / monitor_hz : period;
-        // One image per refresh: the wake-ups at the refresh rate, within 2%
-        // (4% to stop: a refresh missed now and then is still one per refresh)
-        double off = interval > 0 ? std::abs(interval / refresh - 1) : 0;
-        bool per_refresh = mode == Presents ? off < 0.02 : off < 0.04;
-        Mode was = mode;
-        mode = !per_refresh ? Presents : dwm && !other_monitor ? Vblanks : Refreshes;
-        if (mode != was || !told) {
-            told = true;
-            if (mode == Vblanks)
-                printf("[video] display clock: vblanks reported by Windows (%.1f Hz)\n", 1 / dwm_period);
-            else if (mode == Refreshes)
-                printf("[video] display clock: one image per refresh, timed from the presents (the window's monitor "
-                       "%.0f Hz, Windows reports %.1f Hz)\n", monitor_hz, dwm ? 1 / dwm_period : 0.0);
-            else
-                printf("[video] display clock: each image when it is ready (%.1f images per second on a %.0f Hz "
-                       "monitor: vsync off, G-Sync/FreeSync or refreshes missed)\n",
-                       1 / interval, 1 / refresh);
-            fflush(stdout);
-            period = refresh;
-            at = 0;
-        }
-        if (mode == Presents) {
-            if (dwm && !other_monitor) period = dwm_period;
-            // The wake-ups are less even than the images going out (the
-            // thread is woken late now and then): the moment moves on by
-            // their average interval and follows them by a tenth of the
-            // difference, starting again when one is off by a whole interval
-            double next = at + interval;
-            at = at > 0 && interval > 0 && std::abs(now - next) < interval ? next + 0.1 * (now - next) : now;
-            last = now;
-            return at;
-        }
-        if (mode == Vblanks) {
-            double vblank = double(info.qpcVBlank) / f;
-            period = dwm_period;
-            double next = vblank + std::ceil((now - vblank) / period) * period;
-            // One refresh per image unless one was really skipped
-            at = at > 0 && next < at + 0.5 * period && next > at - 2 * period ? at + period : next;
-            last = now;
-            return at;
-        }
-        if (last > 0 && now - last < 0.1) period += 0.002 * (std::clamp(now - last, 1.0 / 1000, 0.05) - period);
-        last = now;
-        if (at > 0 && std::abs(now - (at + period)) < 2 * period) {
-            at += period;
-            at += now < at ? now - at : 0.01 * (now - at);
-        } else {
-            at = now;
-        }
-        return at;
+// The display clock's readings from Windows: the window's monitor (once a
+// second, the window may have moved) and DWM's vblanks
+static double display_tick(DisplayClock& clock, HWND hwnd) {
+    double now = now_seconds();
+    if (now - clock.checked > 1) {   // the window may have moved to another monitor
+        clock.checked = now;
+        clock.monitor_hz = 0;
+        MONITORINFOEXW mi{};
+        mi.cbSize = sizeof(mi);
+        DEVMODEW dm{};
+        dm.dmSize = sizeof(dm);
+        if (GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mi) &&
+            EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm) && dm.dmDisplayFrequency > 1)
+            clock.monitor_hz = dm.dmDisplayFrequency;
     }
-};
-
-// Debugging aid: LW_PACING=1 measures how evenly the interpolated motion
-// runs. Every 5 s it prints, over the presents, the game time shown per
-// present divided by the time between their moments on screen (1.00 =
-// perfectly even; "dispersion" is its standard deviation) and the presents
-// where the picture stood still or went back, and the same for the previous
-// method (frames dated when the game finished them and placed at the moment
-// the image is recorded, no delay for late frames)
-static const bool g_pacing_log = getenv("LW_PACING") != nullptr;
-
-// Debugging aid: LW_FRAMELOG=path writes one line per present to that file
-// (when the image was prepared, which game frames it shows, where the time
-// went) and, with VK_KHR_present_wait, one per present when it reached the
-// screen; the game thread adds one per game frame (runtime.cpp). Read with
-// tools/frame_log.py
-static FILE* g_frame_log = getenv("LW_FRAMELOG") ? fopen(getenv("LW_FRAMELOG"), "w") : nullptr;
-static std::mutex g_frame_log_mutex;
-
-void frame_log(const char* fmt, ...) {
-    if (!g_frame_log) return;
-    va_list args;
-    va_start(args, fmt);
-    std::lock_guard<std::mutex> lock(g_frame_log_mutex);
-    vfprintf(g_frame_log, fmt, args);
-    va_end(args);
-}
-
-static void pacing_sample(double now, double display, double shown, const R3DFrameState& built) {
-    struct Method {
-        double last_shown = 0, sum = 0, sum2 = 0;
-        int n = 0, still = 0, back = 0;
-        void add(double dt, double value) {
-            if (last_shown != 0 && dt > 0) {
-                double rate = (value - last_shown) / dt;
-                if (std::abs(rate) < 4) {   // pauses and cuts are left out
-                    sum += rate;
-                    sum2 += rate * rate;
-                    n++;
-                    still += rate < 0.05;
-                    back += rate < -0.05;
-                }
-            }
-            last_shown = value;
-        }
-        void print(const char* name) {
-            double mean = n ? sum / n : 0, dev = n ? std::sqrt(std::max(sum2 / n - mean * mean, 0.0)) : 0;
-            printf("[pacing] %s: speed %.3f  dispersion %.3f  still %d  back %d  (%d presents)\n", name, mean, dev,
-                   still, back, n);
-            *this = Method{};
-        }
-    };
-    static Method current, previous;
-    static double last_display = 0, last_print = now, prev_flushed = 0, prev_time = 0;
-    static double prev_period = 1 / GAME_HZ, game_period = 1 / GAME_HZ;
-    static uint64_t prev_frame = 0;
-    if (built.frame != prev_frame) {   // the previous method's frame period, from the finishing times
-        if (prev_frame) {
-            prev_period = std::clamp(built.flushed - prev_flushed, 1.0 / 240, 0.1);
-            game_period = std::clamp(built.time - prev_time, 1.0 / 240, 0.1);
-        }
-        prev_frame = built.frame;
-        prev_flushed = built.flushed;
-        prev_time = built.time;
-    }
-    // Both shown as game time: the scenes themselves belong to their vblanks
-    double t_old = std::clamp((now - built.flushed) / prev_period, 0.0, 1.0);
-    double dt = display - last_display;
-    current.add(dt, shown);
-    previous.add(dt, built.time - game_period * (1 - t_old));
-    last_display = display;
-    if (now - last_print >= 5) {
-        last_print = now;
-        current.print("vblank  ");
-        previous.print("previous");
-        fflush(stdout);
-    }
+    DWM_TIMING_INFO info{};
+    info.cbSize = sizeof(info);
+    bool dwm = SUCCEEDED(DwmGetCompositionTimingInfo(nullptr, &info)) && info.qpcRefreshPeriod > 0;
+    double f = double(g_qpf.QuadPart);
+    DisplaySample s{dwm, dwm ? double(info.qpcRefreshPeriod) / f : 0, dwm ? double(info.qpcVBlank) / f : 0};
+    return clock.step(now, s);
 }
 
 // The first start (no anti-aliasing in save/settings.ini yet) picks it for
@@ -364,7 +212,7 @@ struct App {
     // here (the game's CPU time plus this loop's wait for it; follows the
     // latest frames, easing down slowly)
     std::shared_ptr<const R3DFrameState> seen;
-    double next_period = 1.0 / GAME_HZ, lateness = 0.004, lateness_rose = 0, lateness_spike = -100;
+    FramePacer pacer;
     DisplayClock display_clock;
 
     std::vector<uint16_t> tex_rows;
@@ -788,7 +636,7 @@ bool App::init(bool aa_auto) {
         }, &music);
     music_time = now_seconds();
     prep.start(&g_opt);
-    if (g_frame_log && presenter.can_wait_present()) shown_waiter = std::thread([this] { note_presents(); });
+    if (frame_log_on() && presenter.can_wait_present()) shown_waiter = std::thread([this] { note_presents(); });
     queue_depth = getenv("LW_QUEUE") ? atoi(getenv("LW_QUEUE")) : 2;
     image_timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     return true;
@@ -1338,7 +1186,7 @@ bool App::present_frame(double loop_from) {
         std::lock_guard<std::mutex> lock(prep.ready_mutex);
         prep.ready_frames.clear();
     }
-    double display = display_clock.tick(presenter.hwnd());
+    double display = display_tick(display_clock, presenter.hwnd());
     // MAX FPS below the refresh rate with vsync: in whole refreshes, the ones
     // in between show the image before again (only the crosshairs move), less
     // work for the GPU (60 at 120 Hz: every other refresh; without vsync the
@@ -1373,37 +1221,15 @@ bool App::present_frame(double loop_from) {
     }
     if (!waiting.empty()) newest = waiting.back(), latest = newest->state;
     if (latest && latest != seen) {
-        if (seen) next_period = std::clamp(latest->time - seen->time, 1.0 / 240, 0.1);
+        if (seen) pacer.next_period = std::clamp(latest->time - seen->time, 1.0 / 240, 0.1);
         // How long after its vblank the frame was ready to take, plus how
         // far ahead of now this image's moment is: from the preparation
         // thread, when it finished; from the game, when this loop saw it
         double late = newest ? newest->ready_at - latest->time + (display - display_clock.last) : display - latest->time;
-        // It rises at once with 1.5 ms to spare, so that later frames by a
-        // little do not each step the motion back; a frame much later
-        // than the rest (a one-off slow 2D composition) only raises it if
-        // another follows 0.25-3 s later: alone it costs one hitch, while
-        // raising it would add that delay for a long while. After 5 s
-        // without rising it eases down, by 1% of its excess per frame
-        // (at least 1.7 ms per second): the motion runs up to ~2% faster
-        late = std::clamp(late, 0.0, 0.05);
-        if (late > lateness) {
-            // (the frames right after a slow one are late too: the same hitch)
-            bool spike = false;
-            if (late > lateness + 0.004) {
-                double since = display - lateness_spike;
-                if (since > 3) lateness_spike = display;
-                spike = since > 3 || since < 0.25;
-            }
-            if (!spike) {
-                lateness = late + 0.0015;
-                lateness_rose = display;
-            }
-        } else if (display - lateness_rose > 5) {
-            lateness = std::max(lateness - std::max(0.00003, 0.01 * (lateness - late)), late);
-        }
+        pacer.frame(late, display);
         seen = latest;
     }
-    double shown_time = display - lateness - next_period - 0.0005;
+    double shown_time = pacer.shown_time(display);
     bool take = latest && latest != built && (!interpolating || !built || shown_time >= built->time);
     // The frame to take: the first one waiting that reaches the picture's
     // moment (the newest if none does)
@@ -1557,7 +1383,7 @@ bool App::present_frame(double loop_from) {
                     (unsigned long long)shift_to, t, int(paired), int(mx.known), mx.offset, mx.velocity, int(my.known),
                     my.offset, my.velocity);
         }
-        if (g_pacing_log) pacing_sample(now, display, built->time - frame_period * (1 - t), *built);
+        if (pacing_log_on()) pacing_sample(now, display, built->time - frame_period * (1 - t), built->frame, built->time, built->flushed);
     }
     static int film_presents = 0;
     if (!film.empty() && ++film_presents == 3) {
@@ -1583,7 +1409,7 @@ bool App::present_frame(double loop_from) {
         ui.record(cmd, view, extent);
         if (toast_shown) toast_layer.record(cmd, view, extent);   // over the menus too: their backdrop is opaque
     });
-    if (g_frame_log) {
+    if (frame_log_on()) {
         const VkPresenter::LastFrame& f = presenter.last_frame();
         double t = interpolating && built ? std::clamp((shown_time - built->time) / frame_period + 1.0, 0.0, 1.0) : 1;
         frame_log("P %llu %.6f %.6f %.6f %.4f %llu %llu %.6f %d %d %.3f %d %.3f %.3f %.3f %.3f %.3f %.6f\n",
@@ -1591,7 +1417,7 @@ bool App::present_frame(double loop_from) {
                   (unsigned long long)(built ? built->frame : 0), (unsigned long long)(latest ? latest->frame : 0),
                   latest ? latest->time : 0.0, int(take), int(shown != shown_before), scene_seconds * 1000,
                   tex_dirty_rows, f.fence * 1000, f.acquire * 1000, f.record * 1000, f.present * 1000,
-                  (now_seconds() - loop_from) * 1000, lateness);
+                  (now_seconds() - loop_from) * 1000, pacer.lateness);
         if (f.present_id) presented_id = f.present_id;
     }
     if (!film.empty() && film_presents >= 4) {   // next snapshot of the sequence
