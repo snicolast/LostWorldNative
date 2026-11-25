@@ -861,8 +861,9 @@ struct App {
     // PLAY > CLASSIC: the menu stays up while the game runs on to its route
     // selection unseen (g_arcade_entry, runtime.cpp), then closes on it
     bool play_waits = false;
-    // ...and once it is there, until the game begins: no game played yet, so
-    // Esc and the pad's BACK give PLAY up (cancel_play) instead of pausing
+    // ...and once it is there, until the first stage begins (the route
+    // selection, then the stage's map): no game played yet, so Esc and the
+    // pad's BACK give PLAY up (cancel_play) instead of pausing
     bool on_route = false;
     bool survival_cli_pending = false;   // waits for the boot screens
     bool survival_wait_home = false;
@@ -1724,8 +1725,8 @@ bool App::menu_key(int vk) {
     return true;
 }
 
-// Esc in the game: the pause menu; on PLAY's route selection (no game played
-// yet) straight back to the main menu
+// Esc in the game: the pause menu; on PLAY's route selection or the first
+// stage's map after it (no game played yet) straight back to the main menu
 void App::game_escape() {
     if (on_route) {
         cancel_play();
@@ -1746,14 +1747,15 @@ void App::update_arcade_entry() {
         frontend.open(Frontend::Screen::Main);
         g_menu_open = g_hold = true;
     }
-    uint32_t select = rd32(0x1C2AD8);   // 0 attract, 1-2 choosing the route, 0xC playing
-    bool choosing = select == 1 || select == 2;
+    // 0 before the first game, 1-2 choosing the route, 9-0xB the first
+    // stage's intro (its map), 0xC playing (stats.cpp counts a game from there)
+    uint32_t select = rd32(0x1C2AD8);
     if (play_waits && !g_arcade_entry && !g_boot_skip) {
         play_waits = false;
-        on_route = choosing;   // (not when it gave up, or found a game on)
+        on_route = select != 0 && select != 0xC;   // (not when it gave up, or found a game on)
         close_menu();
     }
-    if (on_route && (!choosing || boss_fight >= 0 || survival_view().mode != SurvivalMode::Off)) on_route = false;
+    if (on_route && (select == 0xC || boss_fight >= 0 || survival_view().mode != SurvivalMode::Off)) on_route = false;
 }
 
 // save/settings.ini: PC EDITION's settings at the top, ARCADE ORIGINAL's in its
