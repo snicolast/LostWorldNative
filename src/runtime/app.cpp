@@ -283,7 +283,7 @@ static bool crosshair_idle(int p, const PlayerAim& aim) {
 // to those of the player pad_player() gives them. The first pad shares player
 // 1 with the mouse, and whichever moved last aims. START joins the game, takes
 // player 1's sight from the mouse or, pressed by the pad that plays, pauses
-// it; BACK pauses. Returns true when a pad asks for the pause menu.
+// it; BACK pauses. Returns which button asked for the pause menu.
 static Gamepads g_pads;
 static GamepadSettings g_pad_settings;
 
@@ -305,7 +305,8 @@ static std::vector<AimTarget> aim_targets() {
     return out;
 }
 
-static bool poll_gamepads(HWND hwnd) {
+enum class PadPause { None, Start, Back };
+static PadPause poll_gamepads(HWND hwnd) {
     bool focused = GetForegroundWindow() == hwnd;
     g_pads.set_targets(aim_targets());
     g_pads.poll(g_pad_settings, focused, g_menu_open);
@@ -322,8 +323,8 @@ static bool poll_gamepads(HWND hwnd) {
     for (int i = 0; i < Gamepads::MAX; i++)
         if (connected >> i & 1 && pad_player(i, connected) == 1) g_p2_pad = true;
     if (g_menu_open) std::fill(std::begin(blocked), std::end(blocked), true);   // the button that closes it does not fire
-    if (!focused || g_menu_open || !g_auto.events.empty() || survival_owns_inputs() || g_arcade_entry) return false;
-    bool pause = false;
+    if (!focused || g_menu_open || !g_auto.events.empty() || survival_owns_inputs() || g_arcade_entry) return PadPause::None;
+    PadPause pause = PadPause::None;
     for (int i = 0; i < Gamepads::MAX; i++) {
         const PadState& pad = g_pads.pad(i);
         if (!pad.connected) continue;
@@ -352,9 +353,11 @@ static bool poll_gamepads(HWND hwnd) {
             g_pads.rumble_triggers(i, 0.8f, 0.0f, 70);
         }
         fire_was[i] = fire, reload_was[i] = reload;
-        if (pad.back) pause = true;
+        if (pad.back) pause = PadPause::Back;
         if (pad.start) {
-            if (pl.playing && (p == 1 || g_p1_pad == i)) pause = true;
+            if (pl.playing && (p == 1 || g_p1_pad == i)) {
+                if (pause == PadPause::None) pause = PadPause::Start;
+            }
             else if (pl.playing) g_p1_pad = i;   // player 1 plays with the mouse (a pad plugged in mid-game)
             else {
                 if (p == 0) g_p1_pad = i;   // this pad starts player 1's game
@@ -857,6 +860,10 @@ struct App {
     // PLAY > CLASSIC: the menu stays up while the game runs on to its route
     // selection unseen (g_arcade_entry, runtime.cpp), then closes on it
     bool play_waits = false;
+    // ...and once it is there, until the first stage begins (the route
+    // selection, then the stage's map): no game played yet, so Esc and the
+    // pad's BACK give PLAY up (cancel_play) instead of pausing
+    bool on_route = false;
     bool survival_cli_pending = false;   // waits for the boot screens
     bool survival_wait_home = false;
     uint64_t survival_audio_at = 0;   // audio frames out when the loading began (it stays silent)
@@ -938,6 +945,10 @@ struct App {
     void start_arcade();
     void cancel_arcade_entry();
     void update_arcade_entry();
+    void quit_to_menu();
+    void cancel_play();
+    bool menu_key(int vk);
+    void game_escape();
     // The video options the menu changes, to the renderer and the presenter:
     // at the start (was = nullptr; the 3D resolution, MSAA, anisotropic
     // filtering and vsync were given to init) and after a change in the menu
@@ -1406,14 +1417,13 @@ bool App::init(bool aa_auto) {
                     return true;
                 }
                 if (msg == WM_KEYDOWN && wp == VK_ESCAPE) {
-                    frontend.open(Frontend::Screen::Pause);
-                    g_menu_open = g_hold = true;
+                    game_escape();
                     return true;
                 }
                 return false;
             }
             switch (msg) {
-            case WM_KEYDOWN: return frontend.key(int(wp));
+            case WM_KEYDOWN: return menu_key(int(wp));
             case WM_MOUSEMOVE: {
                 // Windows also sends it when nothing moved (a window or the
                 // pointer changing): those neither bring the pointer back nor
@@ -1426,11 +1436,14 @@ bool App::init(bool aa_auto) {
                 frontend.mouse_move(x, y);
                 return true;
             }
-            case WM_LBUTTONDOWN: frontend.click(x, y); return true;
+            case WM_LBUTTONDOWN:
+                if (!play_waits) frontend.click(x, y);   // (PLAY on its way: only Esc, menu_key)
+                return true;
             case WM_RBUTTONDOWN:   // right button: back (not in GUN TEST, where it is a gun reloading)
-                if (!frontend.gun_test_open()) frontend.key(VK_ESCAPE);
+                if (!frontend.gun_test_open()) menu_key(VK_ESCAPE);
                 return true;
             case WM_MOUSEWHEEL: {
+                if (play_waits) return true;
                 POINT p{x, y};   // screen coordinates for this one
                 ScreenToClient(presenter.hwnd(), &p);
                 frontend.wheel(p.x, p.y, GET_WHEEL_DELTA_WPARAM(wp));
@@ -1672,8 +1685,54 @@ void App::start_arcade() {
 
 // Another mode picked while the game was on its way to the route selection
 void App::cancel_arcade_entry() {
-    play_waits = false;
+    play_waits = on_route = false;
     g_arcade_entry = 0;
+}
+
+// QUIT TO MAIN MENU (the pause menu of any mode): the game at its home state
+// again (the SEGA logo, before any credit), put back when the menu closes
+void App::quit_to_menu() {
+    boss_pending = -1;
+    cancel_arcade_entry();
+    if (survival_view().mode != SurvivalMode::Off) {
+        survival_to_menu();
+        return;
+    }
+    boss_fight = -1;
+    frontend.boss_mode = false;
+    game_state_load_home();
+    frontend.open(Frontend::Screen::Main);
+}
+
+// PLAY given up before the game began (Esc, the pad's BACK): while the game
+// runs on to its route selection behind the menu, or on the route selection.
+// As QUIT TO MAIN MENU: the home state is from before the credit PLAY put in,
+// so none is left
+void App::cancel_play() {
+    printf("[play] given up %s: back to the main menu\n", play_waits ? "on the way" : "on the route selection");
+    quit_to_menu();
+    g_menu_open = g_hold = true;
+}
+
+// A key for the menu (the keyboard, a pad's buttons as keys, LW_MENU_KEYS).
+// While the game runs on to its route selection (play_waits) Esc and BACK
+// give PLAY up and the rest wait: the menu closes on its own then, and would
+// close on whatever page they had opened
+bool App::menu_key(int vk) {
+    if (!play_waits) return frontend.key(vk);
+    if (vk == VK_ESCAPE || vk == VK_BACK) cancel_play();
+    return true;
+}
+
+// Esc in the game: the pause menu; on PLAY's route selection or the first
+// stage's map after it (no game played yet) straight back to the main menu
+void App::game_escape() {
+    if (on_route) {
+        cancel_play();
+        return;
+    }
+    frontend.open(Frontend::Screen::Pause);
+    g_menu_open = g_hold = true;
 }
 
 void App::update_arcade_entry() {
@@ -1683,14 +1742,19 @@ void App::update_arcade_entry() {
     // A game over: the main menu instead of the attract, the game back at its
     // home state behind it (attract_guard_frame)
     if (g_game_over_menu.exchange(false)) {
-        play_waits = false;
+        play_waits = on_route = false;
         frontend.open(Frontend::Screen::Main);
         g_menu_open = g_hold = true;
     }
+    // 0 before the first game, 1-2 choosing the route, 9-0xB the first
+    // stage's intro (its map), 0xC playing (stats.cpp counts a game from there)
+    uint32_t select = rd32(0x1C2AD8);
     if (play_waits && !g_arcade_entry && !g_boot_skip) {
         play_waits = false;
+        on_route = select != 0 && select != 0xC;   // (not when it gave up, or found a game on)
         close_menu();
     }
+    if (on_route && (select == 0xC || boss_fight >= 0 || survival_view().mode != SurvivalMode::Off)) on_route = false;
 }
 
 // save/settings.ini: PC EDITION's settings at the top, ARCADE ORIGINAL's in its
@@ -1748,18 +1812,7 @@ void App::handle_menu_actions() {
             frontend.boss_mode = false;
             frontend.open(Frontend::Screen::Main);
             break;
-        case Frontend::Action::QuitToMenu:   // from the pause menu of any mode
-            boss_pending = -1;
-            cancel_arcade_entry();
-            if (survival_view().mode != SurvivalMode::Off) {
-                survival_to_menu();
-                break;
-            }
-            boss_fight = -1;
-            frontend.boss_mode = false;
-            game_state_load_home();
-            frontend.open(Frontend::Screen::Main);
-            break;
+        case Frontend::Action::QuitToMenu: quit_to_menu(); break;   // from the pause menu of any mode
         case Frontend::Action::Quit: presenter.close(); break;
         case Frontend::Action::Restart:   // RESTART NOW: saved, closed as on QUIT, started again (App::shutdown)
             save_settings();
@@ -1940,11 +1993,8 @@ void App::update_menus() {
             char* end = nullptr;
             int vk = int(strtol(menu_keys, &end, 10));
             menu_keys = *end == ',' ? end + 1 : end;
-            if (frontend.active()) frontend.key(vk);
-            else if (vk == VK_ESCAPE) {
-                frontend.open(Frontend::Screen::Pause);
-                g_menu_open = g_hold = true;
-            }
+            if (frontend.active()) menu_key(vk);
+            else if (vk == VK_ESCAPE) game_escape();
         } else if (menu_presents % 30 == 0) {
             presenter.capture_next("out/menu.bmp");
             menu_keys = nullptr;
@@ -2080,7 +2130,7 @@ void App::update_intro() {
 void App::read_inputs() {
     update_aim_reach(presenter.hwnd());
     poll_keyboard_mouse(presenter.hwnd());
-    bool pad_pause = poll_gamepads(presenter.hwnd());
+    PadPause pad_pause = poll_gamepads(presenter.hwnd());
     if (g_pads.changed()) {   // the CONTROLS tab names the pads
         std::wstring names;
         bool gyro = false;
@@ -2098,14 +2148,15 @@ void App::read_inputs() {
         static const int VK[] = {VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, VK_RETURN, VK_ESCAPE, 'Q', 'E', 'R'};
         bool resume = frontend.screen() == Frontend::Screen::Pause;
         if (frontend.active()) {
-            frontend.key(k == PadKey::Start ? (resume ? VK_ESCAPE : VK_RETURN) : VK[int(k)]);
+            menu_key(k == PadKey::Start ? (resume ? VK_ESCAPE : VK_RETURN) : VK[int(k)]);
             pad_in_menu = true;
         }
     }
-    if (pad_pause && g_opt.menu && !frontend.active()) {
-        frontend.open(Frontend::Screen::Pause);
-        pad_in_menu = true;
-        g_menu_open = g_hold = true;
+    if (pad_pause != PadPause::None && g_opt.menu && !frontend.active()) {
+        // PLAY's route selection: BACK leaves it, as Esc; START does nothing there
+        if (!on_route) game_escape();
+        else if (pad_pause == PadPause::Back) cancel_play();
+        if (frontend.active()) pad_in_menu = true;
     }
     join_update();
     bool f12 = GetForegroundWindow() == presenter.hwnd() && (GetAsyncKeyState(VK_F12) & 0x8000);

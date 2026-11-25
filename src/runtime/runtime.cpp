@@ -1382,6 +1382,11 @@ void rt_event(Ctx& c) {
             if (g_boss_maker >= 0) boss_maker_frame();
             video_snapshot();
             if (!g_logo_up && ((g_frame % 4 == 0 && boot_logo_up()) || g_frame > 3000)) g_logo_up = true;
+            {   // PLAY given up on its way (app.cpp, cancel_play): no coin or START left held
+                static bool entry_was = false;
+                if (entry_was && !g_arcade_entry) g_inputs.p[0].coin = g_inputs.p[0].start = false;
+                entry_was = g_arcade_entry != 0;
+            }
             // Survival mode: on to the chosen stage at full speed, behind its loading screen
             // Boss mode: on to the fight's state, behind the menu (app.cpp, update_boss_mode)
             bool boot_done = survival_enabled() ? !survival_owns_inputs() || g_frame > 200000   // (survival gives up first)
