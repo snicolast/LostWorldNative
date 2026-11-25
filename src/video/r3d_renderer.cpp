@@ -18,6 +18,7 @@
 #include "rays.frag.h"
 #include "sky_fields.frag.h"
 #include "../common/clock.h"
+#include "../common/game_hz.h"
 #include "tilegen.h"
 
 namespace {
@@ -1447,7 +1448,7 @@ void R3DRenderer::update_atmosphere(const ScreenLayout& lay, uint32_t target_w, 
     WorldPose pose = world_pose(w);
     if (w) {
         // Game time (about 57.5 frames per second), so a replay drifts the same way
-        float time = (float(scene_->frame % 100000) + interp_) / 57.5f;
+        float time = (float(scene_->frame % 100000) + interp_) / float(GAME_HZ);
         for (int k = 0; k < 3; k++)
             for (int i = 0; i < 3; i++) u.axes[k * 4 + i] = pose.axes[k * 3 + i];
         u.camera[0] = pose.camera[0];
@@ -2460,7 +2461,7 @@ void R3DRenderer::record(VkCommandBuffer cmd, VkImageView target, VkExtent2D ext
     if (scene_)
         for (const R3DViewport& v : scene_->viewports)
             if (v.world && v.proj[5] != 0) {
-                float time = (float(scene_->frame % 100000) + interp_) / 57.5f;
+                float time = (float(scene_->frame % 100000) + interp_) / float(GAME_HZ);
                 rain_.build(v, time, 2.0f / (std::fabs(v.proj[5]) * float(f.out_h)), rain_vertices_);
             }
     record_uploads(f);

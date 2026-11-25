@@ -21,6 +21,8 @@
 #include <thread>
 
 #include "bosses.h"
+#include "game_ram.h"
+#include "../common/game_hz.h"
 #include "disk_writer.h"
 #include "eeprom.h"
 #include "inputs.h"
@@ -125,8 +127,7 @@ std::atomic<int> g_subtitles{0};
 namespace {
 
 constexpr uint64_t CPU_HZ = 100000000;      // PowerPC 603e at 100 MHz
-constexpr double FRAME_HZ = 57.524;         // Model 3 refresh rate
-constexpr uint64_t FRAME_CYCLES = uint64_t(CPU_HZ / FRAME_HZ);
+constexpr uint64_t FRAME_CYCLES = uint64_t(CPU_HZ / GAME_HZ);
 constexpr uint64_t SAMPLE_CYCLES = 200000;  // sampling profiler
 constexpr uint32_t MSR_EE = 0x8000, MSR_IP = 0x40;
 
@@ -369,7 +370,7 @@ void r3d_flush() {
     // frames a few ms after the vblank, by a varying amount, and that jitter
     // would make the interpolated motion uneven
     if (g_realtime && !g_boot_skip) {
-        double vblank = double(g_start_time.QuadPart) / double(g_qpf.QuadPart) + double(g_frame) / FRAME_HZ;
+        double vblank = double(g_start_time.QuadPart) / double(g_qpf.QuadPart) + double(g_frame) / GAME_HZ;
         if (state->flushed >= vblank && state->flushed < vblank + 0.05) state->time = vblank;
     }
     {
@@ -787,7 +788,7 @@ void video_snapshot() {
 
 double g_wait_seconds = 0;   // time spent waiting since the last frame event (game thread only)
 
-// Keeps the game at the original speed (vblank at FRAME_HZ)
+// Keeps the game at the original speed (vblank at GAME_HZ)
 void pace_frame() {
     double wait_from = now_seconds();
     struct Done {   // whichever way pace_frame returns, the wait is counted
@@ -796,7 +797,7 @@ void pace_frame() {
     } done{wait_from};
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
-    double target = double(g_frame) / FRAME_HZ;
+    double target = double(g_frame) / GAME_HZ;
     double elapsed = double(now.QuadPart - g_start_time.QuadPart) / double(g_qpf.QuadPart);
     if (elapsed > target + 0.25) {   // far behind (e.g. window being dragged): don't try to catch up
         g_start_time.QuadPart = now.QuadPart - LONGLONG(target * double(g_qpf.QuadPart));
@@ -1155,7 +1156,7 @@ static void hide_stage_captions(bool hide) {
     static uint32_t orig[4][2];
     for (int i = 0; i < 4; i++)
         for (int lang = 0; lang < 2; lang++) {
-            uint32_t a = 0x134B28 + IDS[i] * 16 + 4 + lang * 8;
+            uint32_t a = ram::TEXT_TABLE + IDS[i] * 16 + 4 + lang * 8;
             // not loaded yet (or the power-on RAM test running): leave it alone
             if (rd32(a - 4) >> 24 != 0xFF) return;
             uint32_t w = rd32(a);
@@ -1191,22 +1192,22 @@ static void boss_maker_frame() {
         exit_from_game_thread(1);
     }
     if (f < 900) return;   // past the boot (a button held there changes what it does)
-    uint32_t select = rd32(0x1C2AD8);   // course select: 0 attract, 1-2 choosing, 0xC playing
+    uint32_t select = rd32(ram::COURSE_SELECT);   // 0 attract, 1-2 choosing, 0xC playing
     if (select == 0) {                  // a credit and start, again until the course select opens
         auto_coin_start(g_inputs.p[0], f);
         return;
     }
     g_inputs.p[0].coin = g_inputs.p[0].start = false;
     if (select != 0xC) {   // the boss's stage first in the run
-        if (int32_t(rd32(0x1C2B10)) == -1) wr32(0x1C2AFC, uint32_t(b.stage_index));
+        if (int32_t(rd32(ram::PLAYLIST_INDEX)) == -1) wr32(ram::PLAYLIST, uint32_t(b.stage_index));
         return;
     }
-    if (!lives) lives = rd8(0x1A3723);
-    if (lives) wr8(0x1A3723, lives);
-    if (rd8(0x1A623C) == b.stage_index && int32_t(rd32(0x1A841C)) == b.label && int32_t(rd32(0x1A847C)) >= b.index) {
+    if (!lives) lives = rd8(ram::P1_LIVES_BYTE);
+    if (lives) wr8(ram::P1_LIVES_BYTE, lives);
+    if (rd8(ram::STAGE) == b.stage_index && int32_t(rd32(ram::VM_ENCOUNTER)) == b.label && int32_t(rd32(ram::VM_PC)) >= b.index) {
         g_inputs.p[0].trigger = g_inputs.p[0].offscreen = false;
-        wr32(0x1A857C, 0);   // the score starts at zero
-        wr32(0x1A8594, 0);
+        wr32(ram::P1_SCORE, 0);   // the score starts at zero
+        wr32(ram::P1_STAGE_SCORES + 4 * 2, 0);   // 0x1A8594, stage 3's (the boss's own would be + 4 * b.stage_index)
         game_state_save(path + ".tmp");
         saving = true;
         return;
@@ -1241,7 +1242,7 @@ static bool arcade_entry_frame() {
         from = g_frame, select_at = 0;
         p.trigger = p.offscreen = false;
     }
-    uint32_t select = rd32(0x1C2AD8);   // 0 attract, 1-2 choosing, 0xC playing
+    uint32_t select = rd32(ram::COURSE_SELECT);   // 0 attract, 1-2 choosing, 0xC playing
     if (!g_logo_up || game_state_pending()) {   // the boot screens, or a state still being put back
         p.coin = p.start = false;
         if (g_frame - from > 20000) return finish("given up (no SEGA logo)");
@@ -1283,7 +1284,7 @@ static bool arcade_entry_frame() {
 static void attract_guard_frame() {
     static bool game_on = false;
     static uint32_t mode_was = 0;
-    uint32_t mode = rd32(0x1A6164), select = rd32(0x1C2AD8);
+    uint32_t mode = rd32(ram::GAME_MODE), select = rd32(ram::COURSE_SELECT);
     if (mode != mode_was && (mode == 0xB || mode_was == 0xB))
         printf("[play] game mode %X -> %X (route selection %X, frame %llu)\n", unsigned(mode_was), unsigned(mode),
                unsigned(select), (unsigned long long)g_frame);
@@ -1336,7 +1337,7 @@ void rt_event(Ctx& c) {
                 static int applied = g_subtitles;
                 if (g_subtitles != applied) {
                     applied = g_subtitles;
-                    wr32(0x1A6168, rt_text_region(rd8(0x1226)));
+                    wr32(ram::LANGUAGE, rt_text_region(rd8(ram::SETTING_COUNTRY)));
                 }
             }
             hide_stage_captions(g_subtitles == 0);
@@ -1353,13 +1354,13 @@ void rt_event(Ctx& c) {
                 // back, and PLAY's own credit starts the game. Not in
                 // survival or boss mode, which have no continue. Off, the
                 // test menu's own setting stands (also over a kept state)
-                uint32_t mode = rd32(0x1A6164);
-                bool in_game = mode != 0 && mode != 1 && (rd8(0x1A3791) <= 2 || rd8(0x1A37A1) <= 2);
+                uint32_t mode = rd32(ram::GAME_MODE);
+                bool in_game = mode != 0 && mode != 1 && (rd8(ram::P1_SLOT) <= 2 || rd8(ram::P2_SLOT) <= 2);
                 bool forced = g_free_play && !survival_enabled() && g_boss_maker < 0 && (!g_skip_attract || in_game);
-                wr8(0x12F4, forced || rd8(0x1225) == 0x1A ? 0xFF : 0);
+                wr8(ram::FREE_PLAY, forced || rd8(ram::SETTING_COIN) == 0x1A ? 0xFF : 0);
             }
             for (int p = 0; p < 2; p++) {   // player slots (0x10 bytes each): +0xD = 1 or 2 while playing
-                uint8_t state = rd8(0x1A3791 + 0x10 * p);
+                uint8_t state = rd8(ram::P1_SLOT + 0x10 * p);
                 g_inputs.p[p].playing = state == 1 || state == 2;
             }
             if (g_frame % 60 == 0) {
@@ -1373,7 +1374,7 @@ void rt_event(Ctx& c) {
             g_auto.apply(g_frame);
             attract_guard_frame();   // before the frame's picture is taken
             {   // the attract: game mode 0 or 1 (attract_guard_frame), not survival or boss mode
-                uint32_t mode = rd32(0x1A6164);
+                uint32_t mode = rd32(ram::GAME_MODE);
                 g_in_attract = (mode == 0 || mode == 1) && !survival_enabled() && g_boss_maker < 0;
             }
             if (survival_frame(c)) g_hold = true;   // survival start and results screens
@@ -1405,7 +1406,7 @@ void rt_event(Ctx& c) {
                        now_seconds() - g_boot_s, (unsigned long long)g_frame);
                 LARGE_INTEGER now;   // real-time pacing starts from here
                 QueryPerformanceCounter(&now);
-                g_start_time.QuadPart = now.QuadPart - LONGLONG(double(g_frame) / FRAME_HZ * double(g_qpf.QuadPart));
+                g_start_time.QuadPart = now.QuadPart - LONGLONG(double(g_frame) / GAME_HZ * double(g_qpf.QuadPart));
             }
             if (g_hold && !g_boot_skip) {
                 double hold_from = now_seconds();
@@ -1413,7 +1414,7 @@ void rt_event(Ctx& c) {
                 g_wait_seconds += now_seconds() - hold_from;
                 LARGE_INTEGER now;   // carry on at real speed from here, without catching up
                 QueryPerformanceCounter(&now);
-                g_start_time.QuadPart = now.QuadPart - LONGLONG(double(g_frame) / FRAME_HZ * double(g_qpf.QuadPart));
+                g_start_time.QuadPart = now.QuadPart - LONGLONG(double(g_frame) / GAME_HZ * double(g_qpf.QuadPart));
             }
             if (g_realtime && !g_boot_skip) pace_frame();
             frame_log("G %llu %.6f\n", (unsigned long long)g_frame, now_seconds());
@@ -1425,7 +1426,7 @@ void rt_event(Ctx& c) {
                 g_parked = true;
                 for (;;) Sleep(INFINITE);
             }
-            g_sound.run_frame(FRAME_HZ);
+            g_sound.run_frame(GAME_HZ);
             g_midi_pulses = (g_midi_ctrl & 0x20) ? 128 : 0;
             g_phase = 1;
             g_next_phase = g_frame_start + 40 * LINE_CYCLES;
@@ -1539,7 +1540,7 @@ static std::mutex g_marks_mutex;
 void rt_projected(uint32_t lr, uint32_t vec, uint32_t px, uint32_t py) {
     static FILE* log = getenv("LW_PROJ_LOG") ? fopen(getenv("LW_PROJ_LOG"), "w") : nullptr;
     float sx = float(f2d(rd32(px))), sy = float(f2d(rd32(py))), vz = float(f2d(rd32(vec + 8)));
-    float k = float(f2d(rd32(0x1A33FC)));   // the projection's focal length in pixels
+    float k = float(f2d(rd32(ram::FOCAL_LENGTH)));   // the projection's focal length in pixels
     if (log) fprintf(log, "%llu %08X %.1f %.1f %.2f\n", (unsigned long long)g_frame, lr, 248 + sx, 192 - sy, vz);
     if (std::find(std::begin(ENEMY_PROJECTIONS), std::end(ENEMY_PROJECTIONS), lr) == std::end(ENEMY_PROJECTIONS)) return;
     float d = std::fabs(vz);

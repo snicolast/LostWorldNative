@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "../common/game_hz.h"
+
 namespace {
 
 constexpr float FALL_SPEED = 55.0f;   // world units per second (the camera stands some 13 above the ground)
@@ -87,7 +89,7 @@ void R3DRain::observe(const R3DScene& scene) {
         if (have_camera_) {
             float v[3], speed = 0;
             for (int k = 0; k < 3; k++) {
-                v[k] = (w->camera[k] - last_camera_[k]) * 57.5f;
+                v[k] = (w->camera[k] - last_camera_[k]) * float(GAME_HZ);
                 speed += v[k] * v[k];
             }
             if (speed > 0 && std::sqrt(speed) < 4.0f * FALL_SPEED)

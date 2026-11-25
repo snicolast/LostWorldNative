@@ -49,76 +49,47 @@
 #include "bosses.h"
 #include "disk_writer.h"
 #include "encounter_script.h"
+#include "game_ram.h"
+#include "../common/game_hz.h"
 #include "inputs.h"
 #include "ppc_rt.h"
 #include "weather.h"
 
 namespace {
 
-// Game RAM (docs/game_ram.md)
-constexpr uint32_t STAGE = 0x1A623C;        // byte: current stage (0 = stage 1)
-constexpr uint32_t ZONE = 0x1A3984;         // low nibble: current zone of the stage
-constexpr uint32_t CAMERA_POS = 0x1A6F28;   // floats x, y, z: camera position
-constexpr uint32_t TASK_HEAD = 0x1C10B0;    // first task; node +8 next, +0xC function
+// Game RAM (game_ram.h, docs/game_ram.md)
+using namespace ram;
 constexpr uint32_t FN_TASK_NEW = 0x00116A48;   // (size, fn) -> task
-constexpr uint32_t PLAYER_LIFE = 0x1A3720;  // player 1 object (0x1A36C8) + 0x58: lives left
-constexpr uint32_t PLAYER2_LIFE = 0x1A377C; // player 2 object + 0x58
-constexpr uint32_t PLAYER2_LIFE_COPY = 0x1C1264;
-constexpr uint32_t PLAYER2_SLOT = 0x1A37A1; // byte: 1 / 2 playing, 0 continue, 3 out (INSERT COIN)
-constexpr uint32_t PLAYER2_CONTINUE = 0x1C1234;   // its CONTINUE countdown (0x4B0 at the start)
-// Players in the game: bit 0x01000000 player 1, 0x02000000 player 2 (the
-// hit function fn_000463D4 picks its victim among them, op -14 checks both)
-constexpr uint32_t PLAYERS_IN = 0x7F4;
+// Player 2's bit in PLAYERS_IN (the hit function fn_000463D4 picks its
+// victim among the players in, op -14 checks both)
 constexpr uint32_t PLAYER2_IN = 0x02000000;
-// The text layer the game draws its HUD in: 0x1A6FEC points to it in RAM,
-// cell (x, y) at + y * 256 + x * 2, 0 blank (fn_0002E30C clears a box so).
+// The HUD's text layer (TEXT_LAYER; fn_0002E30C clears a box in it).
 // Player 2's hearts are drawn from cell (0x29, 0x2A) on (fn_0000FEA0)
-constexpr uint32_t TEXT_LAYER = 0x1A6FEC;
 constexpr int P2_HEARTS_X = 0x29, P2_HEARTS_Y = 0x2A, P2_HEARTS_W = 20, P2_HEARTS_H = 3;
 // Powerbar pieces: some things shot in a stage give a piece (fn_000104A0);
 // the third one makes a medkit (a life) and the count starts again. The count
-// is at 0x1A37A4 (+4 player 2); 1 or 2 pieces are drawn on the text layer
+// is PIECES (+4 player 2); 1 or 2 pieces are drawn on the text layer
 // from cell (0x17, 0x2A) for player 1 and (0x22, 0x2A) for player 2
-constexpr uint32_t PIECES = 0x1A37A4;
-constexpr uint32_t PIECES2 = 0x1A37A8;
+constexpr uint32_t PIECES2 = PIECES + 4;
 constexpr int PIECES_X = 0x17, PIECES2_X = 0x22, PIECES_Y = 0x2A, PIECES_W = 6, PIECES_H = 3;
 constexpr uint32_t FN_PLAYER_HIT[2] = {0x000463D4, 0x00071460};   // hurt the player: lives - 1
 // Player 1's score, the score its counter shows (fn_0003E800 draws the digits
 // again when the two differ; the game writes -1 there to force it), then the score of each
-constexpr uint32_t SCORE[7] = {0x1A857C, 0x1C1D54,
-                               0x1A858C, 0x1A8590, 0x1A8594, 0x1A8598, 0x1A859C};   // stage (0x1A858C + 4 * stage)
-constexpr uint32_t SETTING_LIFE = 0x122A;   // byte: LIFE setting (RAM copy of the EEPROM)
-constexpr uint32_t SETTING_DIFF = 0x122D;   // high nibble: difficulty (RAM copy, read live)
-constexpr uint32_t PLAYLIST = 0x1C2AFC;    // 5 ints: stages of the course, in order
-constexpr uint32_t PLAYLIST_INDEX = 0x1C2B10;
+constexpr uint32_t SCORE[7] = {P1_SCORE, P1_SCORE_SHOWN, P1_STAGE_SCORES, P1_STAGE_SCORES + 4,
+                               P1_STAGE_SCORES + 8, P1_STAGE_SCORES + 12, P1_STAGE_SCORES + 16};   // stage
 constexpr uint32_t FN_NEXT_STAGE = 0x00081364;   // stage byte = PLAYLIST[++PLAYLIST_INDEX]
 constexpr uint32_t FN_PLAYLIST_INIT = 0x000812DC;   // PLAYLIST = 0..4, PLAYLIST_INDEX = -1 (new game)
 // Encounter machine (its script: encounter_script.h)
 using script::FN_ENCOUNTER_START;
 constexpr uint32_t FN_ENCOUNTER = 0x0003951C;         // the task that runs the script
 constexpr uint32_t FN_STOP = 0x0003B3F4;              // zone trigger: the camera stops (CAM_WALK = 0)
-constexpr uint32_t TRIGGER_TASK = 0x1C12A0;           // the zone trigger task (fn_00014764); +0: its first node
-constexpr uint32_t VM_PC = 0x1A847C;
-constexpr uint32_t VM_ALIVE = 0x1A8468;     // enemies alive (what op -1 waits for)
-constexpr uint32_t VM_ALIVE2 = 0x1A83D4;    // the count op -1 waits for while flag 0x200 is set
-constexpr uint32_t VM_FLAGS = 0x1A8414;
-constexpr uint32_t VM_WAIT = 0x1A842C;      // frames waited by the current op
-constexpr uint32_t VM_COUNTDOWN = 0x1C1D0C; // op -21: frames left (loaded from its argument when 0)
-constexpr uint32_t LOOK_AT = 0x1A3454;      // floats: point the camera turns to (op -9)
-// Camera walk along the stage path
-constexpr uint32_t CAM_WALK = 0x1A3960;     // 1: walk on (set when an encounter ends), 0: stop (trigger 0x3B3F4)
-constexpr uint32_t CAM_NODE = 0x1A3A0C;     // node of the path the camera heads for
-constexpr uint32_t CAM_SPEED = 0x1A39C8;    // float: speeds up and slows down by itself
-// Gait (fn_0001A4DC writes them; the stop trigger fn_0001A5B4 too): target speed
-// 0..0xFF, 0 walking / 0xFF stopped, and how fast it gets there
-constexpr uint32_t CAM_GAIT_SPEED = 0x1A3994, CAM_GAIT_HALT = 0x1A399C, CAM_GAIT_RAMP = 0x1A3990;
 // Free RAM (the game uses up to 0x200000) for the survival scripts
 constexpr uint32_t FREE_RAM = 0x700000;
 constexpr int32_t WAIT_FOREVER = 0x3FFFFFFF;
 constexpr uint64_t CLEAR_FRAMES = 230;      // a stop cleared: the walk on starts after this (4 s), less every lap
 constexpr uint64_t WALK_LONGEST = 3600;     // a walk that never reaches a stop (1 min): the lap ends there
 constexpr uint64_t FADE_FRAMES = 40;        // the fade to black at the end of a lap, and back
-constexpr int32_t COUNTDOWN_FRAMES = int32_t(SURVIVAL_COUNTDOWN * 57.5);   // the countdown, as a -21 wait
+constexpr int32_t COUNTDOWN_FRAMES = int32_t(SURVIVAL_COUNTDOWN * GAME_HZ);   // the countdown, as a -21 wait
 constexpr int WAVE_MIN = 8, WAVE_MAX = 30;  // dinosaurs in a wave: at least as many as the arena's first (the game's own)
 using script::FN_RAPTOR;
 // The dead triceratops of the arcade's story (task 0x5B830, only in encounter 3,
@@ -142,7 +113,6 @@ constexpr float BONUS_HIT = 30;             // how near a shot must land (game s
 constexpr int MAX_LIVES = 9;                // the hearts count shows one digit: past it, points
 constexpr int GOLD_POINTS = 5000;
 constexpr uint64_t DYING_FRAMES = 80;       // the killing attack and its flash play out (1.4 s), controls locked
-constexpr uint32_t COURSE_SELECT = 0x1C2AD8;   // 0 attract, 1-2 choosing a course, 0xC playing
 constexpr uint64_t LOADING_GIVE_UP = 40000;    // game frames (at full speed, ~50 s; the slowest arena takes ~9000)
 constexpr const char* RECORDS = "save/survival.ini";
 
@@ -895,7 +865,7 @@ struct Survival : Run {
 
     // The end of the zone: fade out, then the state kept at the first stop
     void start_lap_out() {
-        saved_lives = int(rd32(PLAYER_LIFE));
+        saved_lives = int(rd32(P1_LIVES));
         saved_score = score();
         saved_pieces = int(rd32(PIECES));
         saved_piece_cells = read_text(PIECES_X, PIECES_Y, PIECES_W, PIECES_H);
@@ -910,7 +880,7 @@ struct Survival : Run {
     // The game is back at the first stop (or, if that failed, still at the last)
     void new_lap(bool back) {
         if (back) {
-            wr32(PLAYER_LIFE, uint32_t(saved_lives));
+            wr32(P1_LIVES, uint32_t(saved_lives));
             if (pieces_kept) {   // (the game draws the medkits again by itself: it compares)
                 wr32(PIECES, uint32_t(saved_pieces));
                 write_text(PIECES_X, PIECES_Y, PIECES_W, PIECES_H, saved_piece_cells);
@@ -935,9 +905,9 @@ struct Survival : Run {
     }
 
     void give_reward() {
-        int lives_now = int(rd32(PLAYER_LIFE));
+        int lives_now = int(rd32(P1_LIVES));
         if (lives_now < MAX_LIVES) {
-            wr32(PLAYER_LIFE, uint32_t(lives_now + 1));
+            wr32(P1_LIVES, uint32_t(lives_now + 1));
             reward = 1;
         } else {
             for (uint32_t a : {SCORE[0], SCORE[2 + size_t(stage)]}) wr32(a, rd32(a) + GOLD_POINTS);
@@ -964,7 +934,7 @@ struct Survival : Run {
             for (int p = 0; p < 2; p++) trigger_was[p] = g_inputs.p[p].trigger;
             return;
         }
-        float t = float(f - (bonus_until - BONUS_FRAMES)) / 57.5f;
+        float t = float(f - (bonus_until - BONUS_FRAMES)) / float(GAME_HZ);
         bonus_x = bonus_bx + 0.06f * std::sin(t * 1.7f);
         bonus_y = bonus_by + 0.04f * std::sin(t * 2.3f);
         bool hit = false;
@@ -1093,14 +1063,14 @@ struct Survival : Run {
 
     // After a hit with one life left (survival_enter gave one more): did it take it?
     void watch_lives() {
-        lives = int(rd32(PLAYER_LIFE));
+        lives = int(rd32(P1_LIVES));
         if (!last_hit) return;
         last_hit = false;
         if (lives <= 1) {   // it did: the hunt is over, once the attack has been seen
             lives = 0;
             if (!dying_until) dying_until = g_frame_no + DYING_FRAMES, log("  last hit\n");
         } else {            // that call did not hurt
-            wr32(PLAYER_LIFE, uint32_t(--lives));
+            wr32(P1_LIVES, uint32_t(--lives));
         }
     }
 
@@ -1117,8 +1087,8 @@ struct Survival : Run {
         g_inputs.p[0].gun_x = 128, g_inputs.p[0].gun_y = 128;
         if (select == 0xC && shoot_in) {   // in the stage: shoots its way to the arena, lives kept
             auto_sweep_fire(g_inputs.p[0], f);
-            if (!loading_lives) loading_lives = rd32(PLAYER_LIFE);
-            if (loading_lives) wr32(PLAYER_LIFE, loading_lives);
+            if (!loading_lives) loading_lives = rd32(P1_LIVES);
+            if (loading_lives) wr32(P1_LIVES, loading_lives);
         }
         step = boot || state == STARTING ? step
              : select == 0 ? SurvivalStep::Coin
@@ -1152,7 +1122,7 @@ struct Survival : Run {
         first_enemies = enemies, first_looks = looks, first_setup = setup;
         first_count = enemies.size();
         find_zone_encounters();
-        start_lives = lives = std::max(1, int(rd32(PLAYER_LIFE)));
+        start_lives = lives = std::max(1, int(rd32(P1_LIVES)));
         // No powerbar pieces to start with (a kept state may have some from
         // the arcade game): every hunt starts with none
         wr32(PIECES, 0);
@@ -1179,18 +1149,18 @@ struct Survival : Run {
         if (!take_over(h)) return false;
         // The lives of a new game (fn_00010804: LIFE + 1), not those of the
         // arcade game the state was kept from (medkits picked up on the way)
-        wr32(PLAYER_LIFE, uint32_t(std::clamp(int(rd8(SETTING_LIFE)) + 1, 1, MAX_LIVES)));
+        wr32(P1_LIVES, uint32_t(std::clamp(int(rd8(SETTING_LIFE)) + 1, 1, MAX_LIVES)));
         // Survival is for player 1: a state kept while player 2 was in the game
         // (some were) starts with player 2 out, as a new game does. It is put
         // on its CONTINUE screen with no time left, so the game itself takes
         // it out on the first frame (and clears its hearts); the dinosaurs
         // attack only the players in the game
-        if (rd8(PLAYER2_SLOT) != 3 || (rd32(PLAYERS_IN) & PLAYER2_IN)) {
+        if (rd8(P2_SLOT) != 3 || (rd32(PLAYERS_IN) & PLAYER2_IN)) {
             printf("[survival] player 2 was in the kept game: out\n");
             wr32(PLAYERS_IN, rd32(PLAYERS_IN) & ~PLAYER2_IN);
-            wr32(PLAYER2_LIFE, 0);
-            wr32(PLAYER2_LIFE_COPY, 0);
-            if (rd8(PLAYER2_SLOT) != 3) wr8(PLAYER2_SLOT, 0), wr32(PLAYER2_CONTINUE, 1);
+            wr32(P2_LIVES, 0);
+            wr32(P2_HUD_LIVES, 0);
+            if (rd8(P2_SLOT) != 3) wr8(P2_SLOT, 0), wr32(P2_CONTINUE, 1);
             wr32(PIECES2, 0);
             p2_hearts_left = true;   // (the game only clears the CONTINUE box below them)
             clear_p2_hud();
@@ -1349,8 +1319,8 @@ void survival_enter(Ctx& c, uint32_t fn) {
             wr32(PLAYLIST + 4 * uint32_t(i), uint32_t(g_surv.stage));
     }
     if ((fn == FN_PLAYER_HIT[0] || fn == FN_PLAYER_HIT[1]) && g_surv.on && g_surv.mode == SurvivalMode::Playing &&
-        int(rd32(PLAYER_LIFE)) <= 1) {   // this hit would end the game: it takes the extra life instead
-        wr32(PLAYER_LIFE, rd32(PLAYER_LIFE) + 1);
+        int(rd32(P1_LIVES)) <= 1) {   // this hit would end the game: it takes the extra life instead
+        wr32(P1_LIVES, rd32(P1_LIVES) + 1);
         g_surv.last_hit = true;
     }
     if (fn == FN_ENCOUNTER && g_surv.on) {
@@ -1385,7 +1355,7 @@ static void arcade_arena(int id) {
     int stage = rd8(STAGE) + 1, zone = int(rd32(ZONE) & 15);
     for (const SurvivalZone& sz : SURVIVAL_ZONES) {
         if (sz.stage != stage || sz.zone != zone || sz.encounter != id) continue;
-        int lives = std::max(g_arcade_lives, int(rd32(PLAYER_LIFE)));
+        int lives = std::max(g_arcade_lives, int(rd32(P1_LIVES)));
         unlock(stage, zone, lives, true);
         std::string path = arena_state_path(stage, zone);
         if (g_arcade_saving.empty() && !game_state_valid(path)) {
@@ -1451,7 +1421,7 @@ bool survival_frame(Ctx&) {
     }
     if (g_ungate.exchange(false)) s.gate = false;
     if (!s.on) {   // the arcade game
-        g_arcade_lives = rd32(COURSE_SELECT) == 0xC ? std::max(g_arcade_lives, int(rd32(PLAYER_LIFE))) : 0;
+        g_arcade_lives = rd32(COURSE_SELECT) == 0xC ? std::max(g_arcade_lives, int(rd32(P1_LIVES))) : 0;
         if (!g_arcade_saving.empty() && game_state_result() != 0) {
             bool ok = game_state_result() > 0 && MoveFileExA((g_arcade_saving + ".tmp").c_str(),
                                                               g_arcade_saving.c_str(), MOVEFILE_REPLACE_EXISTING);
@@ -1522,7 +1492,7 @@ bool survival_frame(Ctx&) {
             } else {
                 hold = true;
             }
-            s.lives = int(rd32(PLAYER_LIFE));
+            s.lives = int(rd32(P1_LIVES));
             break;
         case SurvivalMode::Playing:
             s.tick();
@@ -1552,8 +1522,8 @@ bool survival_frame(Ctx&) {
     if (const char* life = test_env().life; life && g_frame_no > 1000) wr8(SETTING_LIFE, uint8_t(atoi(life)));
     if (test_env().god) {   // testing aid: the player's life never drops
         if (s.on) s.lives = std::max(s.lives, 5);
-        uint32_t life = rd32(PLAYER_LIFE);
-        if (life > 0 && life < 5) wr32(PLAYER_LIFE, 5);
+        uint32_t life = rd32(P1_LIVES);
+        if (life > 0 && life < 5) wr32(P1_LIVES, 5);
     }
     if (test_env().autoplay && rd32(COURSE_SELECT) == 0xC)   // testing aid: shoots all over the screen
         auto_sweep_fire(g_inputs.p[0], g_frame_no);

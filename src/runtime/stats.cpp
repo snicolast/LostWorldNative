@@ -16,6 +16,8 @@
 
 #include "achievements_csv.h"
 #include "disk_writer.h"
+#include "game_ram.h"
+#include "../common/game_hz.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -30,23 +32,15 @@
 
 namespace {
 
-// Game RAM (docs/game_ram.md)
-constexpr uint32_t STAGE = 0x1A623C;          // byte: current stage (0 = stage 1)
-constexpr uint32_t COURSE = 0x1C2AE0;         // 0 Beginner, 1 Expert, 2 Shuffle
-constexpr uint32_t PLAYER_STATE = 0x1A3784 + 0xD;   // player 1 slot: 1 / 2 playing, 0 continue, 3 out
-constexpr uint32_t ROUTE_SELECT = 0x1C2AD8;   // 1-2 choosing, 9-0xB the stage intro, 0xC playing
-constexpr uint32_t PLAYER_LIFE = 0x1A3723;    // low byte of player 1's lives (0: down)
-constexpr uint32_t SCORE = 0x1A857C;          // player 1 score; +0x10 + 4 * stage: score of that stage
-constexpr uint32_t COUNTERS = 0x1A6208;       // player 1 results counters (+4 hits, +6 technical, +0xC shots)
-constexpr uint32_t VM_ALIVE = 0x1A8468;       // enemies alive in the running encounter
+// Game RAM (game_ram.h, docs/game_ram.md)
+using namespace ram;
 constexpr uint32_t FN_ADD_SCORE = 0x0003DC60; // (type, player from 1, points): every scoring hit
-constexpr double FRAME_HZ = 57.524;
 constexpr double MIN_STAGE_SECONDS = 20;    // a stage played through takes minutes
 
 constexpr const char* STATS_FILE = "save/stats.ini";
 constexpr const char* ACHIEVEMENTS_FILE = "save/achievements.ini";
 
-int64_t frames_of(double seconds) { return int64_t(seconds * FRAME_HZ); }
+int64_t frames_of(double seconds) { return int64_t(seconds * GAME_HZ); }
 
 // What each achievement counts, read from the totals (one function per
 // achievement, so checking them at every vblank is a call, not a search)
@@ -213,9 +207,9 @@ void write_achievements_json(const Stats& s, const std::vector<int64_t>& unlocke
         json_string(out, a.text);
         out += ", \"goal\": " + std::to_string(a.goal) + ", \"progress\": " + std::to_string(p);
         if (std::string(a.key) == "veteran") {   // play time, counted in frames
-            int minutes = int(double(p) / FRAME_HZ / 60);
+            int minutes = int(double(p) / GAME_HZ / 60);
             char b[48];
-            snprintf(b, sizeof b, "%dh %02dm / %dh", minutes / 60, minutes % 60, int(double(a.goal) / FRAME_HZ / 3600 + 0.5));
+            snprintf(b, sizeof b, "%dh %02dm / %dh", minutes / 60, minutes % 60, int(double(a.goal) / GAME_HZ / 3600 + 0.5));
             out += std::string(", \"progress_text\": \"") + b + "\"";
         }
         out += ", \"unlocked\": " + std::to_string(when) + "}";
@@ -308,13 +302,13 @@ struct Tracker {
         st.clears++;
         int frames = int(frame - stage_from);
         if (st.best_frames == 0 || frames < st.best_frames) st.best_frames = frames;
-        st.best_score = std::max(st.best_score, int(rd32(SCORE + 0x10 + 4 * s)));
+        st.best_score = std::max(st.best_score, int(rd32(P1_STAGE_SCORES + 4 * s)));
         int64_t shots = stats.shots - base_shots, hits = stats.hits - base_hits;
         if (shots > 0) st.best_accuracy = std::max(st.best_accuracy, int(std::min<int64_t>(1000, hits * 1000 / shots)));
         stats.best_stage_technical = std::max(stats.best_stage_technical, int(stats.technical - base_technical));
         if (stage_lives_lost == 0) stats.untouched_stages++;
         dirty = true;
-        printf("[achievements] stage %d cleared in %.1f s, hits %lld/%lld\n", s + 1, frames / FRAME_HZ, (long long)hits,
+        printf("[achievements] stage %d cleared in %.1f s, hits %lld/%lld\n", s + 1, frames / GAME_HZ, (long long)hits,
                (long long)shots);
     }
 
@@ -323,7 +317,7 @@ struct Tracker {
         in_game = false;
         int course = std::clamp(int(rd32(COURSE)), 0, STAT_COURSES - 1);
         if (boss < 0) {
-            stats.best_score[course] = std::max(stats.best_score[course], int(rd32(SCORE)));
+            stats.best_score[course] = std::max(stats.best_score[course], int(rd32(P1_SCORE)));
             if (finished) {
                 clear_stage(stage);
                 stats.games_finished++;
@@ -336,16 +330,16 @@ struct Tracker {
 
     void frame_tick() {
         frame++;
-        int st = rd8(PLAYER_STATE);
+        int st = rd8(P1_SLOT);
         // START already makes the player "playing" before the route selection
         // opens, and PLAY presses it by itself (runtime.cpp,
         // arcade_entry_frame): a game only counts once its first stage
         // starts (0xC; 9-0xB are its intro), not when it is left before that
         // (QUIT TO MAIN MENU), and the start is not a continue
-        uint32_t route = rd32(ROUTE_SELECT);
+        uint32_t route = rd32(COURSE_SELECT);
         if ((st == 1 || st == 2) && route != 0xC) st = 4;
         Counters now = Counters::read();
-        int lv = rd8(PLAYER_LIFE), al = int(rd32(VM_ALIVE)), sg = rd8(STAGE);
+        int lv = rd8(P1_LIVES_BYTE), al = int(rd32(VM_ALIVE)), sg = rd8(STAGE);
         std::lock_guard<std::mutex> lock(mutex);
         if (rebase) {   // nothing counted across the jump
             rebase = false;
@@ -446,7 +440,7 @@ void stats_boss_end(bool won) {
         b.wins++;
         if (b.best_frames == 0 || frames < b.best_frames) b.best_frames = frames;
         if (g.boss_lives_lost == 0) b.flawless++;
-        printf("[achievements] boss %d defeated in %.1f s\n", g.boss + 1, frames / FRAME_HZ);
+        printf("[achievements] boss %d defeated in %.1f s\n", g.boss + 1, frames / GAME_HZ);
     }
     g.boss = -1;
     g.check_achievements();

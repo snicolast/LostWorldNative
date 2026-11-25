@@ -2,6 +2,8 @@
 
 PowerPC RAM addresses (big-endian) used by the port. "Confirmed" means seen in
 a real game with `--trace-survival`, not just in the disassembly.
+The code takes them from one list, `src/runtime/game_ram.h` (namespace `ram`):
+an address the port starts using goes in both.
 `python tools/analyze.py` generates out/listing.asm for reading the code;
 `python tools/encounters.py` lists the encounter scripts.
 
@@ -35,6 +37,12 @@ a real game with `--trace-survival`, not just in the disassembly.
 | 0xE9C | 4 bytes × 8 | ADC channels as fn_001180A8 leaves them (+4 per channel: 0/1 player 1 X/Y, 2/3 player 2): current, previous, average, difference |
 | fn_0000CBF0 | function | The gun's aim in a stage from the ADC values (object +0x34 x, +0x38 y, units from the middle of the screen, X drawn at px 248 + 0.9797 x, 192 - 0.9957 y; player in byte +0xC of the object at +0). Piecewise linear about the calibration's centre, 232 (X) / 176 (Y) units to its edges, not clamped: the 8-bit ADC is what keeps it near the 4:3 screen. The runtime replaces it in a wide 3D view (rt_gun_aimed, at 0xD49C) |
 | 0x123C | 6 bytes × 2 | Gun calibration (settings copy of the EEPROM), player 2 at 0x1242: X centre, Y centre, X right edge, X left edge, Y edge (ADC above the centre), Y edge (below). Factory: 118 110 213 24 207 12 / 123 108 222 29 199 5 |
+| 0x1A6168 | int | The game's text language, set once at start from COUNTRY (0x1226); the port sets it again when SUBTITLES change (runtime.cpp) |
+| 0x1A33FC | float | The projection's focal length in pixels (the aim assist's projection, runtime.cpp) |
+| 0x7F4 | int | Players in the game: bit 0x01000000 player 1, 0x02000000 player 2 (the hit function picks its victim among them; op -14 checks both) |
+| 0x1C1234 | int | Player 2's CONTINUE countdown (0x4B0 at the start) |
+| 0x1A6FEC | pointer | The text layer the HUD is drawn in: cell (x, y) at + y × 256 + x × 2, 0 blank (fn_0002E30C clears a box) |
+| 0x134B28 | 16 bytes × n | Text table: per text and language (+4 + 8 × language), its image and width |
 
 ## Results screen counters
 

@@ -68,7 +68,8 @@ function by address.
 
 The game itself is unchanged: the modes (bosses, survival, random spawns,
 weather) and the fixes work by reading and writing game RAM at the addresses
-documented in `docs/game_ram.md`, or by intercepting calls.
+documented in `docs/game_ram.md` (in the code: `src/runtime/game_ram.h`), or by
+intercepting calls.
 
 ## Threads
 

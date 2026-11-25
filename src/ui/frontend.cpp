@@ -17,6 +17,7 @@
 #include <thread>
 
 #include "../common/clock.h"
+#include "../common/game_hz.h"
 #include "../video/image_io.h"
 
 namespace {
@@ -1397,14 +1398,14 @@ std::wstring grouped(int64_t v) {   // 12,345
 }
 
 std::wstring clock_time(int64_t frames) {   // 2:31.4
-    double s = double(frames) / 57.524;
+    double s = double(frames) / GAME_HZ;
     wchar_t b[32];
     swprintf(b, 32, L"%d:%04.1f", int(s / 60), s - 60 * int(s / 60));
     return b;
 }
 
 std::wstring hours(int64_t frames) {   // 3 H 05 MIN
-    int64_t m = int64_t(double(frames) / 57.524 / 60);
+    int64_t m = int64_t(double(frames) / GAME_HZ / 60);
     wchar_t b[32];
     swprintf(b, 32, L"%lld H %02lld MIN", (long long)(m / 60), (long long)(m % 60));
     return b;
@@ -1441,7 +1442,7 @@ std::vector<Frontend::RecordRow> Frontend::record_rows() const {
             } else if (a.goal > 1) {
                 int64_t p = achievement_progress(s, i);
                 r.value = std::string(a.key) == "veteran"
-                              ? std::to_wstring(int(double(p) / 57.524 / 3600)) + L" / 5 H"
+                              ? std::to_wstring(int(double(p) / GAME_HZ / 3600)) + L" / 5 H"
                               : grouped(p) + L" / " + grouped(a.goal);
             } else {
                 r.value = L"LOCKED";
