@@ -11,6 +11,9 @@
 #   # ...          a comment, never shown
 # Newest entry at the top. Keep each one short: about ten lines fit.
 
+[24] 2026-11-26
+- PLAY now shows a LOADING screen while the game gets ready. Esc, or B / BACK on the pad, goes back to the main menu while it loads
+
 [23] 2026-11-24
 - DLAA and DLSS: when the graphics card runs short of time, the 3D is drawn a little smaller and DLSS brings it back to full size, so the frame rate holds
 - OPTIONS, RECORDS and the pause SETTINGS have a new page layout: sections on the left, the settings in groups, the description on the right
