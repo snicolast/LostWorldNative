@@ -122,7 +122,7 @@ for 3D textures (`textures/`, by hash of the decoded texture).
 
 ## Saved state
 
-`save/` holds `settings.ini` (the menu; one table in `frontend.cpp` drives the
+`save/` holds `settings.ini` (the menu; one table, `frontend_table.cpp`, drives the
 file, the rows and their behaviour), `eeprom.bin` (the arcade's settings and
 records), `survival/` (arenas unlocked, records), `pipeline_cache.bin` (the
 GPU's compiled pipelines, `VkPipelineCache`; ignored when it comes from
@@ -150,7 +150,9 @@ call chain it was saved in (the main loop), so loads happen at `IDLE` points.
 ## Settings
 
 The menu (`src/ui/frontend.cpp`) owns `FrontendSettings` (`frontend_settings.h`)
-and `save/settings.ini`.
+and `save/settings.ini`, read and written by `frontend_settings.cpp` through the
+settings table (`frontend_table.cpp`, whose rows are `Frontend::Setting`,
+`frontend_rows.h`).
 `settings_bridge.cpp` turns them into the command-line `Options` (`options.cpp`,
 one table for the parser and `--help`) and back; `app.cpp` hands the options to
 the renderer (`App::apply_video_options`, at the start and after each change in
@@ -169,7 +171,8 @@ queue, the ROM layout from the zip, the encounter script reader (against
 `tools/encounters.py`), the SCSP's part of the saved states, the weather sound,
 the procedural sky (CPU against GLSL), the scene builder's cached frame reads
 (`R3DStateReader`), the helper thread (`Worker`), the menu settings to options
-and back (`settings_bridge`) and the 2D replacement matching (`Pack2D`, on
+and back (`settings_bridge`), `save/settings.ini` (written and read back, older
+files, the `[arcade]` section) and the 2D replacement matching (`Pack2D`, on
 synthetic screens). Full-game checks are headless runs
 (`--headless --frames N`, deterministic: `out/ram.bin` and `out/real3d/*` can be
 compared by hash) and `--shot N` captures.

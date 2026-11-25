@@ -1,5 +1,5 @@
-// The options menu's settings (save/settings.ini), without the menu itself
-// (frontend.h), for the settings bridge and its test
+// The options menu's settings (save/settings.ini, frontend_settings.cpp), without
+// the menu itself (frontend.h), for the settings bridge and the tests
 #pragma once
 #include <string>
 
