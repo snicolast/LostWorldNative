@@ -788,6 +788,13 @@ void video_snapshot() {
 
 double g_wait_seconds = 0;   // time spent waiting since the last frame event (game thread only)
 
+// Real-time pacing goes on from the frame the game is at, without catching up
+static void rebase_clock() {
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    g_start_time.QuadPart = now.QuadPart - LONGLONG(double(g_frame) / GAME_HZ * double(g_qpf.QuadPart));
+}
+
 // Keeps the game at the original speed (vblank at GAME_HZ)
 void pace_frame() {
     double wait_from = now_seconds();
@@ -1404,17 +1411,13 @@ void rt_event(Ctx& c) {
                 g_sound.set_muted(false);   // fades in from silence
                 printf("[boot] start screens skipped in %.1f s (frame %llu)\n",
                        now_seconds() - g_boot_s, (unsigned long long)g_frame);
-                LARGE_INTEGER now;   // real-time pacing starts from here
-                QueryPerformanceCounter(&now);
-                g_start_time.QuadPart = now.QuadPart - LONGLONG(double(g_frame) / GAME_HZ * double(g_qpf.QuadPart));
+                rebase_clock();   // real-time pacing starts from here
             }
             if (g_hold && !g_boot_skip) {
                 double hold_from = now_seconds();
                 while (g_hold && !g_quit && !g_boot_skip) Sleep(4);   // (PLAY runs it on unseen behind the menu)
                 g_wait_seconds += now_seconds() - hold_from;
-                LARGE_INTEGER now;   // carry on at real speed from here, without catching up
-                QueryPerformanceCounter(&now);
-                g_start_time.QuadPart = now.QuadPart - LONGLONG(double(g_frame) / GAME_HZ * double(g_qpf.QuadPart));
+                rebase_clock();   // carry on at real speed from here, without catching up
             }
             if (g_realtime && !g_boot_skip) pace_frame();
             frame_log("G %llu %.6f\n", (unsigned long long)g_frame, now_seconds());

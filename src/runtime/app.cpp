@@ -648,6 +648,15 @@ static int screen_height(HWND hwnd) {
 bool g_restart = false;   // RESTART NOW: the game starts again once this one has closed
 static void restart_game();   // (after App::shutdown)
 
+// The game runs on unseen: at full speed, with nothing on screen and the sound
+// muted, until runtime.cpp's boot skip ends (the boot screens, a game state
+// loaded or PLAY's route selection reached): then the sound fades in
+static void run_unseen() {
+    g_boot_skip = g_fast_idle = true;
+    g_sound.set_dsp_enabled(false);
+    g_sound.set_muted(true);
+}
+
 // The zip the ROM came from (empty when it came from a data folder): the boss
 // state makers are started on the same ROM
 static std::string g_rom_zip;
@@ -924,7 +933,10 @@ struct App {
     void poll_snapshots();
     void take_snapshot(uint64_t up_to, Layers2D& out);
     void survival_to_menu();
+    void open_menu(Frontend::Screen s);   // a menu over the game, which stands still
     void close_menu();
+    void end_boss_mode();       // no fight and no boss mode (the menu's BOSS pages as from the main menu)
+    void boss_mode_to_menu();   // ...and the main menu, with the arcade game at its home state behind it
     void start_maker(int i);
     void start_survival(int stage, int zone);
     void survival_go_on(const SurvivalView& sv);
@@ -991,7 +1003,11 @@ void App::take_snapshot(uint64_t up_to, Layers2D& out) {
 void App::survival_to_menu() {
     survival_end();
     game_state_load_home();
-    frontend.open(Frontend::Screen::Main);
+    open_menu(Frontend::Screen::Main);
+}
+
+void App::open_menu(Frontend::Screen s) {
+    frontend.open(s);
     g_menu_open = g_hold = true;
 }
 
@@ -1032,9 +1048,7 @@ void App::start_survival(int stage, int zone) {
     survival_wait_home = true;
     survival_audio_at = g_sound.frames_out();
     survival_begin(stage, zone);
-    g_boot_skip = g_fast_idle = true;
-    g_sound.set_dsp_enabled(false);
-    g_sound.set_muted(true);
+    run_unseen();
     if (g_opt.menu) close_menu();
     else g_hold = false;
 }
@@ -1672,9 +1686,7 @@ void App::apply_video_options(const Options* was) {
 // on to its route selection behind the menu (LOADING), which closes once it is there
 void App::start_arcade() {
     g_arcade_entry = 1;
-    g_boot_skip = g_fast_idle = true;
-    g_sound.set_dsp_enabled(false);
-    g_sound.set_muted(true);
+    run_unseen();
     play_waits = true;
     frontend.starting = true;
     frontend.invalidate();
@@ -1696,8 +1708,16 @@ void App::quit_to_menu() {
         survival_to_menu();
         return;
     }
+    boss_mode_to_menu();
+}
+
+void App::end_boss_mode() {
     boss_fight = -1;
     frontend.boss_mode = false;
+}
+
+void App::boss_mode_to_menu() {
+    end_boss_mode();
     game_state_load_home();
     frontend.open(Frontend::Screen::Main);
 }
@@ -1723,8 +1743,7 @@ bool App::menu_key(int vk) {
 
 // Esc in the game (or a pad's BACK or START): the pause menu, also on the route selection
 void App::game_escape() {
-    frontend.open(Frontend::Screen::Pause);
-    g_menu_open = g_hold = true;
+    open_menu(Frontend::Screen::Pause);
 }
 
 void App::update_arcade_entry() {
@@ -1736,8 +1755,7 @@ void App::update_arcade_entry() {
     if (g_game_over_menu.exchange(false)) {
         play_waits = false;
         frontend.starting = false;
-        frontend.open(Frontend::Screen::Main);
-        g_menu_open = g_hold = true;
+        open_menu(Frontend::Screen::Main);
     }
     if (play_waits && !g_arcade_entry && !g_boot_skip) {
         play_waits = false;
@@ -1776,10 +1794,7 @@ void App::handle_menu_actions() {
             cancel_arcade_entry();
             random_spawns_set(false);
             weather_choose(z.indoor ? WEATHER_NONE : frontend.run_weather());   // indoors: the game's own
-            if (boss_fight >= 0 || frontend.boss_mode) {   // from boss mode: back to the arcade first
-                boss_fight = -1;
-                frontend.boss_mode = false;
-            }
+            if (boss_fight >= 0 || frontend.boss_mode) end_boss_mode();   // from boss mode: back to the arcade first
             start_survival(z.stage, z.zone);
             break;
         }
@@ -1796,10 +1811,7 @@ void App::handle_menu_actions() {
             break;
         case Frontend::Action::LeaveBossMode:   // the arcade game as it was comes back when the menu closes
             boss_pending = -1;
-            game_state_load_home();
-            boss_fight = -1;
-            frontend.boss_mode = false;
-            frontend.open(Frontend::Screen::Main);
+            boss_mode_to_menu();
             break;
         case Frontend::Action::QuitToMenu: quit_to_menu(); break;   // from the pause menu of any mode
         case Frontend::Action::Quit: presenter.close(); break;
@@ -1880,9 +1892,7 @@ void App::update_boss_mode() {
             // picture showed for a moment first; at real speed behind the
             // menu, the click seemed not to work (runtime.cpp: the boot skip
             // ends once the state is in)
-            g_boot_skip = g_fast_idle = true;
-            g_sound.set_dsp_enabled(false);
-            g_sound.set_muted(true);
+            run_unseen();
             g_hold = false;
         } else {
             frontend.boss_status[boss_pending] = Frontend::BOSS_MISSING;   // made again
@@ -1907,8 +1917,7 @@ void App::update_boss_mode() {
         }
         if (game_state_result() < 0) {
             printf("[boss] could not start the fight\n");
-            boss_fight = -1;
-            frontend.boss_mode = false;
+            end_boss_mode();
             frontend.open_boss_list(true);
             g_menu_open = g_hold = true;
         }
@@ -1937,10 +1946,7 @@ void App::update_boss_mode() {
         }
         // The next stage starting (its map) is not shown: the menu at once
         if (boss_over_at > 0 && (stage_ended || now_seconds() - boss_over_at > 3)) {
-            boss_fight = -1;
-            frontend.boss_mode = false;
-            game_state_load_home();
-            frontend.open(Frontend::Screen::Main);
+            boss_mode_to_menu();
             g_menu_open = g_hold = true;
         }
     }
