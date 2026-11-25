@@ -163,6 +163,8 @@ add_executable(LostWorld WIN32
     src/runtime/runtime.cpp
     src/runtime/app.cpp
     src/runtime/app_input.cpp
+    src/runtime/boss_mode.cpp
+    src/runtime/frame_prep.cpp
     src/runtime/rom_load.cpp
     src/runtime/debug_snapshot.cpp
     src/runtime/debug_aids.cpp
