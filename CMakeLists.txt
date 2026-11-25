@@ -196,6 +196,8 @@ add_executable(LostWorld WIN32
     src/ui/menu_music.cpp
     src/ui/splash_video.cpp
     src/ui/frontend.cpp
+    src/ui/frontend_table.cpp
+    src/ui/frontend_settings.cpp
     src/video/r3d_state.cpp
     src/video/r3d_scene.cpp
     src/video/r3d_screen.cpp
@@ -304,9 +306,10 @@ if(LW_TESTS)
     add_executable(achievements_csv_test tests/achievements_csv_test.cpp src/runtime/achievements_csv.cpp src/runtime/disk_writer.cpp)
     target_include_directories(achievements_csv_test PRIVATE ${ICONS_DIR})
     add_executable(disk_writer_test tests/disk_writer_test.cpp src/runtime/disk_writer.cpp)
+    add_executable(settings_ini_test tests/settings_ini_test.cpp src/ui/frontend_settings.cpp src/ui/frontend_table.cpp)
     foreach(t tilegen_test fnv_test options_test sky_motion_test audio_stream_test rom_zip_test encounter_script_test
               scsp_state_test weather_sound_test sky_procedural_test r3d_state_test worker_test settings_bridge_test
-              pack2d_test r3d_shelter_test menu_music_test achievements_csv_test disk_writer_test)
+              pack2d_test r3d_shelter_test menu_music_test achievements_csv_test disk_writer_test settings_ini_test)
         target_include_directories(${t} PRIVATE src/video src/common src/runtime src/audio src/ui ${MINIZ_DIR})
         if(MSVC)
             target_compile_options(${t} PRIVATE /W4 /utf-8)
@@ -331,6 +334,7 @@ if(LW_TESTS)
     add_test(NAME menu_music COMMAND menu_music_test ${CMAKE_SOURCE_DIR}/res/menu/music.mp3)
     add_test(NAME achievements_csv COMMAND achievements_csv_test)
     add_test(NAME disk_writer COMMAND disk_writer_test)
+    add_test(NAME settings_ini COMMAND settings_ini_test)
     # 3.10: the version the tools need, so an older Python in PATH is skipped (Star Wars Trilogy issue #51)
     find_package(Python3 3.10 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
