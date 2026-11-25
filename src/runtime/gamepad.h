@@ -65,7 +65,6 @@ public:
     void poll(const GamepadSettings& s, bool focused, bool menu);
     double now() const { return now_; }
     const PadState& pad(int i) const { return state_[i]; }
-    int connected() const;
     bool changed() { bool c = changed_; changed_ = false; return c; }   // a pad came or went
     // Moves a pad's sight (it follows the mouse while the mouse aims)
     void set_aim(int i, float x, float y);

@@ -212,7 +212,6 @@ add_executable(LostWorld WIN32
     src/audio/scsp.cpp
     src/audio/sound_board.cpp
     src/audio/weather_sound.cpp
-    ${MUSASHI_DIR}/m68kdasm.c
     ${MUSASHI_GEN}/m68kops.c
     ${GEN_SOURCES}
     res/lostworld.rc

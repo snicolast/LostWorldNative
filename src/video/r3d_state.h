@@ -30,6 +30,8 @@ struct R3DFrameState {
     double time = 0, flushed = 0;
     uint64_t vblank = 0;   // the game's frame counter when it was finished
 
+    // The plain reads (a map lookup per word): the scene builder uses
+    // R3DStateReader below; these stay as r3d_state_test's reference
     uint32_t read(uint32_t ppc_addr) const {
         auto it = pages.find(ppc_addr >> 16);
         if (it == pages.end()) return 0;

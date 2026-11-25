@@ -56,7 +56,6 @@ public:
     // known, as cam_dx, cam_dy sky pixels (x right, y down)
     void solve(bool camera, float cam_dx, float cam_dy);
     bool pending() const { return pending_; }
-    uint64_t frame() const { return frame_; }
 
     // The texels for the shader: ROWS for x, then ROWS for y (layout above)
     const uint32_t* texels() const { return texels_; }

@@ -26,9 +26,6 @@ unsigned int m68k_read_memory_16(unsigned int a) { return g_board->read16(a & 0x
 unsigned int m68k_read_memory_32(unsigned int a) {
     return (unsigned(g_board->read16(a & 0xFFFFFF)) << 16) | g_board->read16((a + 2) & 0xFFFFFF);
 }
-unsigned int m68k_read_disassembler_8(unsigned int a) { return m68k_read_memory_8(a); }
-unsigned int m68k_read_disassembler_16(unsigned int a) { return m68k_read_memory_16(a); }
-unsigned int m68k_read_disassembler_32(unsigned int a) { return m68k_read_memory_32(a); }
 void m68k_write_memory_8(unsigned int a, unsigned int v) { g_board->write8(a & 0xFFFFFF, uint8_t(v)); }
 void m68k_write_memory_16(unsigned int a, unsigned int v) { g_board->write16(a & 0xFFFFFF, uint16_t(v)); }
 void m68k_write_memory_32(unsigned int a, unsigned int v) {

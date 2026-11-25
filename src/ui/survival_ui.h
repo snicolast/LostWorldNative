@@ -30,8 +30,6 @@ public:
     // seconds (same clock as SurvivalView::wave_started)
     bool draw(int w, int h, const SurvivalView& v, double now, std::vector<uint32_t>& out,
               const SurvivalLayout& layout = {});
-    // Nothing to show (playing between banners still shows the wave counter)
-    static bool empty(const SurvivalView& v) { return v.mode == SurvivalMode::Off; }
 
 private:
     enum Family { TITLE, TEXT, NUMBER };   // NUMBER: titles with digits (the Jurassic font has none)

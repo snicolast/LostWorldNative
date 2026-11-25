@@ -310,7 +310,3 @@ def decode(word, addr):
         if xo10 == 64:
             return I("mcrfs", f"cr{rd >> 2}", f"cr{ra >> 2}")
     return I(".word", f"0x{word:08X}")
-
-
-def is_valid(insn):
-    return insn.mnem != ".word"

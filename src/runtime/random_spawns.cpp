@@ -273,7 +273,6 @@ void random_spawns_set(bool on) {
     g_on = on;
 }
 
-bool random_spawns_on() { return g_on; }
 bool random_spawns_playing() { return g_playing; }
 
 void random_spawns_enter(Ctx& c, uint32_t fn) {

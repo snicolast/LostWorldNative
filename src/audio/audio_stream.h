@@ -44,7 +44,6 @@ public:
     AudioStream();
     // Reading side only, before it pulls (or between pulls on the same thread)
     void set_output_rate(int rate);
-    int output_rate() const { return out_rate_; }
 
     // Writing side: frames of kInChannels floats (full scale = 1). If the queue
     // is full the rest is dropped (the reader then skips with a fade).

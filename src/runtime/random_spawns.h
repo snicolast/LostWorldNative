@@ -23,5 +23,4 @@ void random_spawns_enter(Ctx& c, uint32_t fn);
 void random_spawns_frame();   // every vblank
 // Window thread: the next arcade game is shuffled or the original
 void random_spawns_set(bool on);
-bool random_spawns_on();
 bool random_spawns_playing();   // a shuffled game is being played (not its attract or another mode)

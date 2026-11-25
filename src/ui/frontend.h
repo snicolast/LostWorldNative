@@ -175,7 +175,6 @@ private:
     static const std::vector<Setting>& setting_table();
     static const Setting* setting_of(Id id);
     std::vector<Item> option_items(const FrontendSettings& s) const;   // every option, as with these settings
-    const std::wstring& default_value(int id);   // what option_items shows for it with the defaults
     void activate(const Item& it, int dir);
     void reset_tab();   // the open settings tab back to its defaults
     FrontendSettings base_defaults() const;   // those defaults: PC EDITION's, or ARCADE ORIGINAL's look
@@ -291,8 +290,6 @@ private:
     struct ValueArea { int left, value, right; };
     std::vector<ValueArea> values_;
     bool wrap_ = false;
-    std::vector<Item> defaults_;   // option_items(FrontendSettings{}), made once (again if rt_available changes)
-    bool defaults_rt_ = false;
     // The settings' sections (setting_table says where each option goes,
     // ROW_GROUPS in frontend.cpp the headings over its rows)
     enum { EXPERIENCE_TAB, DISPLAY_TAB, LIGHTING_TAB, AUDIO_TAB, CONTROLS_TAB, GAME_TAB };   // LIGHTING_TAB is shown as GRAPHICS
@@ -316,7 +313,7 @@ private:
     bool options_scroll_ = false;   // the open section's rows do not all fit (the last draw)
     RECT more_up_{}, more_down_{};  // clickable "more" arrows of a scrolled section
     std::vector<RECT> tab_rects_;   // the sections in the column at the left (clicks)
-    int mouse_x_ = -1, mouse_y_ = -1;
+    int mouse_y_ = -1;
 
     GdiText* gdi_ = nullptr;
     bool jurassic_ = false;   // third_party/fonts/Jurassic_Park.ttf loaded

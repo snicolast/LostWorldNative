@@ -36,7 +36,6 @@ public:
     bool ready() const { return dc_ != nullptr; }
     bool loaded(Face f) const { return loaded_[f]; }
     static const char* file(Face f);   // its file in the fonts folder
-    const std::string& font_dir() const { return dir_; }
     HFONT font(Face f, int px);
     // The mask of a text; edge_px > 0 also makes its outline (Mask::e)
     const Mask& mask(Face f, int px, const std::wstring& s, int edge_px = 0);
@@ -44,7 +43,6 @@ public:
 
 private:
     int users_ = 0;
-    std::string dir_;
     bool loaded_[FACE_COUNT] = {};
     std::vector<HANDLE> font_handles_;
     std::vector<std::vector<char>> font_data_;

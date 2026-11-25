@@ -49,7 +49,6 @@ public:
     int msaa_samples() const { return int(samples_); }
     bool dlaa_active() const { return dlaa_.ready(); }
     bool dlss_upscaling() const { return dlaa_.ready() && upscale_ > 1.0f; }
-    int dlss_preset() const { return dlss_preset_; }   // the NGX preset in use (dlss::PRESET_*), 0 without DLSS
     // Texture pack slots this GPU's descriptor limits allow (TexturePack::set_max_slots)
     uint32_t replacement_slots() const { return replacement_slots_; }
     // MSAA samples per pixel from the next frame on (1 = off; nothing while
@@ -62,7 +61,6 @@ public:
     void set_light_gain(float gain) {
         light_gain_ = gain < 0.1f ? 0.1f : (gain > 8.0f ? 8.0f : gain);
     }
-    float light_gain() const { return light_gain_; }
     void shutdown();
 
     // Thread-safe sources are read by the caller; these just stage data

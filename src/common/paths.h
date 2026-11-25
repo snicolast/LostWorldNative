@@ -33,10 +33,3 @@ inline std::string exe_folder() {
     std::string s(path, n);
     return s.substr(0, s.find_last_of("\\/") + 1);
 }
-
-// Its folder without the separator ("." if the path has none)
-inline std::wstring exe_folder_w() {
-    std::wstring s = exe_path_w();
-    size_t sep = s.find_last_of(L"\\/");
-    return sep == std::wstring::npos ? L"." : s.substr(0, sep);
-}
