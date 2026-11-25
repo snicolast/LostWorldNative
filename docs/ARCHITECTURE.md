@@ -76,7 +76,7 @@ intercepting calls.
 | Thread | Where | What |
 |---|---|---|
 | Game | `runtime.cpp`, started by `app.cpp` with a 512 MB stack (the recompiled code nests deeply) | Runs the recompiled game at real speed (`pace_frame`), publishes a Real3D frame at each command-port write (`r3d_flush`: unchanged 64 KB pages shared with the previous frame) and the 2D layer memory at each vblank (dirty pages only), drives the sound board, saves/loads states at safe points (`rt_state_point`: the copy is taken there, the file is written by a helper thread) |
-| Window | `app.cpp` (`App::run`) | Win32 messages, inputs (mice/light guns, gamepads), the menus, and one image per monitor refresh: picks the newest prepared frame, interpolates the 3D between game frames (`set_interpolation`), composes and presents (`VkPresenter::frame`). Beside it: `app_input.cpp` (keyboard, mice and guns, gamepads: `Controls`), `frame_prep.cpp` (the 2D chain and the preparation thread), `boss_mode.cpp`, `rom_load.cpp` (the ROM at start), `debug_snapshot.cpp` (F9, `--replay`) and `debug_aids.cpp` (the `LW_*` menu drivers, logs and pictures) |
+| Window | `app.cpp` (`App::run`) | Win32 messages, inputs (mice/light guns, gamepads), the menus, and one image per monitor refresh: picks the newest prepared frame, interpolates the 3D between game frames (`set_interpolation`), composes and presents (`VkPresenter::frame`). Beside it: `app_input.cpp` (keyboard, mice and guns, gamepads: `Controls`), `frame_prep.cpp` (the 2D chain and the preparation thread), `boss_mode.cpp`, `display_clock.cpp` (when each image is on screen, how far behind the game it runs) and `pacing_log.cpp` (`LW_FRAMELOG`, `LW_PACING`), `rom_load.cpp` (the ROM at start), `debug_snapshot.cpp` (F9, `--replay`) and `debug_aids.cpp` (the `LW_*` menu drivers, logs and pictures) |
 | Preparation | `FramePrep` (`frame_prep.cpp`) | For every game frame as soon as it is published: builds the 3D scene (`R3DSceneBuilder`) while a helper thread (`Worker`) composes the 2D layers (`TileGen::compose`, 2D replacements, HD text), so the window thread only draws |
 | Audio | `src/audio/audio_out.cpp` | WASAPI output; pulls from the `AudioStream` queue the sound board fills (resampling and rate control there) |
 | Boss state makers | separate processes (`--make-boss-state N`) | Play headless up to each boss and save its state, one at a time while the game runs |
@@ -93,7 +93,7 @@ blocked by drawing.
 2. Preparation builds `R3DScene` (viewports, vertices with their previous
    position for interpolation, LOD, the world tracker's camera estimate) and
    the 2D layers of the same vblank (`Layers2D`), and queues the result.
-3. At each monitor vblank (`DisplayClock`, DWM timing or `VK_KHR_present_wait`)
+3. At each monitor vblank (`DisplayClock` in `display_clock.cpp`, DWM timing or `VK_KHR_present_wait`)
    the window thread takes the frame due, sets the interpolation fraction and
    records the GPU passes (`R3DRenderer::record`): a strip of the procedural
    sky's cloud panorama, ray tracing build (if any), sun shadow map, the world
@@ -172,7 +172,7 @@ queue, the ROM layout from the zip, the encounter script reader (against
 the procedural sky (CPU against GLSL), the scene builder's cached frame reads
 (`R3DStateReader`), the helper thread (`Worker`), the menu settings to options
 and back (`settings_bridge`), `save/settings.ini` (written and read back, older
-files, the `[arcade]` section) and the 2D replacement matching (`Pack2D`, on
+files, the `[arcade]` section), the display clock and frame pacer (`display_clock`, with made-up vblanks and wake-ups) and the 2D replacement matching (`Pack2D`, on
 synthetic screens). Full-game checks are headless runs
 (`--headless --frames N`, deterministic: `out/ram.bin` and `out/real3d/*` can be
 compared by hash) and `--shot N` captures.
