@@ -162,6 +162,9 @@ endif()
 add_executable(LostWorld WIN32
     src/runtime/runtime.cpp
     src/runtime/app.cpp
+    src/runtime/rom_load.cpp
+    src/runtime/debug_snapshot.cpp
+    src/runtime/debug_aids.cpp
     src/runtime/eeprom.cpp
     src/runtime/disk_writer.cpp
     src/runtime/inputs.cpp

@@ -27,6 +27,8 @@
 #include <windowsx.h>   // GET_X_LPARAM
 
 #include "bosses.h"
+#include "debug_aids.h"
+#include "debug_snapshot.h"
 #include "game_ram.h"
 #include "gamepad.h"
 #include "inputs.h"
@@ -38,6 +40,7 @@
 #include "runtime.h"
 #include "stats.h"
 #include "random_spawns.h"
+#include "rom_load.h"
 #include "survival.h"
 #include "weather.h"
 #include "../audio/sound_board.h"
@@ -72,44 +75,6 @@ static bool select_dot_on_screen(const R3DScene& scene) {
     for (uint32_t i = 0; i < v.trans_count; i++)
         if (scene.vertices[v.trans_first + i].tex == 0x625A0340) return true;
     return false;
-}
-// Debugging aid for --shot: every triangle with its screen bounding box
-// (native pixels), plus the 2D layers' alpha along two columns
-static void dump_scene(const R3DScene& scene, const uint32_t* back, const uint32_t* front, const char* path) {
-    FILE* f = fopen(path, "w");
-    if (!f) return;
-    for (size_t vi = 0; vi < scene.viewports.size(); vi++) {
-        const R3DViewport& v = scene.viewports[vi];
-        fprintf(f, "viewport %zu prio %d rect %.0f %.0f %.0f %.0f opaque %u trans %u\n", vi, v.priority, v.x, v.y,
-                v.w, v.h, v.opaque_count / 3, v.trans_count / 3);
-        fprintf(f, "  fog density %.5f start %.3f colour %.3f %.3f %.3f ambient %.3f scroll %.3f far %.1f world %d\n",
-                v.fog_density, v.fog_start, v.fog_color[0], v.fog_color[1], v.fog_color[2], v.fog_ambient,
-                v.scroll_fog, v.scenery_far, int(v.world));
-        for (int pass = 0; pass < 2; pass++) {
-            uint32_t first = pass ? v.trans_first : v.opaque_first, count = pass ? v.trans_count : v.opaque_count;
-            for (uint32_t t = 0; t + 2 < count; t += 3) {
-                float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f, zmin = 1e9f;
-                const R3DVertex* tri = &scene.vertices[first + t];
-                for (int k = 0; k < 3; k++) {
-                    const float* p = tri[k].pos;
-                    float cx = v.proj[0] * p[0] + v.proj[4] * p[1] + v.proj[8] * p[2] + v.proj[12];
-                    float cy = v.proj[1] * p[0] + v.proj[5] * p[1] + v.proj[9] * p[2] + v.proj[13];
-                    float cw = v.proj[3] * p[0] + v.proj[7] * p[1] + v.proj[11] * p[2] + v.proj[15];
-                    if (cw <= 1e-6f) cw = 1e-6f;
-                    float sx = v.x + (cx / cw + 1) / 2 * v.w, sy = v.y + (cy / cw + 1) / 2 * v.h;
-                    x0 = std::min(x0, sx), x1 = std::max(x1, sx), y0 = std::min(y0, sy), y1 = std::max(y1, sy);
-                    zmin = std::min(zmin, -p[2]);
-                }
-                fprintf(f, "  tri v%zu %s bbox %.1f %.1f %.1f %.1f z %.3f color %08x flags %x tex %08x\n", vi,
-                        pass ? "T" : "O", x0, y0, x1, y1, zmin, tri[0].color, tri[0].flags, tri[0].tex);
-            }
-        }
-    }
-    for (int y = 0; y < SCREEN_H; y += 4)
-        fprintf(f, "2d row %d: back[0] %08x back[248] %08x front[0] %08x front[248] %08x\n", y,
-                back[y * BACK_W + BACK_MARGIN], back[y * BACK_W + BACK_MARGIN + 248], front[y * SCREEN_W],
-                front[y * SCREEN_W + 248]);
-    fclose(f);
 }
 
 static const float WEATHER_SOUND_LEVEL[4] = {0.0f, 0.5f, 1.0f, 1.6f};   // WEATHER SOUND: OFF, LOW, MEDIUM, HIGH
@@ -379,59 +344,6 @@ static bool poll_gamepads(HWND hwnd) {
     return pause;
 }
 
-// Debug snapshot (F9): the Real3D memory of the frame on screen, texture RAM
-// and 2D layer memory in one file, to look at a scene again with --replay
-static const uint32_t SNAPSHOT_MAGIC = 0x3153574C;   // "LWS1"
-
-static void save_snapshot(const char* path, const R3DFrameState& state, const std::vector<uint8_t>& vram) {
-    FILE* f = fopen(path, "wb");
-    if (!f) return;
-    uint32_t count = uint32_t(state.pages.size());
-    fwrite(&SNAPSHOT_MAGIC, 4, 1, f);
-    fwrite(&state.frame, 8, 1, f);
-    fwrite(&count, 4, 1, f);
-    for (auto& [key, page] : state.pages) {
-        fwrite(&key, 4, 1, f);
-        fwrite(page->data(), 1, page->size(), f);
-    }
-    std::vector<uint16_t> texels;
-    g_texture_ram.copy_all(texels);
-    fwrite(texels.data(), 2, texels.size(), f);
-    fwrite(vram.data(), 1, vram.size(), f);
-    fclose(f);
-}
-
-static bool load_snapshot(const char* path) {
-    FILE* f = fopen(path, "rb");
-    if (!f) return false;
-    uint32_t magic = 0, count = 0;
-    auto state = std::make_shared<R3DFrameState>();
-    bool ok = fread(&magic, 4, 1, f) == 1 && magic == SNAPSHOT_MAGIC && fread(&state->frame, 8, 1, f) == 1 &&
-              fread(&count, 4, 1, f) == 1;
-    for (uint32_t i = 0; ok && i < count; i++) {
-        uint32_t key;
-        auto page = std::make_shared<R3DPage>();
-        ok = fread(&key, 4, 1, f) == 1 && fread(page->data(), 1, page->size(), f) == page->size();
-        state->pages[key] = page;
-    }
-    std::vector<uint16_t> texels(2048 * 2048);
-    ok = ok && fread(texels.data(), 2, texels.size(), f) == texels.size();
-    std::vector<uint8_t> vram(TILEGEN_SIZE);
-    ok = ok && fread(vram.data(), 1, vram.size(), f) == vram.size();
-    fclose(f);
-    if (!ok) return false;
-    g_texture_ram.load_all(texels);
-    {
-        std::lock_guard<std::mutex> lock(g_video_mutex);
-        g_video_vram = vram;
-        g_video_frame = state->frame;
-        for (uint64_t& serial : g_video_page_serial) serial++;
-    }
-    std::lock_guard<std::mutex> lock(g_r3d_mutex);
-    g_r3d_latest = std::move(state);
-    return true;
-}
-
 // When the image being recorded will be on screen: with vsync the images go
 // out once per refresh, evenly, while this thread wakes up for them at uneven
 // moments (it waits for the GPU and the display, then builds the scene). The
@@ -612,13 +524,6 @@ static void pacing_sample(double now, double display, double shown, const R3DFra
     }
 }
 
-static bool file_exists(const std::string& path) { return GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES; }
-static std::string full_path(const std::string& path) {
-    char full[MAX_PATH];
-    DWORD n = GetFullPathNameA(path.c_str(), MAX_PATH, full, nullptr);
-    return n && n < MAX_PATH ? std::string(full, n) : path;
-}
-
 // The first start (no anti-aliasing in save/settings.ini yet) picks it for
 // the GPU and the screen instead of MSAA 4x for everyone, as Sega Rally 2
 // does: on an NVIDIA card DLSS is asked for, DLAA, or DLSS QUALITY on a screen
@@ -660,81 +565,6 @@ static void run_unseen() {
 // The zip the ROM came from (empty when it came from a data folder): the boss
 // state makers are started on the same ROM
 static std::string g_rom_zip;
-
-// Loads the ROM from the first of: --rom or LW_ROM_ZIP (lostwsga.zip read
-// directly), --data, data\ in the current folder or next to the exe (what
-// build.bat extracts), lostwsga.zip next to the exe or in the current folder.
-// If none is there, says where it looked and how to give the path
-static bool load_game_rom(std::vector<uint8_t>& sound_program, std::vector<uint8_t>& sound_samples) {
-    std::string zip = g_opt.rom_zip;
-    if (zip.empty() && getenv("LW_ROM_ZIP")) zip = getenv("LW_ROM_ZIP");
-    std::vector<std::string> looked;   // full paths, for the error
-    auto missing = [&](const std::string& path) {
-        std::string f = full_path(path);
-        if (std::find(looked.begin(), looked.end(), f) == looked.end()) looked.push_back(f);
-    };
-    if (zip.empty()) {
-        std::vector<std::string> dirs = {g_opt.data_dir};
-        if (g_opt.data_dir == "data") dirs.push_back(exe_folder() + "data");   // --data not given
-        for (const std::string& d : dirs) {
-            if (file_exists(d + "/crom.bin")) {
-                g_data_dir = d;
-                if (!load_rom("crom.bin", g_crom, true)) return false;
-                load_rom("banked_crom.bin", g_banked, false);
-                load_rom("vrom.bin", g_vrom, false);
-                load_rom("sound_program.bin", sound_program, false);
-                load_rom("sound_samples.bin", sound_samples, false);
-                if (g_banked.empty() || g_vrom.empty() || sound_program.empty() || sound_samples.empty()) {
-                    // An older romtool.py stopped at the first missing chip and
-                    // left crom.bin without the rest: say so, not a black screen
-                    std::string msg =
-                        "The ROM in " + full_path(d) + " is incomplete: it has crom.bin but not\n"
-                        "banked_crom.bin, vrom.bin, sound_program.bin and sound_samples.bin.\n\n"
-                        "Your lostwsga.zip probably lacks some chips. Get a complete lostwsga.zip,\n"
-                        "put it next to build.bat and run build.bat again.";
-                    fprintf(stderr, "%s\n", msg.c_str());
-                    if (!g_opt.headless) MessageBoxA(nullptr, msg.c_str(), "Lost World Native", MB_OK | MB_ICONERROR);
-                    return false;
-                }
-                printf("ROM: %s\n", d.c_str());
-                return true;
-            }
-            missing(d + "\\crom.bin");
-        }
-        if (g_opt.data_dir == "data")
-            for (const std::string& z : {exe_folder() + "lostwsga.zip", std::string("lostwsga.zip")}) {
-                if (file_exists(z)) {
-                    zip = z;
-                    break;
-                }
-                missing(z);
-            }
-    }
-    std::string error;
-    if (!zip.empty()) {
-        RomSet rom;
-        if (load_rom_zip(zip, rom, error)) {
-            g_crom = std::move(rom.crom);
-            g_banked = std::move(rom.banked_crom);
-            g_vrom = std::move(rom.vrom);
-            sound_program = std::move(rom.sound_program);
-            sound_samples = std::move(rom.sound_samples);
-            g_rom_zip = zip;
-            printf("ROM: %s\n", zip.c_str());
-            return true;
-        }
-        error = "Cannot load the ROM: " + error + ".\n";
-    } else {
-        error = "Cannot find The Lost World ROM (lostwsga.zip). Looked in:\n";
-        for (const std::string& l : looked) error += "  " + l + "\n";
-    }
-    error += "\nPut lostwsga.zip next to LostWorld.exe, or give its path with\n"
-             "  LostWorld.exe --rom D:\\roms\\lostwsga.zip\n"
-             "or in the LW_ROM_ZIP environment variable.";
-    fprintf(stderr, "%s\n", error.c_str());
-    if (!g_opt.headless) MessageBoxA(nullptr, error.c_str(), "Lost World Native", MB_OK | MB_ICONERROR);
-    return false;
-}
 
 // The 2D layers of one vblank as the renderer takes them (App::compose_2d)
 struct Layers2D {
@@ -1972,29 +1802,16 @@ void App::update_menus() {
             frontend.invalidate();
         }
     }
-    // Debugging aid: LW_MENU_KEYS="40,13,27" presses those keys (one
-    // every 10 presents; Esc in the game pauses; "cX/Y" clicks at window
-    // pixel X,Y), then saves out/menu.bmp and quits
-    static const char* menu_keys = getenv("LW_MENU_KEYS");
-    static int menu_presents = 0;
-    if (menu_keys && ++menu_presents % 10 == 0) {
-        if (*menu_keys == 'c') {
-            int cx = 0, cy = 0, len = 0;
-            sscanf(menu_keys, "c%d/%d%n", &cx, &cy, &len);
-            menu_keys += len;
-            if (*menu_keys == ',') menu_keys++;
-            frontend.click(cx, cy);
-        } else if (*menu_keys) {
-            char* end = nullptr;
-            int vk = int(strtol(menu_keys, &end, 10));
-            menu_keys = *end == ',' ? end + 1 : end;
-            if (frontend.active()) menu_key(vk);
-            else if (vk == VK_ESCAPE) game_escape();
-        } else if (menu_presents % 30 == 0) {
-            presenter.capture_next("out/menu.bmp");
-            menu_keys = nullptr;
-            presenter.close();
-        }
+    // Debugging aid: LW_MENU_KEYS (debug_aids.h)
+    debug_aids::MenuStep step = debug_aids::menu_keys_step();
+    if (step.kind == debug_aids::MenuStep::CLICK) {
+        frontend.click(step.x, step.y);
+    } else if (step.kind == debug_aids::MenuStep::KEY) {
+        if (frontend.active()) menu_key(step.vk);
+        else if (step.vk == VK_ESCAPE) game_escape();
+    } else if (step.kind == debug_aids::MenuStep::DONE) {
+        presenter.capture_next("out/menu.bmp");
+        presenter.close();
     }
     static Frontend::Screen menu_was = Frontend::Screen::None;
     if ((frontend.screen() == Frontend::Screen::Records || frontend.screen() == Frontend::Screen::Main) &&
@@ -2055,14 +1872,8 @@ void App::update_menus() {
         frontend.pad_prompts = pad_in_menu || menu_pad;
         frontend.invalidate();
     }
-    // Debugging aid: LW_MENU_FILM=N saves the menu's next N pictures at half
-    // size as out/menu_film/000.bmp.. (the menu's clock at LW_MENU_FPS, 30 if
-    // not set: one step a picture, none skipped), then quits.
-    // LW_MENU_FILM_KEYS="40:13,75:27" presses key 13 after picture 40, ...
-    static int film_left = getenv("LW_MENU_FILM") ? atoi(getenv("LW_MENU_FILM")) : 0;
-    static int film_index = 0;
-    static const char* film_keys = getenv("LW_MENU_FILM_KEYS");
-    if (film_left > 0 && frontend.active()) frontend.invalidate();   // a picture every refresh
+    // Debugging aid: LW_MENU_FILM, a picture every refresh (debug_aids.h)
+    if (debug_aids::menu_film_on() && frontend.active()) frontend.invalidate();
     if (frontend.active()) {
         RECT rc;
         GetClientRect(presenter.hwnd(), &rc);
@@ -2073,37 +1884,9 @@ void App::update_menus() {
             else ui.set_image(ui_pixels.data(), rc.right, rc.bottom);
             double ms = (now_seconds() - t0) * 1000;
             if (ms > 20) printf("[menu] slow redraw: %.0f ms\n", ms);
-            static const char* menu_shot = getenv("LW_MENU_SHOT");   // debugging aid: the menu picture
-            if (menu_shot) bmp_save(menu_shot, rc.right, rc.bottom, ui_pixels.data());
-            if (film_left > 0) {
-                int fw = rc.right / 2, fh = rc.bottom / 2;
-                std::vector<uint32_t> half(size_t(fw) * fh);
-                for (int y = 0; y < fh; y++)
-                    for (int x = 0; x < fw; x++) {
-                        const uint32_t* q = &ui_pixels[size_t(2 * y) * rc.right + 2 * x];
-                        uint32_t px = 0xFF000000u;
-                        for (int sh = 0; sh <= 16; sh += 8) {
-                            uint32_t c = ((q[0] >> sh) & 0xFF) + ((q[1] >> sh) & 0xFF) + ((q[rc.right] >> sh) & 0xFF) +
-                                         ((q[rc.right + 1] >> sh) & 0xFF);
-                            px |= ((c + 2) / 4) << sh;
-                        }
-                        half[size_t(y) * fw + x] = px;
-                    }
-                CreateDirectoryA("out", nullptr);
-                CreateDirectoryA("out/menu_film", nullptr);
-                char path[64];
-                snprintf(path, sizeof(path), "out/menu_film/%03d.bmp", film_index);
-                bmp_save(path, fw, fh, half.data());
-                for (const char* k = film_keys; k && *k;) {
-                    int at = 0, vk = 0, len = 0;
-                    if (sscanf(k, "%d:%d%n", &at, &vk, &len) < 2) break;
-                    if (at == film_index) frontend.key(vk);
-                    k += len;
-                    if (*k == ',') k++;
-                }
-                film_index++;
-                if (--film_left == 0) presenter.close();
-            }
+            // Debugging aids: LW_MENU_SHOT, LW_MENU_FILM (debug_aids.h)
+            if (debug_aids::menu_picture(ui_pixels.data(), rc.right, rc.bottom, [&](int vk) { frontend.key(vk); }))
+                presenter.close();
         }
     }
 }
@@ -2355,46 +2138,9 @@ bool App::present_frame(double loop_from) {
                 }
             fprintf(g_sky_log, "\n");
         }
-        // Debugging aid: LW_SPOTLOG=path writes the world viewport's spotlight every game frame
-        static FILE* spot_log = getenv("LW_SPOTLOG") ? fopen(getenv("LW_SPOTLOG"), "w") : nullptr;
-        if (spot_log) {
-            int worlds = 0;
-            for (const R3DViewport& v : scene->viewports)
-                if (v.world) {
-                    worlds++;
-                    fprintf(spot_log,
-                            "%llu vp%d col %.0f%.0f%.0f c %.4f %.4f r %.4f %.4f start %.3f ext %.2f sun %.3f amb %.3f "
-                            "fog %.5f/%.3f scroll %.3f far %.1f black %d night %.2f "
-                            "light %.3f %.3f %.3f world %.3f %.3f %.3f\n",
-                            (unsigned long long)built->frame, worlds, v.spot_color[0], v.spot_color[1], v.spot_color[2],
-                            v.spot_center[0], v.spot_center[1], v.spot_radius[0], v.spot_radius[1], v.spot_start,
-                            v.spot_extent, v.sun_intensity, v.ambient, v.fog_density, v.fog_ambient, v.scroll_fog,
-                            v.scenery_far, int(renderer.back_black()), renderer.night_level(), v.sun[0], v.sun[1], v.sun[2],
-                            v.world_axes[0] * v.sun[0] + v.world_axes[1] * v.sun[1] + v.world_axes[2] * v.sun[2],
-                            v.world_axes[3] * v.sun[0] + v.world_axes[4] * v.sun[1] + v.world_axes[5] * v.sun[2],
-                            v.world_axes[6] * v.sun[0] + v.world_axes[7] * v.sun[1] + v.world_axes[8] * v.sun[2]);
-                }
-            if (!worlds) fprintf(spot_log, "%llu no world\n", (unsigned long long)built->frame);
-            fflush(spot_log);
-        }
-        // Debugging aid: LW_FILM=first,count records that many game frames
-        // as snapshots in out/film, to replay as a sequence
-        static const char* film_rec = getenv("LW_FILM");
-        static int film_saved = 0;
-        if (film_rec && g_opt.replay.empty()) {
-            unsigned long long first = 0;
-            int count = 0, every = 1;   // optional third value: keep one frame in that many
-            sscanf(film_rec, "%llu,%d,%d", &first, &count, &every);
-            static unsigned long long film_last = 0;
-            if (built->frame >= first && film_saved < count && (!film_saved || built->frame >= film_last + every)) {
-                film_last = built->frame;
-                CreateDirectoryA("out/film", nullptr);
-                char path[64];
-                snprintf(path, sizeof(path), "out/film/f_%06llu.bin", (unsigned long long)built->frame);
-                save_snapshot(path, *built, layers_shown->vram);
-                film_saved++;
-            }
-        }
+        // Debugging aids: LW_SPOTLOG, LW_FILM (debug_aids.h)
+        debug_aids::spot_log(*scene, built->frame, renderer.back_black(), renderer.night_level());
+        if (g_opt.replay.empty()) debug_aids::film_record(*built, layers_shown->vram);
     }
     int y0, y1, tex_dirty_rows = 0;
     if (g_texture_ram.take_dirty(tex_rows, y0, y1)) {
@@ -2407,23 +2153,9 @@ bool App::present_frame(double loop_from) {
     // anti-aliasing (DLAA) has settled
     static uint64_t replay_presents = 0;
     if (shot && !g_opt.replay.empty() && replay_presents++ < 60) shot = false;
-    // Debugging aid: LW_SHOTS=N[,FROM[,TO]] saves one game frame in N as out/shots/<frame>.bmp
-    static int shots_every = 0;
-    static unsigned long long shots_from = 0, shots_to = ~0ull;
-    static bool shots_parsed = false;
-    if (!shots_parsed) {
-        shots_parsed = true;
-        if (const char* e = getenv("LW_SHOTS")) sscanf(e, "%d,%llu,%llu", &shots_every, &shots_from, &shots_to);
-    }
-    static uint64_t last_shot = 0;
-    if (shots_every > 0 && shown != ~0ull && shown >= shots_from && shown <= shots_to &&
-        shown >= last_shot + shots_every) {
-        last_shot = shown;
-        CreateDirectoryA("out/shots", nullptr);
-        char path[64];
-        snprintf(path, sizeof(path), "out/shots/%06llu.bmp", (unsigned long long)shown);
-        presenter.capture_next(path);
-    }
+    // Debugging aid: LW_SHOTS (debug_aids.h)
+    std::string shot_path = debug_aids::shot_path(shown);
+    if (!shot_path.empty()) presenter.capture_next(shot_path);
     if (shot) {
         presenter.capture_next("out/capture.bmp");
         g_texture_ram.dump("out/texture_ram.bin");
@@ -2741,7 +2473,7 @@ int main(int argc, char** argv) {
     printf("Lost World Native (%s)\n", g_opt.headless ? "no window" : "Vulkan window, 3D + 2D");
     {
         std::vector<uint8_t> program, samples;
-        if (!load_game_rom(program, samples)) return 1;
+        if (!load_game_rom(g_opt, program, samples, g_rom_zip)) return 1;
         if (!getenv("LW_NOSOUND"))
             g_sound.init(std::move(program), std::move(samples), g_opt.headless ? nullptr : &g_audio);
         if (g_boss_maker >= 0) g_sound.set_dsp_enabled(false);   // the effects only matter when heard
