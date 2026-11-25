@@ -1,5 +1,7 @@
 // Debugging aids for one scene: snapshots (F9, --replay, LW_FILM) and the
 // scene's text dump (debug_snapshot.h)
+#define WIN32_LEAN_AND_MEAN   // runtime.h brings windows.h: no min/max macros
+#define NOMINMAX
 #include <algorithm>
 #include <cstdio>
 #include <memory>
