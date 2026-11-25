@@ -346,8 +346,8 @@ const std::vector<Frontend::Setting>& Frontend::setting_table() {
         {.id = NO_ROW, .key = "gun_p2", .path = &FS::gun_p2},
         // and the logos at launch (splash_screens = 0: straight to the menu)
         {.id = NO_ROW, .key = "splash_screens", .flag = &FS::splash},
-        // and the model DLAA and DLSS use, for advanced users (auto: dlss::preset_for)
         {.id = NO_ROW, .key = "fullscreen", .flag = &FS::fullscreen},   // (older versions: display_mode then)
+        // and the model DLAA and DLSS use, for advanced users (auto: dlss::preset_for)
         {.id = NO_ROW, .key = "dlss_model", .number = &FS::dlss_model, .words = {"auto", "k", "m", "l"}},
     };
     return table;
@@ -416,13 +416,6 @@ std::string FrontendSettings::text(bool section) const {
     out += "resolution = " + std::to_string(res_w) + "x" + std::to_string(res_h) + "\n";
     out += "max_fps = " + (max_fps < 0 ? std::string("unlimited") : max_fps == 0 ? std::string("monitor") : std::to_string(max_fps)) + "\n";
     return out;
-}
-
-void FrontendSettings::save(const char* path) const {
-    FILE* f = fopen(path, "w");
-    if (!f) return;
-    fputs(text().c_str(), f);
-    fclose(f);
 }
 
 void FrontendSettings::save_both(const char* path, const FrontendSettings& pc, const FrontendSettings* arcade,
@@ -653,17 +646,6 @@ FrontendSettings Frontend::base_defaults() const {
     FrontendSettings d;
     if (arcade) d.arcade_base();
     return d;
-}
-
-const std::wstring& Frontend::default_value(int id) {
-    if (defaults_.empty() || defaults_rt_ != rt_available) {
-        defaults_ = option_items(base_defaults());
-        defaults_rt_ = rt_available;
-    }
-    static const std::wstring none;
-    for (const Item& d : defaults_)
-        if (d.id == id) return d.value;
-    return none;
 }
 
 void Frontend::reset_tab() {
@@ -1276,7 +1258,6 @@ bool Frontend::drop_key(int vk) {
 
 void Frontend::mouse_move(int x, int y) {
     if (screen_ == Screen::Splash) return;
-    mouse_x_ = x;
     mouse_y_ = y;
     if (drop_open_ && screen_ == Screen::Options) {   // the resolution under the pointer lit
         for (int k = 0; k < int(drop_rects_.size()); k++)

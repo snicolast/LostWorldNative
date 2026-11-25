@@ -35,7 +35,6 @@ const char* GdiText::file(Face f) { return FILES[f]; }
 GdiText& GdiText::acquire(const std::string& font_dir) {
     static GdiText text;
     if (text.users_++ == 0) {
-        text.dir_ = font_dir;
         for (int f = 0; f < FACE_COUNT; f++) {
             text.font_data_.push_back(read_file(font_dir + "/" + FILES[f]));
             auto& data = text.font_data_.back();

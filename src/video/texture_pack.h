@@ -34,7 +34,6 @@ public:
     // Replacements loaded since the last call, to be uploaded by the renderer
     std::vector<RgbaImage> take_new_images();
 
-    size_t replaced_count() const { return slots_.size(); }
 
 private:
     struct Entry {

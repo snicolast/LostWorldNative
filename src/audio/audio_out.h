@@ -18,8 +18,6 @@ public:
     void stop();
     // Called by the emulation thread: frames of kChannels floats (full scale = 1)
     void push(const float* frames, size_t count) { stream_.push(frames, count); }
-    // Frames currently queued
-    size_t queued() const { return stream_.queued(); }
     // Any thread; the device is reopened if the channel count changes
     void set_speakers(AudioStream::Speakers s) { speakers_ = int(s); }
     // Something else to hear on top of the queue (the menus' music): called by

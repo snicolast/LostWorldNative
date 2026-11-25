@@ -17,7 +17,9 @@
 // The 3D pass's descriptor set, as set 1: the texture RAM and the texture pack
 // for the cut-out triangles, the acceleration structure and the cut-outs
 layout(set = 1, binding = 0) uniform usampler2D texture_ram;
-layout(set = 1, binding = 1) uniform sampler2D replacements[4096];
+// (as many as the 3D pass's set has: r3d.frag's REPLACEMENT_SLOTS, set by the renderer)
+layout(constant_id = 0) const uint REPLACEMENT_SLOTS = 4096u;
+layout(set = 1, binding = 1) uniform sampler2D replacements[REPLACEMENT_SLOTS];
 #define RT_SET 1
 #include "raytrace.glsl"
 

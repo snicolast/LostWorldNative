@@ -16,7 +16,6 @@ public:
     // Only rows y0..y1-1 of the same picture changed (a new size: the whole picture)
     void update_rows(const uint32_t* bgra, uint32_t w, uint32_t h, uint32_t y0, uint32_t y1);
     void hide() { visible_ = false; }
-    bool visible() const { return visible_; }
 
     // After the main renderer: blends the picture over the swapchain image
     void record(VkCommandBuffer cmd, VkImageView target, VkExtent2D extent);

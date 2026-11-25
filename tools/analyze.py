@@ -193,7 +193,6 @@ def main():
     path = sys.argv[1] if len(sys.argv) > 1 else "data/crom.bin"
     rom = open(path, "rb").read()
     mem = Memory(rom)
-    word = mem.r32
     for src, dst, n in mem.copies:
         print(f"copy {src:08X} -> RAM {dst:08X} ({n} bytes)")
     with open("data/ram_boot.bin", "wb") as fo:

@@ -246,7 +246,6 @@ struct Tracker {
     int game_continues = 0;
     int stage_lives_lost = 0;
     uint64_t stage_from = 0;
-    Counters stage_base;         // the totals when the stage began
     int64_t base_shots = 0, base_hits = 0, base_technical = 0;
     // Boss mode
     int boss = -1;               // fight on

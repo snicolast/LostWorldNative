@@ -19,7 +19,6 @@ namespace {
 
 struct Job {
     std::string path, data;
-    bool append = false;
 };
 
 struct Writer {
@@ -51,13 +50,6 @@ bool replace_now(const std::string& path, const std::string& data) {
     return ok;
 }
 
-bool append_now(const std::string& path, const std::string& data) {
-    FILE* f = fopen(path.c_str(), "ab");
-    if (!f) return false;
-    bool ok = fwrite(data.data(), 1, data.size(), f) == data.size();
-    return fclose(f) == 0 && ok;
-}
-
 void run() {
     Writer& w = writer();
     std::unique_lock<std::mutex> lock(w.mutex);
@@ -67,7 +59,7 @@ void run() {
         w.jobs.pop_front();
         w.busy = true;
         lock.unlock();
-        bool ok = job.append ? append_now(job.path, job.data) : replace_now(job.path, job.data);
+        bool ok = replace_now(job.path, job.data);
         lock.lock();
         w.busy = false;
         if (!ok && w.failed.insert(job.path).second) printf("[disk] could not write %s\n", job.path.c_str());
@@ -75,7 +67,7 @@ void run() {
     }
 }
 
-void push(const std::string& path, std::string data, bool append) {
+void push(const std::string& path, std::string data) {
     Writer& w = writer();
     {
         std::lock_guard<std::mutex> lock(w.mutex);
@@ -83,28 +75,21 @@ void push(const std::string& path, std::string data, bool append) {
             std::thread(run).detach();
             w.started = true;
         }
-        // The last job still waiting for this file, if it is of the same kind,
-        // takes the new bytes (a newer content, or more lines)
+        // A job still waiting for this file takes the newer content
         Job* last = nullptr;
         for (auto it = w.jobs.rbegin(); it != w.jobs.rend() && !last; ++it)
             if (it->path == path) last = &*it;
-        if (last && last->append == append) {
-            if (append)
-                last->data += data;
-            else
-                last->data = std::move(data);
-        } else {
-            w.jobs.push_back({path, std::move(data), append});
-        }
+        if (last)
+            last->data = std::move(data);
+        else
+            w.jobs.push_back({path, std::move(data)});
     }
     w.wake.notify_one();
 }
 
 }  // namespace
 
-void disk_replace(const std::string& path, std::string data) { push(path, std::move(data), false); }
-
-void disk_append(const std::string& path, std::string data) { push(path, std::move(data), true); }
+void disk_replace(const std::string& path, std::string data) { push(path, std::move(data)); }
 
 void disk_flush() {
     Writer& w = writer();

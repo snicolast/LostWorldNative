@@ -666,7 +666,7 @@ bool R3DRenderer::create_pipelines() {
     glow.color = VK_FORMAT_R8G8B8A8_UNORM;
     glow.additive = true;
     compose_glow_ = make_pipeline(glow);
-    ao_pass_ = make_pipeline({.vs = c_vs, .fs = ao_fs, .layout = ao_layout_, .color = VK_FORMAT_R8_UNORM});
+    ao_pass_ = make_pipeline({.vs = c_vs, .fs = ao_fs, .layout = ao_layout_, .color = VK_FORMAT_R8_UNORM, .fs_spec = &r3d_spec});
     ao_apply_ = make_pipeline({.vs = c_vs, .fs = aoa_fs, .layout = ao_layout_, .color = VK_FORMAT_R16G16B16A16_SFLOAT,
                                .samples = samples_, .multiply = true});
     sky_fields_pipe_ = make_pipeline({.vs = c_vs, .fs = sky_fs, .layout = sky_layout_, .color = VK_FORMAT_R8G8B8A8_UNORM});

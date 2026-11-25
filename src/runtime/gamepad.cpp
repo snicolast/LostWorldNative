@@ -65,12 +65,6 @@ int Gamepads::slot_of(uint32_t id) const {
     return -1;
 }
 
-int Gamepads::connected() const {
-    int n = 0;
-    for (const PadState& p : state_) n += p.connected;
-    return n;
-}
-
 void Gamepads::open(uint32_t id) {
     if (slot_of(id) >= 0) return;
     int i = 0;

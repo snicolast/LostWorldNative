@@ -1,5 +1,5 @@
 // Background file writes (src/runtime/disk_writer.cpp): the latest content of
-// a replaced file, appends in order, a folder that is missing
+// a replaced file, a folder that is missing
 #include <cstdio>
 #include <string>
 
@@ -27,7 +27,6 @@ static std::string read_file(const char* path) {
 
 int main() {
     remove("disk_writer_replace.txt");
-    remove("disk_writer_append.txt");
 
     // Replaced many times in a row: the last content is what stays, no .tmp left
     for (int i = 0; i <= 200; i++) disk_replace("disk_writer_replace.txt", "content " + std::to_string(i));
@@ -41,19 +40,8 @@ int main() {
     disk_flush();
     CHECK(read_file("disk_writer_replace.txt") == bytes);
 
-    // Appends: every line, in order
-    std::string expected;
-    for (int i = 0; i < 500; i++) {
-        std::string line = "line " + std::to_string(i) + "\n";
-        disk_append("disk_writer_append.txt", line);
-        expected += line;
-    }
-    disk_flush();
-    CHECK(read_file("disk_writer_append.txt") == expected);
-
     // A folder that does not exist: skipped (logged once), the others still written
     disk_replace("no_such_folder/x.txt", "x");
-    disk_append("no_such_folder/y.txt", "y");
     disk_replace("disk_writer_replace.txt", "after");
     disk_flush();
     CHECK(read_file("disk_writer_replace.txt") == "after");
@@ -62,7 +50,6 @@ int main() {
     disk_flush();
 
     remove("disk_writer_replace.txt");
-    remove("disk_writer_append.txt");
     if (g_failed) {
         printf("%d checks failed\n", g_failed);
         return 1;

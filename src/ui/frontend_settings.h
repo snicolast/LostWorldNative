@@ -79,7 +79,6 @@ struct FrontendSettings {
     // what save writes: a "key = value" line per setting (section: without the keys of
     // the whole game, which only the first section keeps)
     std::string text(bool section = false) const;
-    void save(const char* path) const;   // this alone (no [arcade] section)
     // PC EDITION's settings at the top (with the keys of the whole game as `whole` has
     // them), ARCADE ORIGINAL's in [arcade] when `arcade` is given
     static void save_both(const char* path, const FrontendSettings& pc, const FrontendSettings* arcade,

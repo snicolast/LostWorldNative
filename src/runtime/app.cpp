@@ -610,7 +610,6 @@ static void pacing_sample(double now, double display, double shown, const R3DFra
     }
 }
 
-// The folder of LostWorld.exe, with its trailing backslash
 static bool file_exists(const std::string& path) { return GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES; }
 static std::string full_path(const std::string& path) {
     char full[MAX_PATH];
@@ -1241,7 +1240,7 @@ bool App::init(bool aa_auto) {
     if (!presenter.init("Lost World Native by snicolast", int(SCREEN_H * 2 * std::clamp(g_opt.max_aspect, 4.0f / 3.0f, 2.4f)), SCREEN_H * 2,
                         g_opt.dlaa)) {
         fprintf(stderr, "Could not start Vulkan; try --headless\n");
-        MessageBoxA(nullptr, "Could not start Vulkan. Update the graphics driver: the game needs Vulkan 1.3.",
+        MessageBoxA(nullptr, "Could not start Vulkan. Update the graphics driver: the game needs Vulkan 1.2 or newer.",
                     "Lost World Native", MB_OK | MB_ICONERROR);
         return false;
     }
@@ -2534,7 +2533,7 @@ void App::shutdown() {
 // the main menu (LW_RESTARTED: no logo), without the debugging aids of one run
 static void restart_game() {
     SetEnvironmentVariableA("LW_RESTARTED", "1");
-    for (const char* aid : {"LW_MENU_KEYS", "LW_MENU_SHOT", "LW_MENU_FILM", "LW_MENU_FILM_KEYS", "LW_MENU_FILM_NOW"})
+    for (const char* aid : {"LW_MENU_KEYS", "LW_MENU_SHOT", "LW_MENU_FILM", "LW_MENU_FILM_KEYS"})
         SetEnvironmentVariableA(aid, nullptr);
     wchar_t exe[MAX_PATH];
     GetModuleFileNameW(nullptr, exe, MAX_PATH);
@@ -2695,7 +2694,7 @@ int main(int argc, char** argv) {
         g_frame_limit = 600;
     }
     g_collect_stats = g_frame_limit != INT32_MAX;   // report() prints them when the run ends
-    printf("Lost World Native - part 4 (%s)\n", g_opt.headless ? "no window" : "Vulkan window, 3D + 2D");
+    printf("Lost World Native (%s)\n", g_opt.headless ? "no window" : "Vulkan window, 3D + 2D");
     {
         std::vector<uint8_t> program, samples;
         if (!load_game_rom(program, samples)) return 1;

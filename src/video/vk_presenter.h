@@ -45,7 +45,6 @@ public:
     const VkPhysicalDeviceLimits& limits() const { return limits_; }
     HWND hwnd() const { return hwnd_; }
     void toggle_fullscreen();   // F11 / Alt+Enter: the window, or the last full-screen mode
-    bool fullscreen() const { return fullscreen_; }
     // MODE: 0 a window (w x h inside, 0: as it is), 1 borderless at the
     // desktop's resolution, 2 exclusive full screen: the monitor set to w x h
     // (0: the desktop's) while the game runs; if the monitor refuses it,
@@ -78,8 +77,6 @@ public:
     VkInstance instance() const { return instance_; }
     VkDevice device() const { return device_; }
     VkPhysicalDevice gpu() const { return gpu_; }
-    VkQueue queue() const { return queue_; }
-    VkCommandPool pool() const { return pool_; }
     VkFormat swap_format() const { return format_; }
     // Compiled pipelines kept between runs (save/pipeline_cache.bin): every
     // vkCreateGraphicsPipelines goes through it. save_pipeline_cache() writes
