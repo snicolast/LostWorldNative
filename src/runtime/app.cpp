@@ -27,6 +27,7 @@
 #include <windowsx.h>   // GET_X_LPARAM
 
 #include "bosses.h"
+#include "game_ram.h"
 #include "gamepad.h"
 #include "inputs.h"
 #include "options.h"
@@ -41,6 +42,7 @@
 #include "weather.h"
 #include "../audio/sound_board.h"
 #include "../common/clock.h"
+#include "../common/game_hz.h"
 #include "../common/paths.h"
 #include "../common/worker.h"
 #include "../ui/achievement_toast.h"
@@ -365,7 +367,7 @@ static bool poll_gamepads(HWND hwnd) {
     // A hit takes a life (game_ram.md): the pads of that player that were used
     // in the last minute rumble
     for (int p = 0; p < 2; p++) {
-        uint32_t lives = rd32(p ? 0x1A377C : 0x1A3720);
+        uint32_t lives = rd32(p ? ram::P2_LIVES : ram::P1_LIVES);
         if (g_inputs.p[p].playing && lives < lives_was[p])
             for (int i = 0; i < Gamepads::MAX; i++)
                 if (g_pads.pad(i).connected && pad_player(i, connected) == p && g_pads.now() - g_pads.pad(i).last_used < 60) {
@@ -585,7 +587,7 @@ static void pacing_sample(double now, double display, double shown, const R3DFra
     };
     static Method current, previous;
     static double last_display = 0, last_print = now, prev_flushed = 0, prev_time = 0;
-    static double prev_period = 1 / 57.524, game_period = 1 / 57.524;
+    static double prev_period = 1 / GAME_HZ, game_period = 1 / GAME_HZ;
     static uint64_t prev_frame = 0;
     if (built.frame != prev_frame) {   // the previous method's frame period, from the finishing times
         if (prev_frame) {
@@ -747,7 +749,7 @@ struct Prepared {
     Layers2D layers;
     uint64_t serial = 0;
     double ready_at = 0;   // when it was ready
-    double period = 1.0 / 57.524;   // since the frame built before it (where its vertices come from)
+    double period = 1.0 / GAME_HZ;   // since the frame built before it (where its vertices come from)
 };
 // The 2D layers of a vblank as the game left them (App::snaps)
 struct Snapshot2D {
@@ -801,13 +803,13 @@ struct App {
     const Layers2D* layers_shown = &own_layers;
     std::shared_ptr<Prepared> built_prep, layers_prep;   // the prepared frames in use (scene, 2D layers)
     std::shared_ptr<const R3DFrameState> built;
-    double frame_period = 1.0 / 57.524;   // between the frame built and the one before
+    double frame_period = 1.0 / GAME_HZ;   // between the frame built and the one before
     // Interpolation timing: the last frame the game published, the time
     // between its last two frames and how late after its vblank a frame gets
     // here (the game's CPU time plus this loop's wait for it; follows the
     // latest frames, easing down slowly)
     std::shared_ptr<const R3DFrameState> seen;
-    double next_period = 1.0 / 57.524, lateness = 0.004, lateness_rose = 0, lateness_spike = -100;
+    double next_period = 1.0 / GAME_HZ, lateness = 0.004, lateness_rose = 0, lateness_spike = -100;
     DisplayClock display_clock;
 
     std::array<Snapshot2D, 4> snaps;   // the 2D layers of the last vblanks (snaps_mutex)
@@ -1181,7 +1183,7 @@ void App::prepare_frames() {
         if (!p) pool.push_back(p = std::make_shared<Prepared>());
         p->state = state;
         p->serial = ++serial;
-        p->period = before > 0 ? std::clamp(state->time - before, 1.0 / 240, 0.1) : 1.0 / 57.524;
+        p->period = before > 0 ? std::clamp(state->time - before, 1.0 / 240, 0.1) : 1.0 / GAME_HZ;
         NewPictures pictures;
         pictures.serial = p->serial;
         {
@@ -1857,9 +1859,9 @@ void App::update_boss_mode() {
             // follow on from it instead (1,2,3,4,0 for stage 2), so its stage
             // ends when the boss is down (states made before this included)
             int stage = BOSSES[boss_fight].stage_index;
-            int index = int32_t(rd32(0x1C2B10));   // the run's stage list (0x1C2AFC) and position
-            for (int k = 1; index >= 0 && index + k < 5; k++) wr32(0x1C2AFC + 4 * (index + k), uint32_t((stage + k) % 5));
-            boss_lives = rd8(0x1A3723);
+            int index = int32_t(rd32(ram::PLAYLIST_INDEX));   // the run's stage list and position
+            for (int k = 1; index >= 0 && index + k < 5; k++) wr32(ram::PLAYLIST + 4 * (index + k), uint32_t((stage + k) % 5));
+            boss_lives = rd8(ram::P1_LIVES_BYTE);
             stats_boss_begin(boss_fight);
             boss_shown_at = now_seconds() + 0.1;   // its first frames drawn
         }
@@ -1884,9 +1886,9 @@ void App::update_boss_mode() {
     // ran out
     if (boss_fight >= 0 && !boss_loading && !frontend.active()) {
         // Player 1 state (docs/game_ram.md): 3 out, 0 on the CONTINUE screen
-        bool out = rd8(0x1A3784 + 0xD) == 3;
-        if (!out) boss_lives = rd8(0x1A3723);
-        bool stage_ended = rd8(0x1A623C) != BOSSES[boss_fight].stage_index;
+        bool out = rd8(ram::P1_SLOT) == 3;
+        if (!out) boss_lives = rd8(ram::P1_LIVES_BYTE);
+        bool stage_ended = rd8(ram::STAGE) != BOSSES[boss_fight].stage_index;
         bool over = stage_ended || out;
         if (!over) boss_over_at = 0;
         else if (boss_over_at == 0) {

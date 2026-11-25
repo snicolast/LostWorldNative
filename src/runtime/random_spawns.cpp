@@ -19,6 +19,7 @@
 
 #include "../common/random_seed.h"
 #include "encounter_script.h"
+#include "game_ram.h"
 #include "ppc_rt.h"
 #include "weather.h"
 
@@ -28,12 +29,8 @@ bool survival_enabled();
 namespace {
 
 using script::FN_ENCOUNTER_START, script::FN_RAPTOR, script::FN_PLACED, script::FN_PLACED_XZ;
+using namespace ram;   // game RAM (game_ram.h)
 constexpr uint32_t FN_ADD_SCORE = 0x0003DC60;   // (type, player from 1, points): every scoring hit
-constexpr uint32_t COURSE_SELECT = 0x1C2AD8; // 0xC while a game is played
-constexpr uint32_t STAGE = 0x1A623C;         // byte: current stage (0 = stage 1)
-constexpr uint32_t ZONE = 0x1A3984;          // low nibble: current zone
-constexpr uint32_t ZONE_INFO = 0x1A37D4;     // 12 bytes per zone: {trigger table index, x, z}
-constexpr uint32_t TRIGGER_TABLES = 0x120A1C;   // 28 bytes each, +8: the zone's records
 constexpr float NEAR_LOOK = 120;             // raptor groups swap only between camera turns this close
 constexpr int TYPE_CHANCE = 30;              // % of the raptors that take another type of the zone's
 constexpr int LIFE_MIN = 70, LIFE_MAX = 150; // a boss's life, % of the arcade's
