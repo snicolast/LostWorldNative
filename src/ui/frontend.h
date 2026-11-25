@@ -89,6 +89,10 @@ public:
     // before the run (runtime/weather.h: WEATHER_RANDOM, one of them or WEATHER_NONE)
     int run_weather() const;
     bool boss_mode = false;   // a boss fight is on: the pause menu offers retry and the list
+    // PLAY > CLASSIC while the game runs on to its route selection behind the
+    // menu: LOADING in PLAY's place, nothing to choose; Esc (the pad's B or
+    // BACK, the right button) gives it up (app.cpp, App::menu_key)
+    bool starting = false;
     // The list of bosses, over the game (from the pause menu or after a fight) or on the menu backdrop
     void open_boss_list(bool over_game);
 

@@ -2300,12 +2300,29 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
         }
     }
     y = y_end;
+    if (starting && n > 0 && reveal_ > 0) {   // LOADING: a light going to and fro under its line (as Virtua Cop 2's)
+        const int ly = row_y[0] + row_h(0) + U(2) + int(desc[0].size()) * desc_line + U(14);
+        const int span = U(600), half = U(60), x0 = right ? tx - span : tx;
+        const double k = 0.5 - 0.5 * std::cos(menu_clock() * 2.6);
+        const int cx = x0 + half + int(k * double(span - 2 * half));
+        const int glow = std::max(4, U(14)), core = std::max(1, U(1.6f));
+        for (int lx = cx - half; lx < cx + half; lx++) {
+            float a = std::min(1.0f, (1.0f - std::fabs(float(lx - cx)) / float(half)) * 3.0f) * reveal_;
+            for (int dy = -glow; dy <= glow; dy++) {
+                float d = std::fabs(float(dy)) / float(glow);
+                blend(lx, ly + dy, AMBER, a * 0.55f * std::exp(-d * d * 5.0f));
+                if (std::abs(dy) <= core) blend(lx, ly + dy, 0xFFE3A8, a);
+            }
+        }
+        animating_ = true;
+    }
 
     vgrad(0, h - U(120), w, h, 0x000000, 0.0f, 0.85f);
-    const wchar_t* back_what = screen_ == Screen::Main ? nullptr : screen_ == Screen::Pause ? L"RESUME" : L"BACK";
+    const wchar_t* back_what = starting ? L"BACK" : screen_ == Screen::Main ? nullptr : screen_ == Screen::Pause ? L"RESUME" : L"BACK";
     int py = h - U(64), x = U(80);
     if (!over_game) {   // the key help at the bottom right; at the left, the credit to the makers of the game
-        x = w - U(80) + U(44) - prompt_width(L"A", L"ENTER", L"SELECT") - (back_what ? prompt_width(L"B", L"ESC", back_what) : 0);
+        x = w - U(80) + U(44) - (starting ? 0 : prompt_width(L"A", L"ENTER", L"SELECT")) -
+            (back_what ? prompt_width(L"B", L"ESC", back_what) : 0);
         if (sega_.w > 0) {   // their logo, its own transparency kept
             int lh = U(52), lw = lh * sega_.w / sega_.h, lx = U(80), ly = h - U(46) - lh;
             for (int j = 0; j < lh; j++)
@@ -2323,7 +2340,7 @@ void Frontend::draw_menu(bool over_game, const std::vector<Item>& list) {
         sprite(credit_, (w - lw) / 2, ly, lw, lh);
         text(ITEM, U(18), L"PC REMASTER BY", w / 2, ly - U(28), 1, {FOOT, FOOT});
     }
-    prompt(x, py, L"A", L"ENTER", L"SELECT");
+    if (!starting) prompt(x, py, L"A", L"ENTER", L"SELECT");
     if (back_what) back_rect_ = prompt(x, py, L"B", L"ESC", back_what);
 }
 
@@ -2741,7 +2758,15 @@ bool Frontend::draw(int w, int h, std::vector<uint32_t>& out) {
         gun_page_key_ = gun_key();
         draw_gun_marks();
     } else if (page) draw_options_page(over_game, list);
-    else draw_menu(over_game, list);
+    else if (starting && !over_game) {   // LOADING (as Virtua Cop 2's): the main menu's look, LOADING where PLAY was
+        const Screen keep_screen = screen_;
+        const int keep = selected_;
+        screen_ = Screen::Main, selected_ = 0;
+        draw_menu(false, {{.id = PLAY, .label = L"LOADING", .hint = L"The credit goes in and the game starts: pick your route"}});
+        screen_ = keep_screen, selected_ = keep;
+        hit_.clear();   // (nothing to click)
+        values_.clear();
+    } else draw_menu(over_game, list);
     if (locked_notice_ && screen_ == Screen::Survival) draw_locked_notice();
     if (restart_shown()) draw_restart();
     if (drop_open_ && screen_ == Screen::Options) draw_drop();
