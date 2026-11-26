@@ -9,6 +9,10 @@
 
 #include "r3d_scene.h"
 
+// How far from the camera, horizontally, the ground it is on is looked for
+// (view units; the camera rides about 17 above it in stage 1)
+static constexpr float NEAR_GROUND = 60.0f;
+
 // Finds the viewport showing the game world and the camera position in a
 // fixed world frame, for the atmosphere. The orientation shared by most
 // of the drawn polygons is the world's; the camera position follows from
@@ -257,23 +261,39 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
     tracking_ = true;
     std::swap(scenery_prev_, scenery_now_);
 
-    // Ground: median height of the upward-facing surfaces below the camera
+    // Ground: median height of the upward-facing scenery below the camera
+    // and near it. The sun shadows and the ambient occlusion leave out what
+    // stands high above it (canopies, the tops of backdrop walls), so it has
+    // to be the ground the camera is on: terrain farther off can lie far
+    // below (past the crest of the ramp at the start of stage 1 the valley
+    // ahead comes into the picture, which would sink the ground by two hundred
+    // units in a second and take the arch of branches overhead out of the
+    // shadows all at once). What eases is the camera's height above it, so
+    // the ground follows the camera up and down slopes without lagging;
+    // with no ground near enough in sight (looking up), the height stays.
     R3DViewport& v = out.viewports[best];
     const float* up = axes + 3;
     std::vector<float> heights;
-    for (uint32_t i = v.opaque_first; i < v.opaque_first + v.opaque_count; i += 3) {
-        const R3DVertex& p = out.vertices[i];
-        float nl = std::sqrt(p.nrm[0] * p.nrm[0] + p.nrm[1] * p.nrm[1] + p.nrm[2] * p.nrm[2]);
-        if (nl <= 0 || (p.nrm[0] * up[0] + p.nrm[1] * up[1] + p.nrm[2] * up[2]) < 0.85f * nl) continue;
-        float h = p.pos[0] * up[0] + p.pos[1] * up[1] + p.pos[2] * up[2];
-        if (h < 0) heights.push_back(h);
+    for (const R3DInstance& in : viewport_instances[best]) {
+        if (!same_axes(in.axes, axes)) continue;   // not the scenery (dinosaurs, vehicles)
+        for (uint32_t i = in.opaque[0]; i + 2 < in.opaque[1]; i += 3) {
+            const R3DVertex* t = &out.vertices[v.opaque_first + i];
+            const float* n = t[0].nrm;
+            float nl = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+            if (nl <= 0 || (n[0] * up[0] + n[1] * up[1] + n[2] * up[2]) < 0.85f * nl) continue;
+            float c[3];
+            for (int k = 0; k < 3; k++) c[k] = (t[0].pos[k] + t[1].pos[k] + t[2].pos[k]) / 3.0f;
+            float h = c[0] * up[0] + c[1] * up[1] + c[2] * up[2];
+            float across = c[0] * c[0] + c[1] * c[1] + c[2] * c[2] - h * h;   // squared, horizontally
+            if (h < 0 && across < NEAR_GROUND * NEAR_GROUND) heights.push_back(h);
+        }
     }
     if (heights.size() >= 16) {
         std::nth_element(heights.begin(), heights.begin() + heights.size() / 2, heights.end());
-        float g = camera_[1] + heights[heights.size() / 2];
-        ground_ = fresh ? g : ground_ + 0.05f * (g - ground_);
+        float above = -heights[heights.size() / 2];
+        height_ = fresh ? above : height_ + 0.05f * (above - height_);
     } else if (fresh) {
-        ground_ = camera_[1] - 20.0f;
+        height_ = 20.0f;
     }
 
     // Draw distance: nearly all the scenery is nearer than this. Only the
@@ -301,7 +321,7 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
     for (int k = 0; k < 3; k++)
         for (int i = 0; i < 3; i++) v.world_axes[k * 3 + i] = axes[k * 3 + i];
     for (int c = 0; c < 3; c++) v.camera[c] = camera_[c] + loop_offset_[c];
-    v.ground = ground_;
+    v.ground = v.camera[1] - height_;
     v.scenery_far = far_;
     for (uint32_t i = v.opaque_first; i < v.opaque_first + v.opaque_count; i++) out.vertices[i].flags |= R3D_WORLD;
     for (uint32_t i = v.trans_first; i < v.trans_first + v.trans_count; i++) out.vertices[i].flags |= R3D_WORLD;
@@ -316,6 +336,6 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
     if (debug)
         printf("[fog] frame %llu camera %.1f %.1f %.1f ground %.1f (height %.1f) far %.0f agree %d/%d models %zu "
                "polygons %u grounds %zu appearing %zu\n",
-               (unsigned long long)out.frame, camera_[0], camera_[1], camera_[2], ground_, camera_[1] - ground_, far_,
+               (unsigned long long)out.frame, camera_[0], camera_[1], camera_[2], camera_[1] - height_, height_, far_,
                agree, common, scenery_prev_.by_key.size(), best_polygons, heights.size(), appearing);
 }
