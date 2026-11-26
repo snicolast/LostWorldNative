@@ -173,7 +173,7 @@ private:
 
     std::vector<Item> items() const;
     // Every setting: where save/settings.ini keeps it and its row in the
-    // options (frontend.cpp)
+    // options (frontend_rows.h)
     struct Setting;
     friend struct FrontendSettings;
     static const std::vector<Setting>& setting_table();
@@ -295,7 +295,7 @@ private:
     std::vector<ValueArea> values_;
     bool wrap_ = false;
     // The settings' sections (setting_table says where each option goes,
-    // ROW_GROUPS in frontend.cpp the headings over its rows)
+    // group_of in frontend.cpp the headings over its rows)
     enum { EXPERIENCE_TAB, DISPLAY_TAB, LIGHTING_TAB, AUDIO_TAB, CONTROLS_TAB, GAME_TAB };   // LIGHTING_TAB is shown as GRAPHICS
     static constexpr int TAB_COUNT = 6;
     static const wchar_t* const TAB_NAMES[TAB_COUNT];
@@ -372,7 +372,7 @@ private:
     bool draw_splash_video(std::vector<uint32_t>& out);
     Picture logo_;   // third_party/menu/logo.png, else res/menu/logo.png: the title over the backdrop, its own transparency kept
     void shade_backdrop();            // darker at the right and the bottom, the logo: on px_
-    // Lightning, the side menus' entrance (frontend.cpp): a strike lights the
+    // Lightning, the side menus' entrance (frontend_draw.cpp): a strike lights the
     // backdrop and the entries come on with it
     enum Strike { STRIKE_INTRO, STRIKE_SWAP, STRIKE_IDLE };
     std::vector<uint32_t> bg_lit_;   // bg_ as a strike lights it, for the current size

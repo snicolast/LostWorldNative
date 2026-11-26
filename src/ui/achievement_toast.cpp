@@ -9,7 +9,7 @@
 
 namespace {
 
-// The menus' colours (ui/frontend.cpp)
+// The menus' colours (ui/frontend_style.h)
 constexpr uint32_t GOLD_TOP = 0xFFEA5C, GOLD_BOTTOM = 0xFF8A00;
 constexpr uint32_t PALE_TOP = 0xE6DCC0, PALE_BOTTOM = 0xBFB294, AMBER = 0xFFA032;
 constexpr double SHOW_SECONDS = 5, SLIDE_IN = 0.5, SLIDE_OUT = 0.4;

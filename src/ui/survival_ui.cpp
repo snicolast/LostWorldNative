@@ -7,7 +7,7 @@
 
 namespace {
 
-// Same colours as the menus (ui/frontend.cpp): the game's yellow-to-orange letters
+// Same colours as the menus (ui/frontend_style.h): the game's yellow-to-orange letters
 constexpr uint32_t GOLD_TOP = 0xFFEA5C, GOLD_BOTTOM = 0xFF8A00;
 constexpr uint32_t PALE_TOP = 0xE6DCC0, PALE_BOTTOM = 0xBFB294;
 constexpr uint32_t BRIGHT_GOLD = 0xFFF27A;   // the golden BONUS target
