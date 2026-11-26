@@ -22,6 +22,7 @@
 
 #include "bosses.h"
 #include "game_flow.h"
+#include "game_modes.h"
 #include "game_ram.h"
 #include "../common/game_hz.h"
 #include "disk_writer.h"
@@ -35,8 +36,6 @@
 #include "../audio/sound_board.h"
 #include "../video/r3d_state.h"
 #include "stats.h"
-#include "random_spawns.h"
-#include "survival.h"
 
 Ctx g_ctx;
 uint8_t* g_ram;
@@ -62,9 +61,7 @@ std::vector<uint32_t> g_diff_mmio;   // (address, size, value) triples
 void diff_run(Ctx& c, uint32_t fn);
 
 void rt_trace(Ctx& c, uint32_t fn) {
-    survival_enter(c, fn);
-    random_spawns_enter(c, fn);
-    stats_enter(c, fn);
+    game_modes_function(c, fn);
     if (fn == g_diff_fn && !g_diff_active) {
         diff_run(c, fn);
         return;
@@ -737,7 +734,7 @@ void diff_run(Ctx& c, uint32_t fn) {
 
 // ---- Indirect calls ----
 void rt_call(Ctx& c, uint32_t addr) {
-    if (c.lr == SURVIVAL_SPAWN_RETURN && survival_spawn_call(c, addr)) return;
+    if (game_modes_call(c, addr)) return;
     if (addr == 0 && g_frame > 0) {   // a null function pointer restarts the game on real hardware
         static int reported = 0;
         if (reported++ < 3) {
@@ -1134,7 +1131,7 @@ void rt_state_point(Ctx& c) {
         if (call_chain(g_ram, c.r[1]) == g_state->chain) {
             if (g_state_keep_home && !g_home) g_home = capture_state(c);
             apply_state(c, *g_state);
-            stats_state_loaded();
+            game_modes_state_loaded();
             g_attract_watch_reset = true;
             g_state_result = 1;
         } else if (g_boot_skip || g_frame - g_state_since < 600) {
@@ -1192,12 +1189,14 @@ void rt_event(Ctx& c) {
                 fflush(stdout);
             }
             g_auto.apply(g_frame);
-            game_flow_modes(c);   // the attract, survival, stats, random spawns, boss maker (game_flow.cpp)
+            game_flow_modes(c);   // the attract and the game modes (game_flow.cpp, game_modes.cpp)
             video_snapshot();
             if (!g_logo_up && ((g_frame % 4 == 0 && boot_logo_up()) || g_frame > 3000)) g_logo_up = true;
-            // Survival mode: on to the chosen stage at full speed, behind its loading screen
+            // A mode that drives the boot (survival: on to the chosen stage at full
+            // speed, behind its loading screen) says when it is over.
             // Boss mode: on to the fight's state, behind the menu (app.cpp, update_boss_mode)
-            bool boot_done = survival_enabled() ? !survival_owns_inputs() || g_frame > 200000   // (survival gives up first)
+            const GameMode* boot_mode = game_mode_owning_boot();
+            bool boot_done = boot_mode           ? boot_mode->boot_done()
                              : g_arcade_entry    ? arcade_entry_frame()
                              : g_logo_up && game_state_pending() ? false
                                                  : (g_frame % 4 == 0 && boot_logo_up()) || g_frame > 3000;
@@ -1206,7 +1205,7 @@ void rt_event(Ctx& c) {
                 // The arcade game at its SEGA logo: the home state, also when
                 // CLASSIC ARCADE was picked before the boot got here (it keeps
                 // it only once the boot is over)
-                if (!survival_enabled()) game_state_keep_home();
+                if (!boot_mode) game_state_keep_home();
                 g_sound.set_dsp_enabled(true);
                 g_sound.set_muted(false);   // fades in from silence
                 printf("[boot] start screens skipped in %.1f s (frame %llu)\n",

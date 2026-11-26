@@ -6,13 +6,11 @@
 #include <cstdio>
 
 #include "bosses.h"
+#include "game_modes.h"
 #include "game_ram.h"
 #include "inputs.h"
 #include "ppc_rt.h"
-#include "random_spawns.h"
 #include "runtime.h"
-#include "stats.h"
-#include "survival.h"
 
 // The place caption shown as each stage starts ("-Crossing point of rescue
 // parties.") does not go through the subtitle function: it is one more image
@@ -61,7 +59,7 @@ void game_flow_frame_start() {
         // test menu's own setting stands (also over a kept state)
         uint32_t mode = rd32(ram::GAME_MODE);
         bool in_game = mode != 0 && mode != 1 && (rd8(ram::P1_SLOT) <= 2 || rd8(ram::P2_SLOT) <= 2);
-        bool forced = g_free_play && !survival_enabled() && g_boss_maker < 0 && (!g_skip_attract || in_game);
+        bool forced = g_free_play && !game_mode_takes_over() && (!g_skip_attract || in_game);
         wr8(ram::FREE_PLAY, forced || rd8(ram::SETTING_COIN) == 0x1A ? 0xFF : 0);
     }
     for (int p = 0; p < 2; p++) {   // player slots (0x10 bytes each): +0xD = 1 or 2 while playing
@@ -96,7 +94,7 @@ static void attract_guard_frame() {
         g_attract_watch_reset = false;
         game_on = false;
     }
-    if (survival_enabled() || g_boss_maker >= 0) {
+    if (game_mode_takes_over()) {
         game_on = false;
         return;
     }
@@ -168,12 +166,9 @@ void game_flow_modes(Ctx& c) {
     attract_guard_frame();   // before the frame's picture is taken
     {   // the attract: game mode 0 or 1 (attract_guard_frame), not survival or boss mode
         uint32_t mode = rd32(ram::GAME_MODE);
-        g_in_attract = (mode == 0 || mode == 1) && !survival_enabled() && g_boss_maker < 0;
+        g_in_attract = (mode == 0 || mode == 1) && !game_mode_takes_over();
     }
-    if (survival_frame(c)) g_hold = true;   // survival start and results screens
-    stats_frame();
-    random_spawns_frame();
-    if (g_boss_maker >= 0) boss_maker_frame();
+    if (game_modes_vblank(c)) g_hold = true;   // e.g. survival's start and results screens
     {   // PLAY given up on its way (app.cpp, cancel_play): no coin or START left held
         static bool entry_was = false;
         if (entry_was && !g_arcade_entry) g_inputs.p[0].coin = g_inputs.p[0].start = false;
