@@ -14,6 +14,7 @@
 [24] 2026-11-27
 - PLAY now shows a LOADING screen while the game gets ready. Esc, or B / BACK on the pad, goes back to the main menu while it loads, and no credit is used
 - Ambient occlusion: no more dark stripes or speckles on the dense bushes in the background
+- Code cleanup under the hood: unused code removed and the larger files split into smaller parts, so future fixes are easier. Nothing changes in game
 
 [23] 2026-11-24
 - DLAA and DLSS: when the graphics card runs short of time, the 3D is drawn a little smaller and DLSS brings it back to full size, so the frame rate holds
