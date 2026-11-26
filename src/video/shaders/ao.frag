@@ -63,6 +63,15 @@ void main() {
     vec3 dy = abs(py1.z - p.z) < abs(p.z - py0.z) ? py1 - p : p - py0;
     vec3 n = normalize(cross(dy, dx));
     if (dot(n, p) > 0.0) n = -n;   // towards the camera
+    // Where neither neighbour continues the surface along a row or a column
+    // (a depth jump of over 1-2% on both sides), there is no surface to build
+    // a normal from: the leaves and holes of dense cut-out foliage, a pixel or
+    // two each, where the depth itself is aliased. The occlusion there turned
+    // into dark stripes and speckles over the bushes, and the smoothing
+    // (ao_apply.frag) cannot even it out across those depth jumps: it fades out
+    const float BROKEN_LOW = 0.01, BROKEN_HIGH = 0.02;
+    float jump = max(min(abs(px1.z - p.z), abs(p.z - px0.z)), min(abs(py1.z - p.z), abs(p.z - py0.z)));
+    float solid = 1.0 - smoothstep(BROKEN_LOW, BROKEN_HIGH, jump / -p.z);
 
     // Rotated per pixel (and per frame with DLAA, which averages it out)
     float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + ao.misc.x);
@@ -72,7 +81,7 @@ void main() {
 #ifdef RAY_TRACING
     // misc.w 1: traced on the left half only, for comparing (LW_RTSPLIT)
     if (ao.misc.z > 0.0 && (ao.misc.w == 0.0 || frag.x < ao.rect.x + ao.rect.z * 0.5)) {
-        out_ao = vec4(mix(1.0, traced_open(p, n, noise), 1.0 - fog));
+        out_ao = vec4(mix(1.0, traced_open(p, n, noise), (1.0 - fog) * solid));
         return;
     }
 #endif
@@ -102,5 +111,5 @@ void main() {
         occlusion += horizon;
     }
     float open = 1.0 - clamp(occlusion / float(DIRECTIONS) * 2.4, 0.0, 1.0);
-    out_ao = vec4(mix(1.0, open, 1.0 - fog));
+    out_ao = vec4(mix(1.0, open, (1.0 - fog) * solid));
 }
