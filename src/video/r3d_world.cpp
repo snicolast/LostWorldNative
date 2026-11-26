@@ -271,6 +271,7 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
     // shadows all at once). What eases is the camera's height above it, so
     // the ground follows the camera up and down slopes without lagging;
     // with no ground near enough in sight (looking up), the height stays.
+    // A cut to another place takes the new height at once.
     R3DViewport& v = out.viewports[best];
     const float* up = axes + 3;
     std::vector<float> heights;
@@ -291,7 +292,7 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
     if (heights.size() >= 16) {
         std::nth_element(heights.begin(), heights.begin() + heights.size() / 2, heights.end());
         float above = -heights[heights.size() / 2];
-        height_ = fresh ? above : height_ + 0.05f * (above - height_);
+        height_ = continuous ? height_ + 0.05f * (above - height_) : above;   // a cut: at once
     } else if (fresh) {
         height_ = 20.0f;
     }
