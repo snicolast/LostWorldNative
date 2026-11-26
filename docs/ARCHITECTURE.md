@@ -141,6 +141,10 @@ call chain it was saved in (the main loop), so loads happen at `IDLE` points.
   each vblank: subtitle language and stage captions, FREE PLAY, who is playing,
   the menu standing in for the attract, PLAY > CLASSIC's way in, and calling
   each mode's frame.
+- **Mode hooks** (`game_modes.h`): each mode is an entry of hooks (function
+  entry, indirect call, vblank, state loaded, takes over the arcade game, drives
+  the boot) in the table in `game_modes.cpp`. `runtime.cpp` and `game_flow.cpp`
+  walk the table and name no mode, so a new mode adds one entry there.
 - **Survival** (`survival.cpp`): the game's own encounter machine
   (`encounter_script.h`) is held at one stop and fed waves; laps restore a
   marked state under a fade.

@@ -162,6 +162,7 @@ endif()
 add_executable(LostWorld WIN32
     src/runtime/runtime.cpp
     src/runtime/game_flow.cpp
+    src/runtime/game_modes.cpp
     src/runtime/boss_maker.cpp
     src/runtime/app.cpp
     src/runtime/app_input.cpp
