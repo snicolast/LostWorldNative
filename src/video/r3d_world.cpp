@@ -292,7 +292,12 @@ void R3DWorldTracker::track(const std::vector<std::vector<R3DInstance>>& viewpor
     if (heights.size() >= 16) {
         std::nth_element(heights.begin(), heights.begin() + heights.size() / 2, heights.end());
         float above = -heights[heights.size() / 2];
-        height_ = continuous ? height_ + 0.05f * (above - height_) : above;   // a cut: at once
+        // A cut: another place, or the camera jumping within the same
+        // scenery (it drives a few units a frame)
+        float moved = std::fabs(camera_[0] - camera_was[0]) + std::fabs(camera_[1] - camera_was[1]) +
+                      std::fabs(camera_[2] - camera_was[2]);
+        bool cut = !continuous || moved > 20.0f;
+        height_ = cut ? above : height_ + 0.05f * (above - height_);
     } else if (fresh) {
         height_ = 20.0f;
     }
