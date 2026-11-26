@@ -161,6 +161,13 @@ The menu (`src/ui/frontend.cpp`) owns `FrontendSettings` (`frontend_settings.h`)
 and `save/settings.ini`, read and written by `frontend_settings.cpp` through the
 settings table (`frontend_table.cpp`, whose rows are `Frontend::Setting`,
 `frontend_rows.h`).
+The `Frontend` class is one, its methods spread over files by what they do:
+`frontend.cpp` (setup, the menus' rows and navigation, keys and mouse, the
+records' rows), `frontend_draw.cpp` (drawing primitives, the backdrops, the
+lightning, the side menus and `draw`), `frontend_page.cpp` (the settings page:
+OPTIONS, SETTINGS, RECORDS), `frontend_screens.cpp` (splash screens, the
+restart notice, the drop-down list) and `frontend_gun_test.cpp` (GUN TEST);
+`frontend_style.h` holds the colours they share.
 `settings_bridge.cpp` turns them into the command-line `Options` (`options.cpp`,
 one table for the parser and `--help`) and back; `app.cpp` hands the options to
 the renderer (`App::apply_video_options`, at the start and after each change in

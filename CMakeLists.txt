@@ -207,6 +207,10 @@ add_executable(LostWorld WIN32
     src/ui/menu_music.cpp
     src/ui/splash_video.cpp
     src/ui/frontend.cpp
+    src/ui/frontend_draw.cpp
+    src/ui/frontend_page.cpp
+    src/ui/frontend_screens.cpp
+    src/ui/frontend_gun_test.cpp
     src/ui/frontend_table.cpp
     src/ui/frontend_settings.cpp
     src/video/r3d_state.cpp
