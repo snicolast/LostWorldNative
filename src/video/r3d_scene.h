@@ -82,6 +82,7 @@ struct R3DViewport {
     float ground = 0;           // world height of the ground around the camera
     float scenery_far = 0;      // distance of the farthest scenery (most of it is nearer)
     uint32_t node = 0;          // culling RAM address of the viewport node (debugging)
+    uint32_t build_index = 0;   // its list in R3DSceneBuilder::instances() (NicoEngine reads it)
 };
 
 struct R3DScene {
@@ -106,6 +107,9 @@ public:
         pack_ = pack;
         texture_ram_ = ram;
     }
+    // The models drawn by the last build, per viewport in build order (R3DViewport::build_index).
+    // Unused by the game itself: NicoEngine's adapter reads them (its model3/real3d_frame.cpp)
+    const std::vector<std::vector<R3DInstance>>& instances() const { return viewport_instances_; }
 
 private:
     struct Mat {
