@@ -53,6 +53,10 @@ versions of the game will not work.
 
 ## Install
 
+<p align="center">
+  <a href="https://github.com/snicolast/NicoLauncher-Hub"><img src="docs/img/nicolauncher.png" alt="NicoLauncher" width="480"></a>
+</p>
+
 You need Windows 10/11 (64-bit) and a GPU with a Vulkan 1.3 driver, or a 1.2 one
 that offers `VK_KHR_dynamic_rendering` (most cards and integrated graphics from 2016 on,
 with current drivers; started from a command prompt, the game's first `[vulkan]` line says what
@@ -62,8 +66,11 @@ the same on any GPU.
 Install it with **[NicoLauncher](https://github.com/snicolast/NicoLauncher-Hub)**, a free app that
 downloads, builds, updates and starts the game for you. No Visual Studio, nothing to set up by hand.
 
-1. Download **[NicoLauncher-setup.exe](https://github.com/snicolast/NicoLauncher-Hub/releases/latest)** and run it.
-2. In the launcher, open **The Lost World**, press **Install** and choose your `lostwsga.zip` when it asks.
+1. Download NicoLauncher, either one:
+   - **[NicoLauncher-setup.exe](https://github.com/snicolast/NicoLauncher-Hub/releases/latest/download/NicoLauncher-setup.exe)**, the installer: run it.
+   - **[NicoLauncher-portable.zip](https://github.com/snicolast/NicoLauncher-Hub/releases/latest/download/NicoLauncher-portable.zip)**, everything in one folder: unzip it anywhere and run `NicoLauncher.exe`
+     ([portable mode](https://github.com/snicolast/NicoLauncher-Hub/blob/main/docs/portable.md)).
+2. In the launcher, open **Nico TLW**, press **Install** and choose your `lostwsga.zip` when it asks.
 3. Press **Play**.
 
 ### Update
