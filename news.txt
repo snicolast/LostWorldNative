@@ -14,6 +14,7 @@
 [24] 2026-11-27
 - PLAY now shows a LOADING screen while the game gets ready. Esc, or B / BACK on the pad, goes back to the main menu while it loads, and no credit is used
 - Ambient occlusion: no more dark stripes or speckles on the dense bushes in the background
+- Shadows and ambient occlusion no longer pop in all at once when a wide view opens up, as on the jeep's ramp early in stage 1
 - Code cleanup under the hood: unused code removed and the larger files split into smaller parts, so future fixes are easier. Nothing changes in game
 
 [23] 2026-11-24
