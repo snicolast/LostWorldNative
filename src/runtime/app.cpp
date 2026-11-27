@@ -77,16 +77,6 @@ static Controls g_controls;   // keyboard, mice and guns, gamepads (app_input.h)
 // menu, the attract plays, coins and START; Esc opens its own pause (frontend.cpp)
 static bool g_arcade = false;
 
-// The stage select screen marks the gun with a small textured dot in its top
-// viewport; in a stage the game draws an untextured X instead
-static bool select_dot_on_screen(const R3DScene& scene) {
-    if (scene.viewports.empty()) return false;
-    const R3DViewport& v = scene.viewports.back();   // highest priority
-    for (uint32_t i = 0; i < v.trans_count; i++)
-        if (scene.vertices[v.trans_first + i].tex == 0x625A0340) return true;
-    return false;
-}
-
 static const float WEATHER_SOUND_LEVEL[4] = {0.0f, 0.5f, 1.0f, 1.6f};   // WEATHER SOUND: OFF, LOW, MEDIUM, HIGH
 
 // The sound options (at the start and from the menu)

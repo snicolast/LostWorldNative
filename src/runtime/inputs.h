@@ -82,6 +82,19 @@ float gun_reach();
 // own stays (4:3, --aim, or a gun moved by something else)
 bool gun_aim_exact(int player, float& out_x, float& out_y);
 extern std::atomic<bool> g_select_aim;   // the stage select screen is up (its gun mapping differs)
+// Whether a built frame (R3DScene) is the stage select screen, for
+// g_select_aim: that screen marks the gun with a small textured dot in its
+// top viewport, where a stage draws an untextured X. For the game's window
+// (app.cpp) and NicoEngine's side (src/engine/live_game.cpp) alike
+constexpr uint32_t SELECT_DOT_TEXTURE = 0x625A0340;
+template <class Scene>
+bool select_dot_on_screen(const Scene& scene) {
+    if (scene.viewports.empty()) return false;
+    const auto& v = scene.viewports.back();   // highest priority: drawn over the others
+    for (uint32_t i = 0; i < v.trans_count; i++)
+        if (scene.vertices[v.trans_first + i].tex == SELECT_DOT_TEXTURE) return true;
+    return false;
+}
 extern std::atomic<bool> g_fixed_aim;    // --aim: the ADC values stay fixed
 // FREE PLAY (settings, --free-play): the game's own free play, as its test
 // menu sets it (runtime.cpp, each frame): START alone starts and continues

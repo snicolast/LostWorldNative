@@ -147,8 +147,8 @@ static std::vector<AimTarget> aim_targets() {
     }
     std::vector<AimTarget> out;
     for (const EnemyMark& m : enemy_marks()) {
-        float cy = m.y - up * m.scale, w = half_w * m.scale, h = half_h * m.scale;
-        out.push_back({(m.x - w) / SCREEN_W, (cy - h) / SCREEN_H, (m.x + w) / SCREEN_W, (cy + h) / SCREEN_H});
+        const ScreenBox b = enemy_box(m, up, half_w, half_h);
+        out.push_back({b.x0, b.y0, b.x1, b.y1});
     }
     return out;
 }
