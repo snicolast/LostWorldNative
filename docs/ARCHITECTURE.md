@@ -191,3 +191,11 @@ files, the `[arcade]` section), the display clock and frame pacer (`display_cloc
 synthetic screens). Full-game checks are headless runs
 (`--headless --frames N`, deterministic: `out/ram.bin` and `out/real3d/*` can be
 compared by hash) and `--shot N` captures.
+
+## NicoEngine
+
+[NicoEngine](https://github.com/snicolast/nicoengine) runs this game inside
+its own program: it compiles the scene builder, the emulator and the sound
+from this repository, with the game's side for it in `src/engine/` (never
+built by the game). What it uses, and must not be deleted or renamed, is in
+[NICOENGINE.md](NICOENGINE.md).

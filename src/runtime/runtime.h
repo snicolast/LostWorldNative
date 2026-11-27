@@ -70,6 +70,18 @@ struct EnemyMark {
     float x, y, scale;
 };
 std::vector<EnemyMark> enemy_marks();
+// What there is to shoot at around a mark, as a box in fractions of the
+// screen: from the point the enemy stands on up its body, sized with its
+// distance (`up`, `half_w`, `half_h` in world units). The aim assist's
+// targets, for the game's window (app_input.cpp) and NicoEngine's side
+// (src/engine/live_game.cpp) alike
+struct ScreenBox {
+    float x0, y0, x1, y1;
+};
+inline ScreenBox enemy_box(const EnemyMark& m, float up = 7, float half_w = 6, float half_h = 5) {
+    const float cy = m.y - up * m.scale, w = half_w * m.scale, h = half_h * m.scale;
+    return {(m.x - w) / SCREEN_W, (cy - h) / SCREEN_H, (m.x + w) / SCREEN_W, (cy + h) / SCREEN_H};
+}
 
 // What the game drew: the last closed 3D frame and the 2D layer memory of the
 // frame on screen, each behind its mutex
