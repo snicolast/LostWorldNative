@@ -362,6 +362,7 @@ void R3DSceneBuilder::viewport(uint32_t addr, int depth) {
         viewport_key_ = addr;
         instances_.clear();
         node_ptr(vp(0x02), base, Attribs{}, 0);
+        v.build_index = uint32_t(viewport_instances_.size());
         viewport_instances_.push_back(std::move(instances_));
         instances_.clear();
 
