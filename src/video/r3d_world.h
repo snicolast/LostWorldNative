@@ -60,6 +60,7 @@ private:
     float camera_[3] = {}, velocity_[3] = {};
     float loop_offset_[3] = {};   // added to the camera for the atmosphere when the game loops its scenery
     int lost_ = 0;   // frames in a row the scenery could not be matched
-    float ground_ = 0, far_ = 0;
+    float height_ = 20.0f;   // the camera's height above the ground near it (eased)
+    float far_ = 0;
     bool tracking_ = false;
 };
