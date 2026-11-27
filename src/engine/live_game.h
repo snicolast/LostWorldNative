@@ -54,6 +54,10 @@ bool live_skies();
 // the game held. Empty: none (this game keeps no such table the engine
 // knows). `find`: words to look for in the game's RAM (Sega Rally 2's)
 std::vector<nico::WorldObject> live_objects();
+// The guns' sights for the engine to draw over the picture (nico::Live::sights):
+// the light gun module's, as the players set them (this game's own window
+// draws its own, app.cpp's set_crosshair)
+std::vector<nico::Sight> live_sights();
 std::string live_report(const std::vector<uint32_t>& find);
 // What a player may set of the game (nico::Live::settings, set): the sound,
 // the skies, the keys, the mouse, a pad's buttons, its aim assist and its vibration

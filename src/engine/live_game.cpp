@@ -243,6 +243,7 @@ void live_before_build(R3DSceneBuilder&, float wide, nico::Lighting) { g_aim_rea
 void live_builder(R3DSceneBuilder&, TexturePack&) {}
 bool live_skies() { return g_sky != 0; }
 std::vector<nico::WorldObject> live_objects() { return {}; }
+std::vector<nico::Sight> live_sights() { return g_shooters.sights(); }
 std::string live_report(const std::vector<uint32_t>&) { return {}; }
 
 void live_after_build(const R3DScene& scene) { g_select_aim = select_dot_on_screen(scene); }
