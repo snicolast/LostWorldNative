@@ -43,8 +43,8 @@ EEPROM (kept apart from the game's own).
 | 7 | Packs and skies | `src/video/texture_pack.*`, `text_hd.*`, `pack2d.*`, `sky_pack.*` with `set_procedural`, `sky_procedural.*`, read from the folder the engine gives |
 | 8 | Life | `live_game.cpp`: `live_start`, `live_hold`, `live_shown`, `live_stop` |
 | 9 | Runtime hooks | `live_host.cpp`: 14 stand-ins |
-| 10 | Controls | The engine's light gun module (`NICO_MODULE_GUN`, its `modules/light_guns.h`); `live_controls` gives what it says to the game's `Inputs` |
-| 11 | Settings | `live_settings`: sound, sky, pad vibration (and the gun module's own) |
+| 10 | Controls | The engine's light gun module (`NICO_MODULE_GUN`, its `modules/light_guns.h`); `live_controls` gives what it says to the game's `Inputs`; `live_sights` gives the guns' sights for the engine to draw (the game's own crosshair is its window's) |
+| 11 | Settings | `live_settings`: sound, sky, pad vibration (and the gun module's own, its crosshair among them) |
 | 12 | Recompiled program | `build/gen` with `files.cmake` and `fns.h`, `src/runtime/ppc_rt.h` |
 
 Version 1 still has the game's side in C++, talking to the engine's own
